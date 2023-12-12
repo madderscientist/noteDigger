@@ -1,0 +1,42 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+
+<body>
+    <input type="file" id="audioInput" accept="audio/*">
+
+</body>
+<script>
+    const audioInput = document.getElementById("audioInput");
+
+    let audioContext = new AudioContext();
+    let source = null;
+
+    function decodeMusic(file) {
+        const fileReader = new FileReader();
+        fileReader.onload = function () {
+            const audioData = fileReader.result;
+            audioContext.decodeAudioData(audioData, function (decodedData) {
+                if (source) {
+                    source.stop();
+                }
+                source = audioContext.createBufferSource();
+                source.buffer = decodedData;
+                source.connect(audioContext.destination);
+                source.start();
+            });
+        };
+        fileReader.readAsArrayBuffer(file);
+    }
+
+    audioInput.addEventListener('change', function (e) {
+        decodeMusic(e.target.files[0]);
+    });
+</script>
+
+</html>

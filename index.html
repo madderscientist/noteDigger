@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>在线扒谱</title>
+    <script src="./dataProcess/fft_real.js"></script>
+    <script src="./dataProcess/analyser.js"></script>
+    <script src="./app.js"></script>
+    <link rel="stylesheet" href="./style/style.css">
+    <link rel="stylesheet" href="./style/askUI.css">
+</head>
+<style>
+    .f {
+        display: flex;
+    }
+
+    .wf {
+        width: 100%;
+    }
+
+    #play-btn {
+        width: 80px;
+    }
+</style>
+
+<body>
+    <input type="file" id="audioInput" accept="audio/*">
+    <div class="wf">
+        <div class="f wf" style="height: 40px;">
+            <button id="play-btn">当前时间<br>总时长</button>
+            <canvas id="timeBar" width="1000px" height="40px"></canvas>
+        </div>
+        <div class="f wf">
+            <canvas id="piano" width="80px" height="718px"></canvas>
+            <canvas id="spectrum" width="1000px" height="618px"></canvas>
+        </div>
+    </div>
+    速度<input type="range" id="speedControl" max="2" min="0.5" step="0.1">
+    倍率<input type="range" id="multiControl" max="2" min="0.5" step="0.1">
+</body>
+<script>
+    const piano = document.getElementById('piano');
+    const cp = piano.getContext('2d');
+    const spectrum = document.getElementById('spectrum');
+    const cs = spectrum.getContext('2d');
+    const timeBar = document.getElementById('timeBar');
+    const ct = timeBar.getContext('2d');
+    cp.fillStyle = 'rgb(255,0,0)'; cp.fillRect(0, 0, piano.width, piano.height);
+    cs.fillStyle = 'rgb(0,0,255)'; cs.fillRect(0, 0, spectrum.width, spectrum.height);
+    ct.fillStyle = 'rgb(0,255,0)'; ct.fillRect(0, 0, timeBar.width, timeBar.height);
+</script>
+<script>
+    const app = new App();
+    // 创建测试时频数据
+    var data = [];
+    for(let i=0;i<100;i++) {
+        let item = new Uint8Array(84);
+        for(let j=0;j<84;j++) {
+            item[j] =j+i+Math.random()*50;
+        }
+        data.push(item);
+    } data[0][0] = 255; data[0][83] = 255;
+    app.Spectrogram.spectrogram = data;
+</script>
+<script>
+    const dragEvents = {
+        dragover: function (e) {
+            e.preventDefault(); // 必须阻止默认事件才能触发drop事件
+        }, // dragover触发过于频繁，所以用dragenter来增加dragIn
+        dragenter: function (e) {
+            e.preventDefault();
+            document.body.classList.add('dragIn');
+        },
+        dragleave: function (e) {
+            e.preventDefault();
+            if (!document.body.contains(e.relatedTarget)) { // 不这样写会导致立即删去dragIn类
+                document.body.classList.remove('dragIn');
+            }
+        },
+        drop: function (e) {
+            e.preventDefault();
+            console.log(e)
+            document.body.classList.remove('dragIn');
+            const file = e.dataTransfer.files[0];
+            if (file.type.startsWith('audio/')) {
+                dragEvents.deRegistDrag();
+                // decodeMusic(file);
+                console.log(file);
+            } else alert('请选择音乐文件！');
+        },
+        registDrag: function () {
+            document.body.addEventListener('dragover', dragEvents.dragover);
+            document.body.addEventListener('dragenter', dragEvents.dragenter);
+            document.body.addEventListener('dragleave', dragEvents.dragleave);
+            document.body.addEventListener('drop', dragEvents.drop);
+        },
+        deRegistDrag: function () {
+            document.body.removeEventListener('dragover', dragEvents.dragover);
+            document.body.removeEventListener('dragenter', dragEvents.dragenter);
+            document.body.removeEventListener('dragleave', dragEvents.dragleave);
+            document.body.removeEventListener('drop', dragEvents.drop);
+        }
+    }; dragEvents.registDrag();
+</script>
+
+</html>

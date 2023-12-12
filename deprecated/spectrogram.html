@@ -1,0 +1,30 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+    <canvas width="1000" height="600" id="c"></canvas>
+</body>
+<script src="./spectrogram.js"></script>
+<script src="./base.js"></script>
+<script>
+    var canvas = document.getElementById('c');
+    var data = [];
+    for(let i=0;i<100;i++) {
+        let item = new Uint8Array(84);
+        for(let j=0;j<84;j++) {
+            // item[j] = Math.floor(Math.random()*(i*2+60));
+            item[j] =j+i+Math.random()*30;
+        }
+        data.push(item);
+    }
+    var base = new Base(canvas);
+    var spectrogram = new Spectrogram(base);
+    spectrogram.spectrogram = data;
+    // base.update();
+    base.loopUpdate();
+</script>
+</html>

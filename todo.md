@@ -1,0 +1,50 @@
+# 在线扒谱应用设计
+1. 获取时域数据（Web Audio API 解码上传的音频文件）【done】
+2. 获取频域信息（FFT类）【done】
+采样率设置为44100，取8192点的实数FFT，分析范围：C1-B7，但点数限制只能区分F#2以上的音符。
+3. 特征提取：提取84个音符的幅度。
+粗糙地实现了。思路是只在需要的频率附近查找。
+面临三个问题：
+3.1. 频谱泄露如何处理
+3.2. 最高到22050Hz，但是音符最高3950Hz，取到C8，即只需777点。后面的是否保留？
+3.3. 有的音乐中心频率不是正好440Hz，是否需要自适应？和频谱泄露处理有关。
+——目前的解决方案：在相邻音周围求平方和。因为有频谱泄露，所以需要收集泄露的频谱的能量。而频谱泄露是对称的，所以相邻音中间的频谱对半分。自适应不实现，因为上述解决方案对音不准有一定的适应能力（音乐高适应性越强，但低音容易出现误判）。每次处理以音符为单位，只搜索周围的能量，所以后面的没用到，随垃圾回收而释放。
+4. 画图。交互
+todo。面临问题：
+4.1. 实时刷新还是一次画完？——选择实时刷新，用无限画布的思路
+4.2. 幅度达到多少认为完全可信？——手调吧。设置一个参数。
+功能：是否自动跟随？
+5. 播放音乐和midi
+todo。问题很多，主要是前端的midi播放。在后文列举。
+
+## 边角功能：
+文件拖拽上传。done
+自动识别音符？比如利用频谱后面的内容，分辨出谐波
+
+## 画图要点
+无限画布 https://blog.csdn.net/shulianghan/article/details/120863626
+
+
+## 键盘画图
+C1对应24 全部按照midi协议编号。
+以一个八度作为最小绘制单元，目前实现的绘图有所冗余，性能未达最优，但是懒得改了。
+
+## midi可视化创建
+关键是如何响应鼠标操作！用状态代替动作
+播放如何同步？
+
+## 音符播放技术要点
+波表合成
+SoundFont文件。参考链接：https://blog.csdn.net/shulianghan/article/details/120863626
+Web Audio API使用：主要是osc
+
+## oscillator 使用
+```js
+var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+var oscillator = audioCtx.createOscillator();
+oscillator.type = "square";
+oscillator.frequency.value = 440; // value in hertz
+oscillator.start(0);
+```
+osc调用start后，动态改变其frequency，它会自动平滑过渡过去。
+注意其属性是AudioParam类别的，所以要通过其value属性来修改值。这个类别维护了一个事件列表，改值也是一个事件，有方法：AudioParam.setValueAtTime(value, startTime)。第二个参数和audioCtx.currentTime有关，单位：s

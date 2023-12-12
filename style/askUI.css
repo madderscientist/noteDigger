@@ -1,0 +1,35 @@
+/* 依赖：style.css中的.card和.hvCenter*/
+#request-cover {
+    position: fixed;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    left: 0;
+    background-color: #6c6c6c78;
+    z-index: 99;
+}
+
+#request-cover .card {
+    position: fixed;
+    width: auto;
+    height: auto;
+    background-color: #fff;
+    padding: 1em;
+}
+
+#request-cover .title {
+    font-size: 1.2em;
+    font-weight: bold;
+}
+
+.card.hvCenter div {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 10px 8px 0 8px;
+}
+
+.card.hvCenter button {
+    flex: 1;
+    margin: 0 0.2em;
+}

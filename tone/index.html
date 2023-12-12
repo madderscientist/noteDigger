@@ -1,0 +1,37 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+</head>
+<body>
+</body>
+<script>
+    const duration = 2.5;
+    function o(f) {
+        var real = new Float32Array([0,-0.580729343,0.128137657,0.097830791,-0.344980402,0.003410015,0.039301075,-0.046438407,-0.018210719,0.042693972,-0.088757664,-0.027706111,-0.063121305,-0.010149762,0.099313636,0.111308038,-0.006738744,0.061558792,-0.004315856,-0.003419428,0.004259346,-0.009657479,-0.005967164,-0.029747023,0,0,0.007641797,0.000429961,-0.006623877,0,0.003485158,0.009779397]);
+        var imag = new Float32Array([0,-0.814096696,-0.0780141,-0.067273312,-0.496902749,0.014973966,0.199009291,0.027340564,-0.049118957,-0.085523269,-0.145336836,-0.02004059,0.13783181,-0.092386787,0.085377333,-0.063096065,-0.001574341,0.009871261,-0.002030624,-0.065436156,-0.007465362,0.019187323,-0.004382582,-0.018297002,0,0,-0.00273699,-0.031419074,-0.014559319,0,-0.001128686,-0.004483854]);
+        var ac = new AudioContext();
+        var osc = ac.createOscillator();
+        var gainNode = ac.createGain();
+        osc.connect(gainNode);
+        gainNode.connect(ac.destination);
+
+        osc.frequency.value = f;
+        var wave = ac.createPeriodicWave(real, imag, { disableNormalization: true });
+        osc.setPeriodicWave(wave);
+
+        // ADSR
+        gainNode.gain.setValueAtTime(0, ac.currentTime);
+        // 0.01秒后音量为1
+        gainNode.gain.linearRampToValueAtTime(1, ac.currentTime + 0.01);
+        // 音调从当前时间开始播放
+        osc.start(ac.currentTime);
+        // this.opts.duration秒内声音慢慢降低，是个不错的停止声音的方法
+        gainNode.gain.exponentialRampToValueAtTime(0.001, ac.currentTime + duration);
+        // this.opts.duration秒后完全停止声音
+        osc.stop(ac.currentTime + duration);
+    }
+</script>
+</html>
