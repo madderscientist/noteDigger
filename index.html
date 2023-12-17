@@ -23,22 +23,38 @@
     #play-btn {
         width: 80px;
     }
+
+    body {
+        display: flex;
+        flex-direction: column;
+    }
+
+    #Canvases-Container {
+        flex: 1;
+        /* 下面这行必须加 不然被画布撑开了就缩不回去了 */
+        overflow: hidden;
+    }
 </style>
 
 <body>
-    <input type="file" id="audioInput" accept="audio/*">
-    <div class="wf">
+    <div style="height: 80px;">
+        <input type="file" id="audioInput" accept="audio/*">
+        速度<input type="range" id="speedControl" max="2" min="0.5" step="0.1">
+        倍率<input type="range" id="multiControl" max="2" min="0.5" step="0.1">
+    </div>
+    <div class="wf" id="Canvases-Container">
         <div class="f wf" style="height: 40px;">
             <button id="play-btn">当前时间<br>总时长</button>
             <canvas id="timeBar" width="1000px" height="40px"></canvas>
         </div>
         <div class="f wf">
-            <canvas id="piano" width="80px" height="718px"></canvas>
-            <canvas id="spectrum" width="1000px" height="618px"></canvas>
+            <canvas id="piano" width="80px" height="500px"></canvas>
+            <canvas id="spectrum" width="1000px" height="500px"></canvas>
         </div>
     </div>
-    速度<input type="range" id="speedControl" max="2" min="0.5" step="0.1">
-    倍率<input type="range" id="multiControl" max="2" min="0.5" step="0.1">
+    <div id="scrollbar-track">
+        <div id="scrollbar-thumb"></div>
+    </div>
 </body>
 <script>
     const piano = document.getElementById('piano');

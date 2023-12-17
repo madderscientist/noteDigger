@@ -1,9 +1,10 @@
-body {
+html, body {
     height: 100%;
     margin: 0;
     padding: 0;
     color: #333;
     background-color: #fff;
+    overflow: hidden;
 }
 
 .dragIn::before {
@@ -27,4 +28,24 @@ body {
     top: 50%;
     left: 50%;
     transform: translate(-50%, -50%);
+}
+
+#scrollbar-track {
+    margin: 0;
+    padding: 0;
+    border: none;
+    position: relative;
+    height: 1em;
+    background-color: lightgray;
+}
+
+#scrollbar-thumb {
+    margin: 0;
+    padding: 0;
+    border: none;
+    position: absolute;
+    height: 100%;
+    width: 50px;
+    background-color: gray;
+    cursor: pointer;
 }

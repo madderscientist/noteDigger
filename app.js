@@ -2,13 +2,12 @@
 // 防止在html初始化之前getElement，所以封装成了构造函数，而不是直接写obj
 function App() {
     this.spectrum = document.getElementById('spectrum');
-    this.spectrum.ctx = this.spectrum.getContext('2d');
+    this.spectrum.ctx = this.spectrum.getContext('2d'); // 绘制相关参数的更改在this.resize中
     this.keyboard = document.getElementById('piano');
     this.keyboard.ctx = this.keyboard.getContext('2d');
-    this.keyboard.ctx.strokeStyle = "black"; this.keyboard.ctx.lineWidth = 1; this.keyboard.ctx.font = "14px Arial";
     this.timeBar = document.getElementById('timeBar');
     this.timeBar.ctx = this.timeBar.getContext('2d');
-    this.width = 16;    // 每格的宽度
+    this.width = 16;    // 每格的宽度 更新时要更新this.HscrollBar.refreshSize();
     this._height = 16;   // 每格的高度
     Object.defineProperty(this, 'height', {
         get: function () { return this._height; },
@@ -19,10 +18,11 @@ function App() {
                 -1.5 * h, -2 * h, -1.5 * h, -1.5 * h, -2 * h, -2 * h, -1.5 * h,
                 -2 * h, -3 * h, -2 * h, -2 * h, -2 * h
             ]);
+            this.keyboard.ctx.font = `${h + 2}px Arial`;
         }
     });
     this.ynum = 84;     // 一共84个按键
-    this.xnum = 0;      // 时间轴的最大长度
+    this.xnum = 0;      // 时间轴的最大长度 更新时要更新this.HscrollBar.refreshSize();
     this.scrollX = 0;   // 视野左边和世界左边的距离
     this.scrollY = 0;   // 视野下边和世界下边的距离
     this.idXstart = 0;  // 开始的X序号
@@ -63,7 +63,7 @@ function App() {
             const sp = this.Spectrogram;
             if (!sp._spectrogram) return;
             const canvas = this.spectrum;
-            const ctx =  this.spectrum.ctx;
+            const ctx = this.spectrum.ctx;
             let rectx = sp.rectXstart;
             for (let x = this.idXstart; x < sp.idXend; x++) {
                 const s = sp._spectrogram[x];
@@ -76,13 +76,23 @@ function App() {
                 rectx += this.width;
             }
             let w = canvas.width - rectx;
-            if (w > 0) { // 填涂剩余部分
+            // 画分界线
+            ctx.beginPath();
+            for (let y = (((this.idYstart / 12) | 0) + 1) * 12,
+                rectY = canvas.height - this.height * y + this.scrollY,
+                dy = -12 * this.height;
+                y < sp.idYend; y += 12, rectY += dy) {
+                ctx.moveTo(0, rectY);
+                ctx.lineTo(canvas.width, rectY);
+            } ctx.stroke();
+            // 填涂剩余部分
+            if (w > 0) {
                 ctx.fillStyle = "#808080";
                 ctx.fillRect(rectx, 0, w, canvas.height);
             }
             // 更新spectrum
             ctx.fillStyle = "#ffffff4f";
-            rectx = canvas.height - (this.Keyboard.highlight-24)*this._height + this.scrollY;
+            rectx = canvas.height - (this.Keyboard.highlight - 24) * this._height + this.scrollY;
             ctx.fillRect(0, rectx, canvas.width, -this._height);
         },
         /**
@@ -109,6 +119,7 @@ function App() {
             } else {
                 this._spectrogram = s;
                 this.parent.xnum = s.length;
+                this.parent.HscrollBar.refreshSize();
                 this.parent.scroll2(0, (this.parent._height * this.parent.ynum - this.parent.spectrum.height) >> 1);  // 垂直方向上，视野移到中间
             }
         }
@@ -147,8 +158,9 @@ function App() {
             const kbd = this.Keyboard;
             const ctx = this.keyboard.ctx;
             const w = this.keyboard.width;
-            const w2 = w*0.618;
-            ctx.clearRect(0, 0, w, this.keyboard.height);
+            const w2 = w * 0.618;
+            ctx.fillStyle = '#fff';
+            ctx.fillRect(0, 0, w, this.keyboard.height);
 
             let noteID = this.idYstart + 24;    // 最下面对应的音的编号
             let note = noteID % 12;             // 一个八度中的第几个音
@@ -157,24 +169,24 @@ function App() {
 
             while (true) {
                 ctx.beginPath();    // 必须写循环内
-                for (let i = 0, rectY = baseY, id = noteID; i < 7 & rectY > 0; i++) { // 画白键
+                ctx.fillStyle = 'orange';
+                for (let i = 0, rectY = baseY, id = noteID; i < 7 & rectY > 0; i++) {   // 画白键
                     let dy = kbd._ychange[i];
-                    if (this.Keyboard.highlight == id) {  // 被选中的
-                        ctx.fillStyle = 'orange';
-                        ctx.fillRect(0, rectY, w, dy);
-                    } else {    // 画线即可 下划线
-                        ctx.moveTo(0, rectY);
-                        ctx.lineTo(w, rectY);
-                    }
+                    if (this.Keyboard.highlight == id) ctx.fillRect(0, rectY, w, dy);   // 被选中的
+                    ctx.moveTo(0, rectY);   // 画线即可 下划线
+                    ctx.lineTo(w, rectY);
                     rectY += dy;
                     id += kbd._idchange[i];
                 } ctx.stroke();
                 // 写音阶名
-                ctx.fillStyle = "black"; ctx.fillText(Math.floor(noteID / 12) - 1, w-14, baseY-4);
+                ctx.fillStyle = "black"; ctx.fillText(Math.floor(noteID / 12) - 1, w - this._height * 0.75, baseY - this._height * 0.3);
                 baseY -= this._height; noteID++;
                 for (let i = 7; i < 12; i++) {
-                    ctx.fillStyle = this.Keyboard.highlight == noteID ? '#Ffa500ff' : 'black';
-                    ctx.fillRect(0, baseY, w2, -this._height);
+                    if (this.Keyboard.highlight == noteID) {    // 考虑到只要画一次高亮，不必每次都改fillStyle
+                        ctx.fillStyle = '#Ffa500ff';
+                        ctx.fillRect(0, baseY, w2, -this._height);
+                        ctx.fillStyle = 'black';
+                    } else ctx.fillRect(0, baseY, w2, -this._height);
                     baseY += kbd._ychange[i];
                     noteID += kbd._idchange[i];
                     if (baseY < 0) return;
@@ -182,8 +194,78 @@ function App() {
             }
         }
     }; this.height = this._height; // 更新this.Keyboard._ychange
-
-    this.resize = (w = window.innerWidth, h = window.innerHeight * 0.7) => {
+    this.TimeBar = {
+        /**
+         * 毫秒转 分:秒:毫秒
+         * @param {Number} ms 毫秒数
+         * @returns [分,秒,毫秒]
+         */
+        msToClock: (ms) => {
+            return [
+                Math.floor(ms / 60000),
+                Math.floor((ms % 60000) / 1000),
+                ms % 1000
+            ];
+        },
+        update: () => {
+            const canvas = this.timeBar;
+            const ctx = this.timeBar.ctx;
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+        },
+    };
+    this.HscrollBar = {     // 配合scroll的滑动条
+        track: document.getElementById('scrollbar-track'),
+        thumb: document.getElementById('scrollbar-thumb'),
+        thumbMousedown: (event) => {    // 滑块跟随鼠标
+            event.stopPropagation();    // 防止触发track的mousedown
+            const startX = event.clientX;
+            const thumb = this.HscrollBar.thumb;
+            const track = this.HscrollBar.track;
+            const thumbLeft = thumb.offsetLeft;
+            const moveThumb = (event) => {
+                let currentX = event.clientX - startX + thumbLeft;
+                let maxThumbLeft = track.offsetWidth - thumb.offsetWidth;
+                let maxScrollX = this.width * this.xnum - this.spectrum.width;
+                this.scroll2(currentX / maxThumbLeft * maxScrollX, this.scrollY);
+            }
+            const stopMoveThumb = () => {
+                document.removeEventListener("mousemove", moveThumb);
+                document.removeEventListener("mouseup", stopMoveThumb);
+            }
+            document.addEventListener("mousemove", moveThumb);
+            document.addEventListener("mouseup", stopMoveThumb);
+        },
+        trackMousedown: (e) => {    // 滑块跳转
+            e.stopPropagation();
+            const thumb = this.HscrollBar.thumb;
+            const track = this.HscrollBar.track;
+            let maxScrollX = this.width * this.xnum - this.spectrum.width;
+            let maxThumbLeft = track.offsetWidth - thumb.offsetWidth;
+            let p = (e.offsetX - (thumb.offsetWidth >> 1)) / maxThumbLeft;  // nnd 减法优先级比位运算高
+            this.scroll2(p * maxScrollX, this.scrollY);
+        },
+        refreshPosition: () => {
+            let all = this.width * this.xnum - this.spectrum.width;
+            let pos = (this.HscrollBar.track.offsetWidth - this.HscrollBar.thumb.offsetWidth) * this.scrollX / all;
+            this.HscrollBar.thumb.style.left = pos + 'px';
+        },
+        refreshSize: () => {    // 需要在this.xnum this.width改变之后调用
+            if (this.xnum) {
+                this.HscrollBar.track.style.display = 'block';
+                let p = Math.min(1, this.spectrum.width / (this.width * this.xnum));
+                let nw = p * this.HscrollBar.track.offsetWidth;
+                this.HscrollBar.thumb.style.width = Math.max(nw, 10) + 'px';    // 限制最小宽度
+            } else {
+                this.HscrollBar.track.style.display = 'hidden';
+            }
+        }
+    };
+    /**
+     * 改变工作区(频谱、键盘、时间轴)大小
+     * @param {Number} w 工作区的新宽度 默认撑满页面
+     * @param {Number} h 工作区的新高度 默认充满父容器 父容器需设置flex:1;overflow:hidden;
+     */
+    this.resize = (w = window.innerWidth, h = document.getElementById('Canvases-Container').getBoundingClientRect().height) => {
         if (w > 80) {
             this.spectrum.width = w - 80;
             this.keyboard.width = 80;
@@ -200,6 +282,12 @@ function App() {
         }
         this.keyboard.height = this.spectrum.height;
         this.timeBar.width = this.spectrum.width;
+        // 改变画布长宽之后，设置的值会重置，需要重新设置
+        this.spectrum.ctx.strokeStyle = "#FFFFFF"; this.spectrum.ctx.lineWidth = 1;
+        this.keyboard.ctx.lineWidth = 1; this.keyboard.ctx.font = `${this._height + 2}px Arial`;
+        this.timeBar.ctx.fillStyle = '#f0f0f0';
+        // 更新滑动条大小
+        this.HscrollBar.refreshSize();
         this.scroll2(this.scrollX, this.scrollY);
     };
     /**
@@ -216,22 +304,32 @@ function App() {
         // 画图的y从左上角开始
         this.rectYstart = this.spectrum.height - this.idYstart * this._height + this.scrollY;
         this.Spectrogram.scroll2();
+        // 滑动条
+        this.HscrollBar.refreshPosition();
     };
+    /**
+     * 按倍数横向缩放时频图 以鼠标指针为中心
+     * @param {Number} mouseX 
+     * @param {Number} times 
+     */
     this.scaleX = (mouseX, times) => {
         let nw = this.width * times;
         if (nw < 3) return;
         if (nw > this.spectrum.width >> 2) return;
         this.width = nw;
+        this.HscrollBar.refreshSize();
         this.scroll2((this.scrollX + mouseX) * times - mouseX, this.scrollY);
     };
+    /**
+     * 重新绘制画布(工作区)
+     */
     this.update = () => {
         // 首先要同步时间 如果音频播放了，就同步音频时间
+        this.AudioPlayer.update();
         this.Spectrogram.update();
         this.Keyboard.update();
         this.MidiAction.update();
-        this.AudioPlayer.update();
-        // 以下测试用
-        this.timeBar.ctx.fillStyle = 'rgb(255,2,235)'; this.timeBar.ctx.fillRect(0, 0, this.timeBar.width, this.timeBar.height);
+        this.TimeBar.update();  // 必须在Spectrogram后更新，因为涉及时间指示的绘制
     };
     this.trackMouse = (e) => {  // onmousemove
         this.mouseY = e.offsetY;
@@ -254,14 +352,14 @@ function App() {
     //=========数据解析相关=========//
     this.Analyser = {
         /**
-         * 对audioBuffer执行小波变换
+         * 对audioBuffer执行小波变换 耗时估计会长，实际使用时再看要不要加ui进度指示
          * @param {AudioBuffer} audioBuffer 音频缓冲区
          * @param {Number} tNum 一秒几次分析 决定步距
          * @param {Number} channel 选择哪个channel分析 0:left 1:right 2:l+r 3:l-r else:fft(l)+fft(r)
          * @param {Number} fftPoints 实数fft点数
          * @returns {Array<Float32Array>} 时频谱数据
          */
-        analyse: (audioBuffer, tNum = 10, A4 = 440, channel = -1, fftPoints = 8192) => {
+        analyse: async (audioBuffer, tNum = 10, A4 = 440, channel = -1, fftPoints = 8192) => {
             this.dt = 1 / tNum;
             let dN = Math.round(audioBuffer.sampleRate / tNum);
             // 创建分析工具
@@ -375,6 +473,8 @@ function App() {
         }   // 只改状态，但不绘图。绘图交给固定时间刷新完成
         this.trackMouse(e);
     });
+    this.HscrollBar.thumb.addEventListener('mousedown', this.HscrollBar.thumbMousedown);
+    this.HscrollBar.track.addEventListener('mousedown', this.HscrollBar.trackMousedown);
     this.keyboard.addEventListener('wheel', (e) => {
         this.scroll2(this.scrollX, this.scrollY - e.deltaY);    // 只能上下移动
     });
@@ -382,15 +482,18 @@ function App() {
         // 双击在此开始播放
     });
     this.spectrum.addEventListener('mousemove', this.trackMouse);
-    this.keyboard.addEventListener('mousedown', this.trackMouse);
+    this.keyboard.addEventListener('mousemove', this.trackMouse);
     this.loopUpdate(true);
 }
 /*
 需要什么dom?
+#Canvases-Container div 决定画布高度
 #spectrum canvas 画频谱
 #piano canvas 画琴键
 #timeBar canvas 画时间轴
 #speedControl input[type=range] 变速
 #multiControl input[type=range] 变画频谱的倍率
 #play-btn button 播放
+#scrollbar-track div 滑动条轨道
+#scrollbar-thumb div 滑动条
 */
