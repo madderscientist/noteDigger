@@ -4,10 +4,19 @@ function App() {
     this.spectrum = document.getElementById('spectrum');
     this.spectrum.ctx = this.spectrum.getContext('2d'); // 绘制相关参数的更改在this.resize中
     this.keyboard = document.getElementById('piano');
-    this.keyboard.ctx = this.keyboard.getContext('2d');
+    this.keyboard.ctx = this.keyboard.getContext('2d', { alpha: false, desynchronized: true });
     this.timeBar = document.getElementById('timeBar');
-    this.timeBar.ctx = this.timeBar.getContext('2d');
-    this.width = 16;    // 每格的宽度 更新时要更新this.HscrollBar.refreshSize();
+    this.timeBar.ctx = this.timeBar.getContext('2d', { alpha: false, desynchronized: true });
+    this._width = 16;    // 每格的宽度
+    Object.defineProperty(this, 'width', {
+        get: function () { return this._width; },
+        set: function (w) {
+            if (w < 0) return;
+            this._width = w;
+            this.TimeBar.updateInterval();
+            this.HscrollBar.refreshSize();  // 刷新横向滑动条
+        }
+    });
     this._height = 16;   // 每格的高度
     Object.defineProperty(this, 'height', {
         get: function () { return this._height; },
@@ -30,8 +39,8 @@ function App() {
     this.rectYstart = 0;// 画步开始的具体y坐标 迭代应该减height 被画频谱、画键盘共享
     this.loop = 0;      // 接收requestAnimationFrame的返回
     this.time = -1;     // 当前时间
-    this.dt = 0.1;      // 每次分析的时间间隔 在this.Analyser.analyse中更新
-    this._mouseY = 0;    // 鼠标当前y坐标
+    this.dt = 100;      // 每次分析的时间间隔 单位毫秒 在this.Analyser.analyse中更新
+    this._mouseY = 0;   // 鼠标当前y坐标
     Object.defineProperty(this, 'mouseY', {
         get: function () { return this._mouseY; },
         set: function (y) {
@@ -70,10 +79,10 @@ function App() {
                 let recty = this.rectYstart;
                 for (let y = this.idYstart; y < sp.idYend; y++) {
                     ctx.fillStyle = sp.getColor(s[y] * sp.multiple);
-                    ctx.fillRect(rectx, recty, this.width, -this._height);
+                    ctx.fillRect(rectx, recty, this._width, -this._height);
                     recty -= this._height;
                 }
-                rectx += this.width;
+                rectx += this._width;
             }
             let w = canvas.width - rectx;
             // 画分界线
@@ -104,9 +113,9 @@ function App() {
         scroll2: () => {    // 单独更新一些量，不污染全局命名空间
             if (!this.Spectrogram._spectrogram) return;
             // 不能用画图的坐标去限制，因为数据可能填不满画布 必须用id
-            this.Spectrogram.idXend = Math.min(this.xnum, Math.ceil((this.scrollX + this.spectrum.width) / this.width));
+            this.Spectrogram.idXend = Math.min(this.xnum, Math.ceil((this.scrollX + this.spectrum.width) / this._width));
             this.Spectrogram.idYend = Math.min(this.ynum, Math.ceil((this.scrollY + this.spectrum.height) / this._height));
-            this.Spectrogram.rectXstart = this.idXstart * this.width - this.scrollX;
+            this.Spectrogram.rectXstart = this.idXstart * this._width - this.scrollX;
         },
         // 注意，getter 和 setter 的this指向为Spectrogram
         get spectrogram() {
@@ -195,6 +204,7 @@ function App() {
         }
     }; this.height = this._height; // 更新this.Keyboard._ychange
     this.TimeBar = {
+        interval: 10,   // 每个标注的间隔块数 在updateInterval中更新
         /**
          * 毫秒转 分:秒:毫秒
          * @param {Number} ms 毫秒数
@@ -210,8 +220,30 @@ function App() {
         update: () => {
             const canvas = this.timeBar;
             const ctx = this.timeBar.ctx;
+            const tb = this.TimeBar;
+            let idstart = Math.ceil(this.idXstart / tb.interval - 0.1);   // 画面中第一个时间点的序号
+            let dt = tb.interval * this.dt;         // 时间的步长
+            let dp = this.width * tb.interval;      // 像素的步长
+            let timeAt = dt * idstart;              // 对应的毫秒
+            let p = idstart * dp - this.scrollX;    // 对应的像素
+            ctx.fillStyle = '#f0f0f0';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = 'black';
+            ctx.beginPath();
+            for (endPix = canvas.width + (dp >> 1); p < endPix; p += dp, timeAt += dt) {
+                ctx.moveTo(p, 0);
+                ctx.lineTo(p, canvas.height);
+                const t = tb.msToClock(timeAt);
+                let str = `${t[0].toString().padStart(2, "0")}:${t[1].toString().padStart(2, "0")}:${t[2].toString().padStart(3, "0")}`;
+                ctx.fillText(str, p - 28, 18);
+            } ctx.stroke();
         },
+        updateInterval: () => {    // 根据this.width改变 在width的setter中调用
+            const fontWidth = this.timeBar.ctx.measureText('00:00:000').width * 1.1;
+            // 如果间距小于fontWidth则细分
+            this.TimeBar.interval = Math.max(1, Math.ceil(fontWidth / this._width));
+        }
+        // todo: 重复区间设置
     };
     this.HscrollBar = {     // 配合scroll的滑动条
         track: document.getElementById('scrollbar-track'),
@@ -225,7 +257,7 @@ function App() {
             const moveThumb = (event) => {
                 let currentX = event.clientX - startX + thumbLeft;
                 let maxThumbLeft = track.offsetWidth - thumb.offsetWidth;
-                let maxScrollX = this.width * this.xnum - this.spectrum.width;
+                let maxScrollX = this._width * this.xnum - this.spectrum.width;
                 this.scroll2(currentX / maxThumbLeft * maxScrollX, this.scrollY);
             }
             const stopMoveThumb = () => {
@@ -239,20 +271,20 @@ function App() {
             e.stopPropagation();
             const thumb = this.HscrollBar.thumb;
             const track = this.HscrollBar.track;
-            let maxScrollX = this.width * this.xnum - this.spectrum.width;
+            let maxScrollX = this._width * this.xnum - this.spectrum.width;
             let maxThumbLeft = track.offsetWidth - thumb.offsetWidth;
             let p = (e.offsetX - (thumb.offsetWidth >> 1)) / maxThumbLeft;  // nnd 减法优先级比位运算高
             this.scroll2(p * maxScrollX, this.scrollY);
         },
         refreshPosition: () => {
-            let all = this.width * this.xnum - this.spectrum.width;
+            let all = this._width * this.xnum - this.spectrum.width;
             let pos = (this.HscrollBar.track.offsetWidth - this.HscrollBar.thumb.offsetWidth) * this.scrollX / all;
             this.HscrollBar.thumb.style.left = pos + 'px';
         },
         refreshSize: () => {    // 需要在this.xnum this.width改变之后调用
             if (this.xnum) {
                 this.HscrollBar.track.style.display = 'block';
-                let p = Math.min(1, this.spectrum.width / (this.width * this.xnum));
+                let p = Math.min(1, this.spectrum.width / (this._width * this.xnum));
                 let nw = p * this.HscrollBar.track.offsetWidth;
                 this.HscrollBar.thumb.style.width = Math.max(nw, 10) + 'px';    // 限制最小宽度
             } else {
@@ -285,7 +317,7 @@ function App() {
         // 改变画布长宽之后，设置的值会重置，需要重新设置
         this.spectrum.ctx.strokeStyle = "#FFFFFF"; this.spectrum.ctx.lineWidth = 1;
         this.keyboard.ctx.lineWidth = 1; this.keyboard.ctx.font = `${this._height + 2}px Arial`;
-        this.timeBar.ctx.fillStyle = '#f0f0f0';
+        this.timeBar.ctx.strokeStyle = '#ff0000'; this.timeBar.ctx.font = '14px Arial';
         // 更新滑动条大小
         this.HscrollBar.refreshSize();
         this.scroll2(this.scrollX, this.scrollY);
@@ -297,9 +329,9 @@ function App() {
      * @param {Number} y 新视野下边和世界下边的距离
      */
     this.scroll2 = (x = 0, y = 0) => {
-        this.scrollX = Math.max(0, Math.min(x, this.width * this.xnum - this.spectrum.width));
+        this.scrollX = Math.max(0, Math.min(x, this._width * this.xnum - this.spectrum.width));
         this.scrollY = Math.max(0, Math.min(y, this._height * this.ynum - this.spectrum.height));
-        this.idXstart = (this.scrollX / this.width) | 0;
+        this.idXstart = (this.scrollX / this._width) | 0;
         this.idYstart = (this.scrollY / this._height) | 0;
         // 画图的y从左上角开始
         this.rectYstart = this.spectrum.height - this.idYstart * this._height + this.scrollY;
@@ -310,14 +342,13 @@ function App() {
     /**
      * 按倍数横向缩放时频图 以鼠标指针为中心
      * @param {Number} mouseX 
-     * @param {Number} times 
+     * @param {Number} times 倍数 比用加减像素好，更连续
      */
     this.scaleX = (mouseX, times) => {
-        let nw = this.width * times;
+        let nw = this._width * times;
         if (nw < 3) return;
         if (nw > this.spectrum.width >> 2) return;
         this.width = nw;
-        this.HscrollBar.refreshSize();
         this.scroll2((this.scrollX + mouseX) * times - mouseX, this.scrollY);
     };
     /**
@@ -360,7 +391,7 @@ function App() {
          * @returns {Array<Float32Array>} 时频谱数据
          */
         analyse: async (audioBuffer, tNum = 10, A4 = 440, channel = -1, fftPoints = 8192) => {
-            this.dt = 1 / tNum;
+            this.dt = 1000 / tNum;
             let dN = Math.round(audioBuffer.sampleRate / tNum);
             // 创建分析工具
             var fft = new realFFT(fftPoints); // 8192点在44100采样率下，最低能分辨F#2，但是足矣
@@ -451,11 +482,12 @@ function App() {
         switch (e.key) {
             case 'ArrowUp': this.scroll2(this.scrollX, this.scrollY - this._height); break;
             case 'ArrowDown': this.scroll2(this.scrollX, this.scrollY + this._height); break;
-            case 'ArrowLeft': this.scroll2(this.scrollX - this.width, this.scrollY); break;
-            case 'ArrowRight': this.scroll2(this.scrollX + this.width, this.scrollY); break;
+            case 'ArrowLeft': this.scroll2(this.scrollX - this._width, this.scrollY); break;
+            case 'ArrowRight': this.scroll2(this.scrollX + this._width, this.scrollY); break;
         }
     });
-    this.AudioPlayer.play_btn.onclick = () => { // 播放
+    this.AudioPlayer.play_btn.onclick = () => {
+        // todo: 播放
     };
     window.addEventListener('resize', () => {
         this.resize();
@@ -479,10 +511,22 @@ function App() {
         this.scroll2(this.scrollX, this.scrollY - e.deltaY);    // 只能上下移动
     });
     this.timeBar.addEventListener('dblclick', (e) => {
-        // 双击在此开始播放
+        // todo: 双击在此开始播放
+    });
+    this.timeBar.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        // todo: 菜单
     });
     this.spectrum.addEventListener('mousemove', this.trackMouse);
+    this.spectrum.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        // todo: 播放音符或者菜单
+    });
     this.keyboard.addEventListener('mousemove', this.trackMouse);
+    this.keyboard.addEventListener('contextmenu', (e) => {
+        e.preventDefault();
+        // todo: 播放音符
+    });
     this.loopUpdate(true);
 }
 /*

@@ -71,10 +71,10 @@
     const app = new App();
     // 创建测试时频数据
     var data = [];
-    for(let i=0;i<100;i++) {
+    for (let i = 0; i < 100; i++) {
         let item = new Uint8Array(84);
-        for(let j=0;j<84;j++) {
-            item[j] =j+i+Math.random()*50;
+        for (let j = 0; j < 84; j++) {
+            item[j] = j + i + Math.random() * 50;
         }
         data.push(item);
     } data[0][0] = 255; data[0][83] = 255;
@@ -100,6 +100,7 @@
             console.log(e)
             document.body.classList.remove('dragIn');
             const file = e.dataTransfer.files[0];
+            if(!file) return;
             if (file.type.startsWith('audio/')) {
                 dragEvents.deRegistDrag();
                 // decodeMusic(file);
