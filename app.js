@@ -134,20 +134,206 @@ function App() {
         }
     };
     this.MidiAction = {
-        clickX: 0,
-        clickY: 0,
+        clickXid: 0,
+        clickYid: 0,
+        _tempdx: 0, // 鼠标移动记录上次
+        _tempdy: 0,
+        _anyAction: false,  // 用于在选中多个后判断松开鼠标时应该如何处理选中
+        /* 一个音符 = {
+            y: 离散 和spectrum的y一致
+            x1: 离散 起点
+            x2: 离散 终点
+        } */
+        selected: [],   // 选中的音符 无序即可
+        midi: [],       // 所有音符 需要维护有序性
         update: () => {
-
+            const m = this.MidiAction.midi;
+            if (m.length == 0) return;   // 二分查找要求长度大于0
+            const s = this.spectrum.ctx;
+            let drawStart = m.length;
+            {   // 找到m中第一个x2值大于this.idXstart的音符的起始位置 由于m中元素较多 用二分查找
+                let l = 0, r = drawStart - 1;
+                while (l <= r) {
+                    let mid = (l + r) >> 1;
+                    if (m[mid].x2 > this.idXstart) {
+                        r = mid - 1;
+                        drawStart = mid;
+                    } else l = mid + 1;
+                }
+            }
+            for (; drawStart < m.length; drawStart++) {
+                const note = m[drawStart];
+                if (note.x1 >= this.Spectrogram.idXend) break;
+                if (note.y < this.idYstart || note.y >= this.Spectrogram.idYend) continue;
+                const params = [note.x1 * this._width - this.scrollX, this.spectrum.height - note.y * this._height + this.scrollY, (note.x2 - note.x1) * this._width, -this._height];
+                if (note.selected) {
+                    s.fillStyle = '#ffffff';
+                    s.fillRect(...params);
+                } else {    // 画白框红内矩形
+                    s.fillStyle = '#FF0000';
+                    s.fillRect(...params);
+                    s.strokeRect(...params);
+                }
+            }
         },
         deleteNote: () => {
-
+            this.MidiAction.selected.forEach((v) => {
+                let i = this.MidiAction.midi.indexOf(v);
+                if (i != -1) this.MidiAction.midi.splice(i, 1);
+            });
+            this.MidiAction.selected.length = 0;
         },
-        addNote: () => {
-
+        clearSelected: () => {  // 取消已选
+            this.MidiAction.selected.forEach(v => { v.selected = false; });
+            this.MidiAction.selected.length = 0;
         },
-        changeNoteTime: () => {
-
-        }
+        /**
+         * 改变选中的音符的时长 依赖相对于点击位置的移动改变长度 所以需要提前准备好clickX
+         * 需要保证和changeNoteX同时只能使用一个
+         * @param {MouseEvent} e 
+         */
+        changeNoteDuration: (e) => {
+            this.MidiAction._anyAction = true;
+            // 兼容窗口滑动，以绝对坐标进行运算
+            let dx = (((e.offsetX + this.scrollX) / this._width) | 0) - this.MidiAction.clickXid;  // 应该用|0因为向0取整
+            this.MidiAction.selected.forEach((v) => {
+                if ((v.x2 += dx - this.MidiAction._tempdx) <= v.x1) v.x2 = v.x1 + 1;
+            });
+            this.MidiAction._tempdx = dx;
+        },
+        changeNoteY: () => {    // 要求在trackMouse之后添加入spectrum的mousemoveEnent
+            this.MidiAction._anyAction = true;
+            let dy = this.Keyboard.highlight - 24 - this.MidiAction.clickYid;  // 应该用|0因为向0取整
+            this.MidiAction.selected.forEach((v) => {
+                v.y += dy - this.MidiAction._tempdy;
+            });
+            this.MidiAction._tempdy = dy;
+        },
+        changeNoteX: (e) => {
+            this.MidiAction._anyAction = true;
+            let dx = (((e.offsetX + this.scrollX) / this._width) | 0) - this.MidiAction.clickXid;  // 应该用|0因为向0取整
+            this.MidiAction.selected.forEach((v) => {
+                let d = v.x2 - v.x1;
+                if ((v.x1 += dx - this.MidiAction._tempdx) < 0) v.x1 = 0; // 越界则设置为0
+                v.x2 = v.x1 + d;
+            });
+            this.MidiAction._tempdx = dx;
+        },
+        /**
+         * 添加音符的鼠标动作 由this.MidiAction.onclick调用
+         */
+        addNoteAction: () => {
+            const m = this.MidiAction;
+            // 取消已选
+            m.clearSelected();
+            // 添加新音符，设置已选
+            const note = {
+                y: m.clickYid,
+                x1: m.clickXid,
+                x2: m.clickXid + 1,
+                selected: true
+            }; m.selected.push(note);
+            {   // 二分插入
+                let l = 0, r = m.midi.length;
+                while (l < r) {
+                    let mid = (l + r) >> 1;
+                    if (m.midi[mid].x1 < note.x1) l = mid + 1;
+                    else r = mid;
+                } m.midi.splice(l, 0, note);
+            }
+            this.spectrum.addEventListener('mousemove', m.changeNoteDuration);
+            this.spectrum.addEventListener('mousemove', m.changeNoteY);
+            // 也许需要在滑动的时候也计算changeNoteDuration
+            const removeEvent = () => {
+                this.spectrum.removeEventListener('mousemove', m.changeNoteDuration);
+                this.spectrum.removeEventListener('mousemove', m.changeNoteY);
+                document.removeEventListener('mouseup', removeEvent);
+            }
+            document.addEventListener('mouseup', removeEvent);
+        },
+        onclick_L: (e) => {
+            //== step 1: 判断是否点在了音符上 ==//
+            const m = this.MidiAction;
+            const midi = m.midi;
+            // 为了支持在鼠标操作的时候能滑动，记录绝对位置
+            m._tempdx = m._tempdy = 0;
+            const x = m.clickXid = ((e.offsetX + this.scrollX) / this._width) | 0;
+            const y = m.clickYid = ((this.scrollY + this.spectrum.height - e.offsetY) / this._height) | 0;
+            // 找到点击的最近的音符
+            let n = null;
+            for (let i = 0, distance = this._width * this.xnum; i < midi.length; i++) {
+                let note = midi[i];
+                let dis = x - note.x1;
+                if (dis < 0) break;
+                if (y == note.y && x <= note.x2) {
+                    if (dis < distance) {
+                        distance = dis;
+                        n = note;
+                    }
+                }
+            }
+            if (!n) { m.addNoteAction(); return; }
+            //== step 2: 如果点击到了音符，ctrl是否按下 ==/
+            if (e.ctrlKey) {    // 有ctrl表示多选
+                if (n.selected) {   // 已经选中了，取消选中
+                    m.selected.splice(m.selected.indexOf(n), 1);
+                    n.selected = false;
+                } else {    // 没选中，添加选中
+                    m.selected.push(n);
+                    n.selected = true;
+                } return;
+            }
+            //== step 3: 单选时，是否选中了多个(事关什么时候取消选中) ==//
+            if (m.selected.length > 1 && n.selected) {    // 如果选择了多个，在松开鼠标的时候处理选中
+                m._anyAction = false;
+                const up = () => {
+                    if (!m._anyAction) {    // 没有任何拖拽动作，说明为了单选
+                        m.selected.forEach(v => { v.selected = false; });
+                        m.selected.length = 0;
+                        n.selected = true;
+                        m.selected.push(n);
+                    }
+                    document.removeEventListener('mouseup', up);
+                }; document.addEventListener('mouseup', up);
+            } else {    // 只选一个
+                if (n.selected) {
+                    m._anyAction = false;
+                    const up = () => {
+                        if (!m._anyAction) {    // 没有任何拖拽动作，说明为了取消选中
+                            m.selected.forEach(v => { v.selected = false; });
+                            m.selected.length = 0;
+                        }
+                        document.removeEventListener('mouseup', up);
+                    }; document.addEventListener('mouseup', up);
+                } else {
+                    m.selected.forEach(v => { v.selected = false; });
+                    m.selected.length = 0;
+                    n.selected = true;
+                    m.selected.push(n);
+                }
+            }
+            //== step 4: 如果点击到了音符，添加移动事件 ==//
+            if (((e.offsetX + this.scrollX) << 1) > (n.x2 + n.x1) * this._width) {    // 靠近右侧，调整时长
+                this.spectrum.addEventListener('mousemove', m.changeNoteDuration);
+                this.spectrum.addEventListener('mousemove', m.changeNoteY);
+                const removeEvent = () => {
+                    this.spectrum.removeEventListener('mousemove', m.changeNoteDuration);
+                    this.spectrum.removeEventListener('mousemove', m.changeNoteY);
+                    document.removeEventListener('mouseup', removeEvent);
+                }
+                document.addEventListener('mouseup', removeEvent);
+            } else {    // 靠近左侧，调整位置
+                this.spectrum.addEventListener('mousemove', m.changeNoteX);
+                this.spectrum.addEventListener('mousemove', m.changeNoteY);
+                const removeEvent = () => {
+                    this.spectrum.removeEventListener('mousemove', m.changeNoteX);
+                    this.spectrum.removeEventListener('mousemove', m.changeNoteY);
+                    document.removeEventListener('mouseup', removeEvent);
+                    this.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
+                }
+                document.addEventListener('mouseup', removeEvent);
+            }
+        },
     };
     this.AudioPlayer = {
         name: "请上传文件", // 在this.Analyser.onfile中赋值
@@ -484,6 +670,7 @@ function App() {
             case 'ArrowDown': this.scroll2(this.scrollX, this.scrollY + this._height); break;
             case 'ArrowLeft': this.scroll2(this.scrollX - this._width, this.scrollY); break;
             case 'ArrowRight': this.scroll2(this.scrollX + this._width, this.scrollY); break;
+            case 'Delete': this.MidiAction.deleteNote(); break;
         }
     });
     this.AudioPlayer.play_btn.onclick = () => {
@@ -500,10 +687,23 @@ function App() {
         } else if (e.shiftKey) { // 垂直滚动
             // 只有鼠标滚轮时是有deltaY。所以这里让X方向能移动，做法是交换X和Y
             this.scroll2(this.scrollX + e.deltaY, this.scrollY + e.deltaX);
-        } else {
+        } else {    // 触摸板的滑动也是wheel
             this.scroll2(this.scrollX + e.deltaX, this.scrollY - e.deltaY);
         }   // 只改状态，但不绘图。绘图交给固定时间刷新完成
         this.trackMouse(e);
+    });
+    this.spectrum.addEventListener('mousedown', (e) => {
+        // 有bug！正确执行一次后卡死
+        if (e.button == 1) {    // 中键按下 动作同触摸板滑动 视窗移动
+            const moveWindow = (e) => {
+                this.scroll2(this.scrollX - e.movementX, this.scrollY + e.movementY);
+            }; this.spectrum.addEventListener('mousemove', moveWindow);
+            const up = () => {
+                this.spectrum.removeEventListener('mousemove', moveWindow);
+                document.removeEventListener('mouseup', up);
+            }; document.addEventListener('mouseup', up);
+        }
+        if (e.button == 0) this.MidiAction.onclick_L(e);    // midi音符相关
     });
     this.HscrollBar.thumb.addEventListener('mousedown', this.HscrollBar.thumbMousedown);
     this.HscrollBar.track.addEventListener('mousedown', this.HscrollBar.trackMousedown);

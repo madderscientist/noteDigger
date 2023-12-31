@@ -87,7 +87,10 @@
         }, // dragover触发过于频繁，所以用dragenter来增加dragIn
         dragenter: function (e) {
             e.preventDefault();
-            document.body.classList.add('dragIn');
+            // 检查是否有文件被拖入 以防止dom被拖入也触发
+            if (Array.from(e.dataTransfer.types).includes('Files')) {
+                document.body.classList.add('dragIn');
+            }
         },
         dragleave: function (e) {
             e.preventDefault();
@@ -97,15 +100,15 @@
         },
         drop: function (e) {
             e.preventDefault();
-            console.log(e)
             document.body.classList.remove('dragIn');
-            const file = e.dataTransfer.files[0];
-            if(!file) return;
-            if (file.type.startsWith('audio/')) {
-                dragEvents.deRegistDrag();
-                // decodeMusic(file);
-                console.log(file);
-            } else alert('请选择音乐文件！');
+            if (Array.from(e.dataTransfer.types).includes('Files')) {   // 判断是否有文件被拖入
+                const file = e.dataTransfer.files[0];
+                if (file.type.startsWith('audio/')) {   // 判断是否为音频文件
+                    dragEvents.deRegistDrag();
+                    // decodeMusic(file);
+                    console.log(file);
+                } else alert('请选择音乐文件！');
+            }
         },
         registDrag: function () {
             document.body.addEventListener('dragover', dragEvents.dragover);
