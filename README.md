@@ -1,6 +1,6 @@
 # noteDigger!
-前端扒谱~模仿的是软件wavetone。<br>
-正在推进~目标是全部自己造轮子~<br>
+前端扒谱。模仿的是软件wavetone。<br>
+推进ing……目标是全部自己造轮子！即：不使用框架、不使用外部库；目的是减小项目大小，并掌握各个环节。目前频谱分析的软件非常多，功能也超级强大，自知比不过……所以唯一能一战的就是项目体积了！作为一个纯前端项目，就要把易用的优点完全发扬！<br>
 [demo](http://htmlpreview.github.io/?https://github.com/madderscientist/noteDigger/blob/main/index.html)
 
 ## 重要更新记录

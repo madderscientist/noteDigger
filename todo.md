@@ -24,7 +24,6 @@ todo。问题很多，主要是前端的midi播放。在后文列举。
 ## 画图要点
 无限画布 https://blog.csdn.net/shulianghan/article/details/120863626
 
-
 ## 键盘画图
 C1对应24 全部按照midi协议编号。
 以一个八度作为最小绘制单元，目前实现的绘图有所冗余，性能未达最优，但是懒得改了。

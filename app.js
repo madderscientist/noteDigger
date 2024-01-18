@@ -36,7 +36,10 @@ function App() {
     this.scrollY = 0;   // 视野下边和世界下边的距离
     this.idXstart = 0;  // 开始的X序号
     this.idYstart = 0;  // 开始的Y序号
-    this.rectYstart = 0;// 画步开始的具体y坐标 迭代应该减height 被画频谱、画键盘共享
+    this.idXend = 0;
+    this.idYend = 0;
+    this.rectXstart = 0;// 目前只有Spectrogram.update在使用
+    this.rectYstart = 0;// 画布开始的具体y坐标(因为最下面一个不完整) 迭代应该减height 被画频谱、画键盘共享
     this.loop = 0;      // 接收requestAnimationFrame的返回
     this.time = -1;     // 当前时间
     this.dt = 100;      // 每次分析的时间间隔 单位毫秒 在this.Analyser.analyse中更新
@@ -53,9 +56,6 @@ function App() {
         parent: this,
         colorStep1: 100,
         colorStep2: 240,
-        rectXstart: 0,
-        idXend: 0,
-        idYend: 0,
         multiple: 1,         // 幅度的倍数
         _spectrogram: null,
         getColor: (value) => {  // 0-step1，是蓝色的亮度从0变为50%；step1-step2，是颜色由蓝色变为红色；step2-255，保持红色
@@ -68,16 +68,15 @@ function App() {
                 hue = 240 - ((value - this.Spectrogram.colorStep1) / (this.Spectrogram.colorStep2 - this.Spectrogram.colorStep1)) * 240;
             } return `hsl(${hue}, 100%, ${lightness}%)`;
         },
-        update: () => {
+        update: () => { // 不能用画图的坐标去限制，因为数据可能填不满画布 必须用id
             const sp = this.Spectrogram;
-            if (!sp._spectrogram) return;
             const canvas = this.spectrum;
             const ctx = this.spectrum.ctx;
-            let rectx = sp.rectXstart;
-            for (let x = this.idXstart; x < sp.idXend; x++) {
+            let rectx = this.rectXstart;
+            for (let x = this.idXstart; x < this.idXend; x++) {
                 const s = sp._spectrogram[x];
                 let recty = this.rectYstart;
-                for (let y = this.idYstart; y < sp.idYend; y++) {
+                for (let y = this.idYstart; y < this.idYend; y++) {
                     ctx.fillStyle = sp.getColor(s[y] * sp.multiple);
                     ctx.fillRect(rectx, recty, this._width, -this._height);
                     recty -= this._height;
@@ -86,11 +85,12 @@ function App() {
             }
             let w = canvas.width - rectx;
             // 画分界线
+            ctx.strokeStyle = "#FFFFFF";
             ctx.beginPath();
             for (let y = (((this.idYstart / 12) | 0) + 1) * 12,
                 rectY = canvas.height - this.height * y + this.scrollY,
                 dy = -12 * this.height;
-                y < sp.idYend; y += 12, rectY += dy) {
+                y < this.idYend; y += 12, rectY += dy) {
                 ctx.moveTo(0, rectY);
                 ctx.lineTo(canvas.width, rectY);
             } ctx.stroke();
@@ -104,19 +104,6 @@ function App() {
             rectx = canvas.height - (this.Keyboard.highlight - 24) * this._height + this.scrollY;
             ctx.fillRect(0, rectx, canvas.width, -this._height);
         },
-        /**
-         * 移动到 scroll to (x, y)
-         * 由目标位置得到合法的scrollX和scrollY，并更新XY方向的scroll离散值起点(序号)
-         * @param {Number} x 新视野左边和世界左边的距离
-         * @param {Number} y 新视野下边和世界下边的距离
-         */
-        scroll2: () => {    // 单独更新一些量，不污染全局命名空间
-            if (!this.Spectrogram._spectrogram) return;
-            // 不能用画图的坐标去限制，因为数据可能填不满画布 必须用id
-            this.Spectrogram.idXend = Math.min(this.xnum, Math.ceil((this.scrollX + this.spectrum.width) / this._width));
-            this.Spectrogram.idYend = Math.min(this.ynum, Math.ceil((this.scrollY + this.spectrum.height) / this._height));
-            this.Spectrogram.rectXstart = this.idXstart * this._width - this.scrollX;
-        },
         // 注意，getter 和 setter 的this指向为Spectrogram
         get spectrogram() {
             return this._spectrogram;
@@ -128,9 +115,9 @@ function App() {
             } else {
                 this._spectrogram = s;
                 this.parent.xnum = s.length;
-                this.parent.HscrollBar.refreshSize();
                 this.parent.scroll2(0, (this.parent._height * this.parent.ynum - this.parent.spectrum.height) >> 1);  // 垂直方向上，视野移到中间
             }
+            this.parent.HscrollBar.refreshSize();
         }
     };
     this.MidiAction = {
@@ -166,8 +153,8 @@ function App() {
             }
             for (; drawStart < m.length; drawStart++) {
                 const note = m[drawStart];
-                if (note.x1 >= this.Spectrogram.idXend) break;
-                if (note.y < this.idYstart || note.y >= this.Spectrogram.idYend) continue;
+                if (note.x1 >= this.idXend) break;
+                if (note.y < this.idYstart || note.y >= this.idYend) continue;
                 const params = [note.x1 * this._width - this.scrollX, this.spectrum.height - note.y * this._height + this.scrollY, (note.x2 - note.x1) * this._width, -this._height];
                 if (note.selected) {
                     s.fillStyle = '#ffffff';
@@ -251,7 +238,7 @@ function App() {
                 this.spectrum.removeEventListener('mousemove', m.changeNoteY);
                 document.removeEventListener('mouseup', removeEvent);
                 // 鼠标松开则存档
-                if(m._anyAction) this.MidiAction.snapshot.add(JSON.stringify(this.MidiAction.midi));
+                if (m._anyAction) this.MidiAction.snapshot.add(JSON.stringify(this.MidiAction.midi));
             }; document.addEventListener('mouseup', removeEvent);
         },
         onclick_L: (e) => {
@@ -394,6 +381,9 @@ function App() {
     }; this.height = this._height; // 更新this.Keyboard._ychange
     this.TimeBar = {
         interval: 10,   // 每个标注的间隔块数 在updateInterval中更新
+        // 重复区间参数 单位：毫秒 如果start>end则区间不起作用
+        repeatStart: -1,
+        repeatEnd: -1,
         /**
          * 毫秒转 分:秒:毫秒
          * @param {Number} ms 毫秒数
@@ -418,6 +408,7 @@ function App() {
             ctx.fillStyle = '#f0f0f0';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
             ctx.fillStyle = 'black';
+            ctx.strokeStyle = '#ff0000';
             ctx.beginPath();
             for (endPix = canvas.width + (dp >> 1); p < endPix; p += dp, timeAt += dt) {
                 ctx.moveTo(p, 0);
@@ -426,13 +417,63 @@ function App() {
                 let str = `${t[0].toString().padStart(2, "0")}:${t[1].toString().padStart(2, "0")}:${t[2].toString().padStart(3, "0")}`;
                 ctx.fillText(str, p - 28, 18);
             } ctx.stroke();
+            // 画重复区间
+            let begin = this._width * tb.repeatStart / this.dt - this.scrollX;  // 单位：像素
+            let end = this._width * tb.repeatEnd / this.dt - this.scrollX;
+            const spectrum = this.spectrum.ctx;
+            const spectrumHeight = this.spectrum.height;
+            // 画线
+            if (begin >= 0 && begin < canvas.width) {   // 画左边
+                ctx.beginPath(); spectrum.beginPath();
+                ctx.strokeStyle = spectrum.strokeStyle = '#20ff20';
+                ctx.moveTo(begin, 0); ctx.lineTo(begin, canvas.height);
+                spectrum.moveTo(begin, 0); spectrum.lineTo(begin, spectrumHeight);
+                ctx.stroke(); spectrum.stroke();
+            }
+            if (end >= 0 && end < canvas.width) {       // 画右边
+                ctx.beginPath(); spectrum.beginPath();
+                ctx.strokeStyle = spectrum.strokeStyle = '#ff2020';
+                ctx.moveTo(end, 0); ctx.lineTo(end, canvas.height);
+                spectrum.moveTo(end, 0); spectrum.lineTo(end, spectrumHeight);
+                ctx.stroke(); spectrum.stroke();
+            }
+            // 画区间 如果begin>end则区间不起作用，不绘制
+            if (begin >= end) return;
+            begin = Math.max(begin + 1, 0); end = Math.min(end - 1, canvas.width);
+            ctx.fillStyle = spectrum.fillStyle = '#80808044';
+            ctx.fillRect(begin, 0, end - begin, canvas.height);
+            spectrum.fillRect(begin, 0, end - begin, spectrumHeight);
         },
         updateInterval: () => {    // 根据this.width改变 在width的setter中调用
             const fontWidth = this.timeBar.ctx.measureText('00:00:000').width * 1.1;
             // 如果间距小于fontWidth则细分
             this.TimeBar.interval = Math.max(1, Math.ceil(fontWidth / this._width));
-        }
-        // todo: 重复区间设置
+        },
+        contextMenu: new ContextMenu([
+            {
+                name: "设置重复区间开始位置",
+                callback: (e_father, e_self) => {
+                    this.TimeBar.repeatStart = (e_father.offsetX + this.scrollX) * this.dt / this._width;
+                }
+            }, {
+                name: "设置重复区间结束位置",
+                callback: (e_father, e_self) => {
+                    this.TimeBar.repeatEnd = (e_father.offsetX + this.scrollX) * this.dt / this._width;
+                }
+            }, {
+                name: "取消重复区间",
+                onshow: () => this.TimeBar.repeatStart >= 0 || this.TimeBar.repeatEnd >= 0,
+                callback: () => {
+                    this.TimeBar.repeatStart = -1;
+                    this.TimeBar.repeatEnd = -1;
+                }
+            }, {
+                name: "从此处播放",
+                callback: (e_father, e_self)=>{
+                    // todo
+                }
+            }
+        ])
     };
     this.HscrollBar = {     // 配合scroll的滑动条
         track: document.getElementById('scrollbar-track'),
@@ -471,14 +512,10 @@ function App() {
             this.HscrollBar.thumb.style.left = pos + 'px';
         },
         refreshSize: () => {    // 需要在this.xnum this.width改变之后调用
-            if (this.xnum) {
-                this.HscrollBar.track.style.display = 'block';
-                let p = Math.min(1, this.spectrum.width / (this._width * this.xnum));
-                let nw = p * this.HscrollBar.track.offsetWidth;
-                this.HscrollBar.thumb.style.width = Math.max(nw, 10) + 'px';    // 限制最小宽度
-            } else {
-                this.HscrollBar.track.style.display = 'hidden';
-            }
+            this.HscrollBar.track.style.display = 'block';
+            let p = Math.min(1, this.spectrum.width / (this._width * this.xnum));   // 由于有min存在所以xnum即使为零也能工作
+            let nw = p * this.HscrollBar.track.offsetWidth;
+            this.HscrollBar.thumb.style.width = Math.max(nw, 10) + 'px';    // 限制最小宽度
         }
     };
     this.shortcutActions = {    // 快捷键动作
@@ -520,9 +557,9 @@ function App() {
         this.keyboard.height = this.spectrum.height;
         this.timeBar.width = this.spectrum.width;
         // 改变画布长宽之后，设置的值会重置，需要重新设置
-        this.spectrum.ctx.strokeStyle = "#FFFFFF"; this.spectrum.ctx.lineWidth = 1;
+        this.spectrum.ctx.lineWidth = 1;
         this.keyboard.ctx.lineWidth = 1; this.keyboard.ctx.font = `${this._height + 2}px Arial`;
-        this.timeBar.ctx.strokeStyle = '#ff0000'; this.timeBar.ctx.font = '14px Arial';
+        this.timeBar.ctx.font = '14px Arial';
         // 更新滑动条大小
         this.HscrollBar.refreshSize();
         this.scroll2(this.scrollX, this.scrollY);
@@ -538,9 +575,10 @@ function App() {
         this.scrollY = Math.max(0, Math.min(y, this._height * this.ynum - this.spectrum.height));
         this.idXstart = (this.scrollX / this._width) | 0;
         this.idYstart = (this.scrollY / this._height) | 0;
-        // 画图的y从左上角开始
-        this.rectYstart = this.spectrum.height - this.idYstart * this._height + this.scrollY;
-        this.Spectrogram.scroll2();
+        this.idXend = Math.min(this.xnum, Math.ceil((this.scrollX + this.spectrum.width) / this._width));
+        this.idYend = Math.min(this.ynum, Math.ceil((this.scrollY + this.spectrum.height) / this._height));
+        this.rectXstart = this.idXstart * this._width - this.scrollX;
+        this.rectYstart = this.spectrum.height - this.idYstart * this._height + this.scrollY;   // 画图的y从左上角开始
         // 滑动条
         this.HscrollBar.refreshPosition();
     };
@@ -684,12 +722,25 @@ function App() {
         this.Spectrogram.multiple = e.target.value;
     };
     document.addEventListener('keydown', (e) => { // 键盘事件
-        switch (e.key) {
-            case 'ArrowUp': this.scroll2(this.scrollX, this.scrollY - this._height); break;
-            case 'ArrowDown': this.scroll2(this.scrollX, this.scrollY + this._height); break;
-            case 'ArrowLeft': this.scroll2(this.scrollX - this._width, this.scrollY); break;
-            case 'ArrowRight': this.scroll2(this.scrollX + this._width, this.scrollY); break;
-            case 'Delete': this.MidiAction.deleteNote(); break;
+        // 以下在没有频谱数据时不启用……【目前的实现是补丁。之后视情况升级：在获取到频谱数据后注册事件回调】
+        if (!this.Spectrogram._spectrogram) return;
+        let shortcut = '';
+        if (e.ctrlKey) shortcut += 'Ctrl+';  // Ctrl优先
+        if (e.shiftKey) shortcut += 'Shift+';
+        if (shortcut != '') {   // 组合键
+            shortcut += e.key.toUpperCase();    // 大小写一视同仁
+            if (this.shortcutActions.hasOwnProperty(shortcut)) {
+                e.preventDefault(); // 阻止默认的快捷键行为
+                this.shortcutActions[shortcut]();
+            }
+        } else {                // 单个按键
+            switch (e.key) {
+                case 'ArrowUp': this.scroll2(this.scrollX, this.scrollY + this._height); break;
+                case 'ArrowDown': this.scroll2(this.scrollX, this.scrollY - this._height); break;
+                case 'ArrowLeft': this.scroll2(this.scrollX - this._width, this.scrollY); break;
+                case 'ArrowRight': this.scroll2(this.scrollX + this._width, this.scrollY); break;
+                case 'Delete': this.MidiAction.deleteNote(); break;
+            }
         }
     });
     this.AudioPlayer.play_btn.onclick = () => {
@@ -723,31 +774,42 @@ function App() {
                 document.removeEventListener('mouseup', up);
             }; document.addEventListener('mouseup', up);
         }
+        // 以下在没有频谱数据时不启用
+        if (!this.Spectrogram._spectrogram) return;
         if (e.button == 0) this.MidiAction.onclick_L(e);    // midi音符相关
+        else this.MidiAction.clearSelected();
     });
     this.spectrum.addEventListener('mousemove', this.trackMouse);
     this.spectrum.addEventListener('contextmenu', (e) => {
         e.preventDefault();
         // todo: 播放音符或者菜单
     });
-    document.addEventListener('keydown', (e) => { // 快捷键处理
-        let shortcut = '';
-        if (e.ctrlKey) shortcut += 'Ctrl+';  // Ctrl优先
-        if (e.shiftKey) shortcut += 'Shift+';
-        if (shortcut != '') {
-            shortcut += e.key.toUpperCase();
-            if (this.shortcutActions.hasOwnProperty(shortcut)) {
-                e.preventDefault(); // 阻止默认的快捷键行为
-                this.shortcutActions[shortcut]();
-            }
-        }
-    });
     this.timeBar.addEventListener('dblclick', (e) => {
         // todo: 双击在此开始播放
     });
     this.timeBar.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        // todo: 菜单
+        e.preventDefault(); // 右键菜单
+        this.TimeBar.contextMenu.show(e);
+    });
+    this.timeBar.addEventListener('mousedown', (e) => {
+        if (e.button) return;   // 左键拖拽
+        const x = (e.offsetX + this.scrollX)/this._width * this.dt;    // 毫秒数
+        let setRepeat = (e) => {
+            let newX = (e.offsetX + this.scrollX)/this._width * this.dt;
+            if(newX > x) {
+                this.TimeBar.repeatStart = x;
+                this.TimeBar.repeatEnd = newX;
+            } else {
+                this.TimeBar.repeatEnd = x;
+                this.TimeBar.repeatStart = newX;
+            }
+        };
+        let removeEvents = () => {
+            this.timeBar.removeEventListener('mousemove', setRepeat);
+            document.removeEventListener('mouseup', removeEvents);
+        };
+        this.timeBar.addEventListener('mousemove', setRepeat);
+        document.addEventListener('mouseup', removeEvents);
     });
     this.keyboard.addEventListener('wheel', (e) => {
         this.scroll2(this.scrollX, this.scrollY - e.deltaY);    // 只能上下移动
