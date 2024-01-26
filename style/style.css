@@ -7,6 +7,21 @@ html, body {
     overflow: hidden;
 }
 
+body {
+    display: flex;
+    flex-direction: column;
+}
+
+/* flex */
+.f {
+    display: flex;
+}
+
+/* width full */
+.wf {
+    width: 100%;
+}
+
 .dragIn::before {
     content: "Drag and drop your file here";
     display: flex;
@@ -48,4 +63,14 @@ html, body {
     width: 50px;
     background-color: gray;
     cursor: pointer;
+}
+
+#play-btn {
+    width: 80px;
+}
+
+#Canvases-Container {
+    flex: 1;
+    /* 下面这行必须加 不然被画布撑开了就缩不回去了 */
+    overflow: hidden;
 }

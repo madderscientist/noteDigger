@@ -1,0 +1,98 @@
+/* 可拖拽的列表 */
+.drag_list {
+    --bg-color: #25262d;
+    --li-hover: #2e3039;
+}
+.drag_list .takeplace {
+    height: 8em;
+}
+/* 列表本体 */
+ul.drag_list {
+    height: 100%;
+    list-style: none;
+    background-color: var(--bg-color);
+    padding: 0.6em;
+    overflow: auto;
+}
+ul.drag_list li.drag_list-item {
+    width: 100%;
+    transition: 0.3s;
+}
+ul.drag_list li.moving {
+    position: relative;
+}
+ul.drag_list li.moving::before {
+    content: "";
+    position: absolute;
+    z-index: 2;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background-color: var(--bg-color);
+    border: 0.125em dashed #ccc;
+    border-radius: 0.6em;
+}
+
+/* 列表项 */
+.channel-Container {
+    position: relative;
+    background-color: transparent;
+    border-radius: 0.32em;
+    margin: 0.6em;
+    border-left: 0.5em solid;
+    border-color: var(--tab-color);
+    padding: 0.4em;
+}
+.channel-Container:hover {
+    background-color: var(--li-hover);
+}
+.channel-Container.selected {
+    background-color: var(--li-hover);
+}
+/* 序号 */
+.channel-Container::after {
+    content: attr(data-tab-index);
+    position: absolute;
+    bottom: 0.32em;
+    right: 0.32em;
+    background-color: transparent;
+    font-size: 0.5em;
+    color: #a5abba;
+    z-index: 1;
+}
+.channel-Container .upper {
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+}
+/* 音轨名 */
+.channel-Name {
+    overflow: hidden; /* 隐藏超出容器的内容 */
+    flex: 1;
+    font-size: 1em;
+    font-weight: bold;
+    color: white;
+    cursor: pointer;
+}
+/* 快捷按钮 */
+.upper .tab {
+    border-radius: 50%;
+    width: 1.8em;
+    height: 1.8em;
+    text-align: center;
+    display: inline;
+    background-color: transparent;
+    border: none;
+    color: var(--tab-color);
+}
+.channel-Container .tab:hover {
+    background-color: #363944;
+}
+/* 乐器选择 */
+.channel-Instrument {
+    display: inline-block;
+    font-size: 0.9em;
+    color: white;
+    overflow: hidden;
+}

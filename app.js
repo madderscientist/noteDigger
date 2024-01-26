@@ -532,6 +532,15 @@ function App() {
                 this.MidiAction.midi = JSON.parse(nextState);
                 this.MidiAction.selected = this.MidiAction.midi.filter((obj) => obj.selected);
             }
+        },
+        'Ctrl+A': () => {
+
+        },
+        'Ctrl+C': () => {
+
+        },
+        'Ctrl+V': () => {
+            
         }
     };
     /**
@@ -677,17 +686,35 @@ function App() {
                 }
             }
         },
-        onfile: (file) => {
-            document.body.insertAdjacentHTML('afterbegin', `<div id="request-cover"><div class="card hvCenter"><label class="title">${file.name}</label><div><span>每秒的次数:</span><input type="number" name="ui-ask" value="10" min="1" max="100"></div><div><span>标准频率A4=</span><input type="number" name="ui-ask" value="440" step="0.1" min="55"></div><div>分析声道:</div><div><input type="radio" name="ui-ask" value="4" checked>Stereo<input type="radio" name="ui-ask" value="2">L+R<input type="radio" name="ui-ask" value="3">L-R<input type="radio" name="ui-ask" value="0">L<input type="radio" name="ui-ask" value="1">R</div><div><button id="ui-confirm">解析</button><button id="ui-cancel">取消</button></div></div></div>`);
+        onfile: (file) => {     // 依赖askUI.css
+            let tempDiv = document.createElement('div');
+            tempDiv.innerHTML = `
+            <div class="request-cover">
+                <div class="card hvCenter"><label class="title">${file.name}</label>
+                    <div><span>每秒的次数：</span><input type="number" name="ui-ask" value="10" min="1" max="100"></div>
+                    <div><span>标准频率A4=</span><input type="number" name="ui-ask" value="440" step="0.1" min="55"></div>
+                    <div>分析声道：</div>
+                    <div>
+                        <input type="radio" name="ui-ask" value="4" checked>Stereo
+                        <input type="radio" name="ui-ask" value="2">L+R
+                        <input type="radio" name="ui-ask" value="3">L-R
+                        <input type="radio" name="ui-ask" value="0">L
+                        <input type="radio" name="ui-ask" value="1">R
+                    </div>
+                    <div><button class="ui-cancel">取消</button><button class="ui-confirm">解析</button></div>
+                </div>
+            </div>`;
             this.AudioPlayer.name = file.name;
             if (!this.audioBuffer) this.audioContext = new AudioContext({ sampleRate: 44100 });
             function close() { document.getElementById('request-cover').remove(); }
-            document.getElementById('ui-cancel').onclick = () => {
+            const ui = tempDiv.firstChild;
+            let btns = ui.getElementsByTagName('button');
+            btns[0].onclick = () => {
                 close(); this.AudioPlayer.audio.src = '';
             };
-            document.getElementById('ui-confirm').onclick = () => {
+            btns[1].onclick = () => {
                 // 获取分析参数
-                const params = document.getElementsByName('ui-ask');
+                const params = ui.querySelectorAll('[name="ui-ask"]');  // getElementsByName只能在document中用
                 let tNum = params[0].value;
                 let A4 = params[1].value;
                 let channel = 4;
@@ -712,6 +739,7 @@ function App() {
                     this.AudioPlayer.audio.src = URL.createObjectURL(new Blob([e.target.result]));
                 }; fileReader.readAsArrayBuffer(file);
             };
+            document.body.insertBefore(ui, document.body.firstChild);   // 插入body的最前面
         }
     };
     //========= 事件注册 =========//

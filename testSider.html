@@ -1,0 +1,40 @@
+<!DOCTYPE html>
+<html lang="zh">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Document</title>
+    <!-- 依赖 -->
+    <link rel="stylesheet" href="./style/channelDiv.css">
+    <link rel="stylesheet" href="./style/icon/iconfont.css">
+    <script src="./channelDiv.js"></script>
+    <script src="./contextMenu.js"></script>
+    <!-- 依赖结束 -->
+    <link rel="stylesheet" href="./style/style.css">
+    <link rel="stylesheet" href="./style/contextMenu.css">
+    <link rel="stylesheet" href="./style/askUI.css">
+</head>
+<style>
+    #channelSide {
+        width: 200px;
+        height: 100%;
+        overflow: hidden;
+    }
+</style>
+
+<body>
+    <div id="channelSide"></div>
+</body>
+<script>
+    let channelDiv = new ChannelList(channelSide);
+    channelDiv.addEventListener('reorder', (e)=>{
+        console.log("reorder", e.detail);
+    });
+    channelDiv.addEventListener('remove', (e)=>{
+        console.log("remove", e.detail);
+    });
+</script>
+</script>
+
+</html>

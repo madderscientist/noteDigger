@@ -8,6 +8,7 @@
     box-shadow: 1px 1px 2px #878787;
     position: fixed;
     user-select: none;
+    z-index: 100;
 }
 
 .contextMenuCard:focus {

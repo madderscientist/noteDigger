@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="zh">
 
 <head>
     <meta charset="UTF-8">
@@ -14,30 +14,6 @@
     <link rel="stylesheet" href="./style/askUI.css">
     <link rel="stylesheet" href="./style/contextMenu.css">
 </head>
-<style>
-    .f {
-        display: flex;
-    }
-
-    .wf {
-        width: 100%;
-    }
-
-    #play-btn {
-        width: 80px;
-    }
-
-    body {
-        display: flex;
-        flex-direction: column;
-    }
-
-    #Canvases-Container {
-        flex: 1;
-        /* 下面这行必须加 不然被画布撑开了就缩不回去了 */
-        overflow: hidden;
-    }
-</style>
 
 <body>
     <div style="height: 80px;">
@@ -59,17 +35,6 @@
         <div id="scrollbar-thumb"></div>
     </div>
 </body>
-<script>
-    const piano = document.getElementById('piano');
-    const cp = piano.getContext('2d');
-    const spectrum = document.getElementById('spectrum');
-    const cs = spectrum.getContext('2d');
-    const timeBar = document.getElementById('timeBar');
-    const ct = timeBar.getContext('2d');
-    cp.fillStyle = 'rgb(255,0,0)'; cp.fillRect(0, 0, piano.width, piano.height);
-    cs.fillStyle = 'rgb(0,0,255)'; cs.fillRect(0, 0, spectrum.width, spectrum.height);
-    ct.fillStyle = 'rgb(0,255,0)'; ct.fillRect(0, 0, timeBar.width, timeBar.height);
-</script>
 <script>
     const app = new App();
     // 创建测试时频数据

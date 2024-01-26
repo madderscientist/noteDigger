@@ -1,5 +1,5 @@
 /* 依赖：style.css中的.card和.hvCenter*/
-#request-cover {
+.request-cover {
     position: fixed;
     top: 0;
     right: 0;
@@ -9,17 +9,20 @@
     z-index: 99;
 }
 
-#request-cover .card {
+.request-cover .card {
     position: fixed;
     width: auto;
     height: auto;
-    background-color: #fff;
+    background-color: rgb(37, 38, 45);;
     padding: 1em;
+    overflow: hidden;
+    color: rgb(235, 235, 235);
 }
 
-#request-cover .title {
+.request-cover .title {
     font-size: 1.2em;
     font-weight: bold;
+    color: white;
 }
 
 .card.hvCenter div {
@@ -27,9 +30,38 @@
     justify-content: space-between;
     align-items: center;
     padding: 10px 8px 0 8px;
+    color: inherit;
+    margin: 0.2em;
 }
 
-.card.hvCenter button {
+.request-cover .card.hvCenter button {
+    margin: 0 0.25em;
+    border: none;
+    border-radius: 0.2em;
+    padding: 0.5em 1em;
+    cursor: pointer;
+    outline: none;
+    color: inherit;
+}
+.request-cover .ui-confirm {
     flex: 1;
-    margin: 0 0.2em;
+    background: rgb(60, 87, 221);
+    color: white;
+}
+.request-cover .ui-cancel {
+    flex: 1;
+    background-color: #2e3039;
+    color: white;
+}
+
+.card.hvCenter input,
+.card.hvCenter select {
+    flex: 1;
+    background: inherit;
+    border: 1px solid rgb(54, 58, 69);
+    border-radius: 0.25em;
+    height: 2em;
+    color: inherit;
+    margin: 0 0.8em;
+    padding-left: 0.6em;
 }

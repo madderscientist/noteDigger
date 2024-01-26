@@ -60,9 +60,50 @@ C1对应24 全部按照midi协议编号。
 
 播放如何同步？
 
+## 多音轨
+此功能似乎用得不多。
+wavetone中，每个音轨之间不存在明显的界限，而signal中，只有选中的音轨可以点击音符。
+我觉得前者适合，可以加一个mute、visible选项控制音轨以达到signal中的效果
+数据结构？
+### midi音符的结构
+两个方案：所有轨都在一个数组中，和每轨一个数组，或者……两者结合
+- 所有轨都在一个数组：可以一次遍历实现音符拾取，绘制也只要一次遍历
+- 每轨一个数组：可以方便地实现单轨样式的应用，更改音轨顺序容易
+- 两者结合：维护较为麻烦
+需要实现的功能：
+- 撤销重做: 用一个数组合适
+- 单音轨播放(静音、乐器)：其实也是一个数组简单，因为播放的时候只需要维护一次遍历
+- 多音轨拖拽：音符拾取是单音轨简单。拖拽影响的是selected数组，两者平局
+综上，存放音符还是单个数组合适。要实现以上功能，只需要给音符加一个channel属性，而每个音轨的设置需要维护一个数组。
+
+### 音轨的结构
+音轨的添加采用动态添加的方式还是静态？wavetone是静态，最大16。我做动态吧。
+动态音轨涉及很多ui的东西：音轨的位置（设计为可拖拽排序）、属性设置
+需要暴露的接口：
+- 音轨变化事件(顺序、个数)：用于触发存档点，目前考虑封装成Event【todo】
+- 音轨状态(颜色、当前选中)
+- 序列化音轨、根据音轨参数数组创建音轨：用于实现音轨的快照【尚不完善，需要等midi播放器完成】
+ChannelList的音轨列表及其属性似乎不需要暴露
+下一步推进的关键：
+MidiPlayer！需要成为ChannelList和ChannelItem的公共可访问对象，然后完成ui和数据的绑定。ChannelItem的instrument是否需要用序号代替？
+耦合关系：
+MidiAction监听ChannelList的事件，而ChannelList不监听MidiAction，但受其控制
+- ChannelList->音轨变化(顺序、个数)->MidiAction&MidiPlayer
+    如何传递这个变化？改变顺序用reorder事件，删除用remove事件，添加似乎不涉及midi音符的操作。
+    删除一个channel时，先触发remove，再触发reorder，remove事件用于删除midi列表对应通道的音符，reorder用于更改剩下的音符的音轨序号
+    由于reorder只在序号发生变化时触发，如果是最后一个删除或添加就不会触发，这意味着对此事件监听不能响应所有变化，那如何设置存档点？存档单独注册一个reorder的监听，add/remove前先取消注册，由add/remove自行设置存档，操作结束再注册回来，防止两次存档。
+- ChannelList->音轨音量改变->MidiPlayer
+- ChannelList<-选中音符<-MidiAction
+
+### 绘制
+使用多音轨后，绘制逻辑需要改变
+重叠：序号越低的音轨图层越上 & 选中的音轨置于顶层？——还是不要后者了。后者可以通过移动音轨实现
+
+
 ## 音符播放技术要点
 波表合成
 SoundFont文件。参考链接：https://blog.csdn.net/shulianghan/article/details/120863626
+https://github.com/g200kg/webaudio-tinysynth
 Web Audio API使用：主要是osc
 
 ## oscillator 使用
