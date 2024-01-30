@@ -399,7 +399,7 @@ class ChannelList extends EventTarget {
         //     const option = document.createElement('option');
         //     option.value = i;
         //     option.innerHTML = 'Acoustic Grand Piano';
-        //     if (ch.instrument === option.innerHTML) inputs[2].value = i;
+        //     if (ch.instrument === option.innerHTML) option.selected = true;
         //     inputs[2].appendChild(option);
         // }
         document.body.insertBefore(card, document.body.firstChild);

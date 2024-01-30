@@ -101,18 +101,11 @@ MidiAction监听ChannelList的事件，而ChannelList不监听MidiAction，但�
 
 
 ## 音符播放技术要点
-波表合成
-SoundFont文件。参考链接：https://blog.csdn.net/shulianghan/article/details/120863626
-https://github.com/g200kg/webaudio-tinysynth
-Web Audio API使用：主要是osc
-
-## oscillator 使用
-```js
-var audioCtx = new (window.AudioContext || window.webkitAudioContext)();
-var oscillator = audioCtx.createOscillator();
-oscillator.type = "square";
-oscillator.frequency.value = 440; // value in hertz
-oscillator.start(0);
-```
-osc调用start后，动态改变其frequency，它会自动平滑过渡过去。
-注意其属性是AudioParam类别的，所以要通过其value属性来修改值。这个类别维护了一个事件列表，改值也是一个事件，有方法：AudioParam.setValueAtTime(value, startTime)。第二个参数和audioCtx.currentTime有关，单位：s
+参考 https://github.com/g200kg/webaudio-tinysynth 完成了精简版的合成器，相比原版，有如下变化：
+- 抽象为类，音色变成static属性。
+- 用animationFrame而非timeInterval实现了音符检查与停止。
+- 为了契合“动态音轨”的设计，合成器中以channel为单位组织数组，而非原版以audioNode为单位。
+- 每个音轨的原型都是合成器，故可以单独拿出来使用。
+- 没有做成midi的形式，音符频率依赖外部传参
+- 没有实现通道的调制、左右声道、混响。
+- 没有做鼓的音色。

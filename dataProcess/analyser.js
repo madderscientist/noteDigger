@@ -1,6 +1,9 @@
-class NoteAnalyser {    // 负责解析频谱数据
-    static freqTable(A4) {
-        const freqTable = new Float32Array(84);  // 范围是C1-B7
+class FreqTable extends Float32Array {
+    constructor(A4 = 440) {
+        super(84);  // 范围是C1-B7
+        this.A4 = A4;
+    }
+    set A4(A4) {
         let Note4 = [
             A4 * 0.5946035575013605, A4 * 0.6299605249474366,
             A4 * 0.6674199270850172, A4 * 0.7071067811865475,
@@ -10,26 +13,38 @@ class NoteAnalyser {    // 负责解析频谱数据
             A4, A4 * 1.0594630943592953,
             A4 * 1.122462048309373
         ];
-        freqTable.set(Note4.map(v => v / 8), 0);
-        freqTable.set(Note4.map(v => v / 4), 12);
-        freqTable.set(Note4.map(v => v / 2), 24);
-        freqTable.set(Note4, 36);
-        freqTable.set(Note4.map(v => v * 2), 48);
-        freqTable.set(Note4.map(v => v * 4), 60);
-        freqTable.set(Note4.map(v => v * 8), 72);
-        return freqTable;
+        this.set(Note4.map(v => v / 8), 0);
+        this.set(Note4.map(v => v / 4), 12);
+        this.set(Note4.map(v => v / 2), 24);
+        this.set(Note4, 36);
+        this.set(Note4.map(v => v * 2), 48);
+        this.set(Note4.map(v => v * 4), 60);
+        this.set(Note4.map(v => v * 8), 72);
     }
-    constructor(df, A4 = 440) {
+    get A4() {
+        return this[45];
+    }
+}
+
+class NoteAnalyser {    // 负责解析频谱数据
+    /**
+     * @param {Number} df FFT的频率分辨率
+     * @param {FreqTable || Number} freq 频率表(将被引用)或中央A的频率
+     */
+    constructor(df, freq) {
         this.df = df;
-        this.A4 = A4;   // 中央A频率
-        this.freqTable = null;  // 频率表
+        if(typeof freq === 'number') {
+            this.freqTable = new FreqTable(freq);
+        } else {
+            this.freqTable = freq;
+        } this.updateRange();
     }
-    set A4(fre) {
-        this.freqTable = NoteAnalyser.freqTable(fre);
+    set A4(freq) {
+        this.freqTable.A4 = freq;
         this.updateRange();
     }
     get A4() {
-        return this.freqTable[45];
+        return this.freqTable.A4;
     }
     updateRange() {
         let at = Array.from(this.freqTable.map((value) => Math.round(value / this.df)));

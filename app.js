@@ -249,6 +249,9 @@ function App() {
             // 为了支持在鼠标操作的时候能滑动，记录绝对位置
             m._tempdx = m._tempdy = 0;
             const x = m.clickXid = ((e.offsetX + this.scrollX) / this._width) | 0;
+            if (x >= this.xnum) {   // 越界
+                m.clearSelected(); return;
+            }
             const y = m.clickYid = ((this.scrollY + this.spectrum.height - e.offsetY) / this._height) | 0;
             // 找到点击的最近的音符 由于点击不经常，所以用遍历足矣
             let n = null;
@@ -335,7 +338,7 @@ function App() {
     };
     this.Keyboard = {
         highlight: -1,   // 选中了哪个音 音的编号以midi协议为准 C1序号为24 根this.mouseY一起在onmousemove更新
-        freqTable: NoteAnalyser.freqTable(440),    // 在this.Analyser.analyse中赋值
+        freqTable: new FreqTable(440),    // 在this.Analyser.analyse中赋值
         // 以下为画键盘所需
         _idchange: new Int8Array([2, 2, 1, 2, 2, 2, -10, 2, 3, 2, 2, 2]),   // id变化
         _ychange: new Float32Array(12), // 纵坐标变化，随this.height一起变化
@@ -469,7 +472,7 @@ function App() {
                 }
             }, {
                 name: "从此处播放",
-                callback: (e_father, e_self)=>{
+                callback: (e_father, e_self) => {
                     // todo
                 }
             }
@@ -534,13 +537,16 @@ function App() {
             }
         },
         'Ctrl+A': () => {
-
+            this.MidiAction.midi.forEach((note) => {
+                note.selected = true;
+            });
+            this.MidiAction.selected = [...this.MidiAction.midi];
         },
         'Ctrl+C': () => {
 
         },
         'Ctrl+V': () => {
-            
+
         }
     };
     /**
@@ -647,8 +653,8 @@ function App() {
             let dN = Math.round(audioBuffer.sampleRate / tNum);
             // 创建分析工具
             var fft = new realFFT(fftPoints); // 8192点在44100采样率下，最低能分辨F#2，但是足矣
-            var analyser = new NoteAnalyser(audioBuffer.sampleRate / fftPoints, A4);
-            if (this.Keyboard.freqTable[45] != A4) this.Keyboard.freqTable = new Float32Array(analyser.freqTable);   // 更新频率表
+            if (this.Keyboard.freqTable.A4 != A4) this.Keyboard.freqTable.A4 = A4;   // 更新频率表
+            var analyser = new NoteAnalyser(audioBuffer.sampleRate / fftPoints, this.Keyboard.freqTable);
             function a(t) { // 对t执行小波变化，并整理为时频谱
                 let nFinal = t.length - fftPoints;
                 const result = new Array(((nFinal / dN) | 0) + 1);
@@ -821,10 +827,10 @@ function App() {
     });
     this.timeBar.addEventListener('mousedown', (e) => {
         if (e.button) return;   // 左键拖拽
-        const x = (e.offsetX + this.scrollX)/this._width * this.dt;    // 毫秒数
+        const x = (e.offsetX + this.scrollX) / this._width * this.dt;    // 毫秒数
         let setRepeat = (e) => {
-            let newX = (e.offsetX + this.scrollX)/this._width * this.dt;
-            if(newX > x) {
+            let newX = (e.offsetX + this.scrollX) / this._width * this.dt;
+            if (newX > x) {
                 this.TimeBar.repeatStart = x;
                 this.TimeBar.repeatEnd = newX;
             } else {
