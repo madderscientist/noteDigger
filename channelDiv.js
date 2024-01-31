@@ -193,7 +193,7 @@ class ChannelItem extends HTMLDivElement {
 }
 
 /**
- * 依赖：contextMenu dragList ChannelItem
+ * 依赖：contextMenu dragList ChannelItem tinySynth
  * 事件：（按发生的顺序排）
  * remove(detail)：发生于删除之前、归还颜色之后
  * reorder(detail)：发生于有序号变化时，最后一个ChannelItem的删除和新增不会触发
@@ -219,8 +219,14 @@ class ChannelList extends EventTarget {
         } else return null;
     }
     static judgeClick(e) { return ChannelList.whichItem(e.target); }
-    constructor(div) {
+    /**
+     * 初始画可拖拽音轨列表
+     * @param {HTMLDivElement} div 
+     * @param {TinySynth} synthesizer 合成器实例
+     */
+    constructor(div, synthesizer) {
         super();
+        this.synthesizer = synthesizer;
         this.colorMask = 0xFFFF;    // 用于表示哪些颜色已经被占用
         const list = dragList();
         list.addEventListener('dragend', this.updateRange.bind(this));
@@ -273,6 +279,7 @@ class ChannelList extends EventTarget {
             e.preventDefault();
             this.contextMenu.show(e);
         });
+        ChannelItem.prototype.toJSON = this._toJSON;
     }
     /**
      * 根据ui维护this.channel和channelItem.dataset.tabIndex
@@ -283,14 +290,17 @@ class ChannelList extends EventTarget {
         let change = false;
         let children = Array.from(this.container.children);
         let indexMap = new Array(children.length + 1);  // 防止重新分配空间 加一是为了兼容删除一个后的reorder
-        this.channel = children.map((item, index) => {
-            const channel = item.firstElementChild;
+        this.synthesizer.channel = new Array(children.length);
+        this.channel = new Array(children.length);
+        for (let i = 0; i < children.length; i++) {
+            const channel = children[i].firstElementChild;
             let oldIndex = channel.index;
-            indexMap[oldIndex] = index;     // 如果在at插入了新的ChannelItem，由于其序号已经对应好，所以不会触发change；且原来在at的元素被推到了(at+1)，会覆盖其对indexMap[at]的更改
-            if (oldIndex !== index) change = true;
-            channel.dataset.tabIndex = index + 1;
-            return channel;
-        });
+            indexMap[oldIndex] = i;     // 如果在at插入了新的ChannelItem，由于其序号已经对应好，所以不会触发change；且原来在at的元素被推到了(at+1)，会覆盖其对indexMap[at]的更改
+            if (oldIndex !== i) change = true;
+            channel.dataset.tabIndex = i + 1;
+            this.channel[i] = channel;
+            this.synthesizer.channel[i] = channel.ch;
+        }
         if (change) this.dispatchEvent(new CustomEvent("reorder", {
             detail: indexMap
         }));
@@ -324,17 +334,26 @@ class ChannelList extends EventTarget {
         }
     }
     /* 颜色管理 end */
-
-    addChannel(at) {    // 用于一个个添加
+    /**
+     * 增加一个channel，触发add事件
+     * @param {Number} at 插入音轨的序号
+     * @returns {ChannelItem}
+     */
+    addChannel(at = this.channel.length) {    // 用于一个个添加
         if (!this.colorMask) {
             alert(`最多只能添加${ChannelList.colorList.length}个轨道！`);
             return;
         }
-        const ch = ChannelItem.new('某音轨', this.borrowColor());
-        ch.index = at === void 0 ? this.channel.length : at;
+        const ch = ChannelItem.new('某音轨', this.borrowColor(), TinySynth.instrument[0]);
+        ch.index = at;
+        ch.ch = this.synthesizer.addChannel(at);
         this.container.appendChild(ch, at);
-        this.updateRange();
         ch.click();
+        this.dispatchEvent(new CustomEvent("add", {
+            detail: ch
+        }));
+        this.updateRange();
+        return ch;
     }
     /**
      * 删除一个channel，触发remove事件。事件发生于删除之前、归还颜色之后
@@ -347,13 +366,15 @@ class ChannelList extends EventTarget {
         this.dispatchEvent(new CustomEvent("remove", {
             detail: channel
         }));
-        if(this.selected === channel) this.selected = null;
+        this.synthesizer.channel.splice(channel.index, 1);
+        if (this.selected === channel) this.selected = null;
         channel.parentNode.remove();
         this.updateRange()
     }
     /**
      * 设置选中的channel的样式
      * @param {ChannelItem || Number} node 节点的序号或者节点或其子元素
+     * @returns {ChannelItem} 如果无该项则返回null
      */
     selectChannel(node) {
         const channel = typeof node === 'number' ? this.channel[node] : ChannelList.whichItem(node);
@@ -361,7 +382,8 @@ class ChannelList extends EventTarget {
             if (this.selected) this.selected.classList.remove('selected');
             this.selected = channel;
             channel.classList.add('selected');
-        }
+            return channel;
+        } return null;
     }
     /**
      * 打开ch的设置面板
@@ -381,28 +403,42 @@ class ChannelList extends EventTarget {
         </div>`;
         const card = tempDiv.firstElementChild;
         const btns = card.getElementsByTagName('button');
-        btns[0].addEventListener('click', () => {
-            card.remove();
+        card.addEventListener('keydown', (e)=>{
+            if (e.keyCode === 13) btns[1].click();  // 回车则点击btns[1]
         });
+        btns[0].addEventListener('click', () => { card.remove(); });
         btns[1].addEventListener('click', () => {
             ch.name = inputs[0].value;
-            // volum的更改涉及合成器
-            ch.instrument = inputs[2].value;
+            ch.ch.out.gain.value = inputs[1].value ** 2 / 16129;   // 平方律设置振幅增益
+            let inst = parseInt(inputs[2].value);
+            ch.ch.instrument = inst;
+            ch.instrument = TinySynth.instrument[inst];
             card.remove();
         });
         const inputs = card.querySelectorAll('[name="ui-ask"]');
         inputs[0].value = ch.name;
-        // 以下都没做完！！！！
-        inputs[1].value = 100;  // 【！！！需要更改！】
+        inputs[1].value = Math.round(Math.sqrt(ch.ch.out.gain.value * 16129));
         // 给select添加选项
-        // for (let i = 0; i < 128; i++) {  // 【！！！需要更改！】【也许音色库需要共用！ChannelItem存音色用序号！】
-        //     const option = document.createElement('option');
-        //     option.value = i;
-        //     option.innerHTML = 'Acoustic Grand Piano';
-        //     if (ch.instrument === option.innerHTML) option.selected = true;
-        //     inputs[2].appendChild(option);
-        // }
+        for (let i = 0; i < 128; i++) {
+            const option = document.createElement('option');
+            option.value = i;
+            option.innerHTML = TinySynth.instrument[i];
+            if (ch.ch.instrument === i) option.selected = true;
+            inputs[2].appendChild(option);
+        }
         document.body.insertBefore(card, document.body.firstChild);
+        card.tabIndex = 0;
+        card.focus();
+    }
+    _toJSON() {
+        return {    // 篡改ChannelItem的原型方法，使保存的乐器是序号，并能保存音量
+            name: this.name,
+            color: this.color,
+            visible: this.visible,
+            mute: this.mute,
+            instrument: this.ch.instrument,
+            volume: Math.round(Math.sqrt(this.ch.out.gain.value * 16129))
+        };
     }
     /**
      * 从数组中创建列表，用于撤销 不会(不能)调用updateRange
@@ -414,17 +450,20 @@ class ChannelList extends EventTarget {
             console.warn(`轨道数超过最大值${ChannelList.colorList.length}！将忽略多余的轨道。`);
             len = ChannelList.colorList.length;
         }
+        this.synthesizer.channel.length = 0;
         this.container.clear();
         this.channel = new Array(len);
         this.colorMask = 0xFFFF;
         let failed = 0x0000;
         for (let i = 0; i < len; i++) {
-            let color = this.borrowTheColor(array[i].color);
+            const item = array[i];
+            let color = this.borrowTheColor(item.color);
             if (!color) {
                 color = '';
                 failed &= (1 << i);
             }
-            const ch = ChannelItem.new(array[i].name, color, array[i].instrument, array[i].visible, array[i].mute);
+            const ch = ChannelItem.new(item.name, color, TinySynth.instrument[item.instrument], item.visible, item.mute);
+            ch.ch = this.synthesizer.addChannel(i, item.instrument, item.volume * item.volume / 16129);
             this.channel[i] = ch;
             ch.dataset.tabIndex = i + 1;
             this.container.appendChild(ch);

@@ -51,7 +51,8 @@ function App() {
             this.Keyboard.highlight = Math.floor((this.scrollY + this.spectrum.height - y) / this._height) + 24;
         }
     });
-    this.audioContext = null;
+    this.audioContext = new AudioContext({ sampleRate: 44100 });
+    this.synthesizer = new TinySynth(this.audioContext);
     this.Spectrogram = {
         parent: this,
         colorStep1: 100,
@@ -96,7 +97,7 @@ function App() {
             } ctx.stroke();
             // 填涂剩余部分
             if (w > 0) {
-                ctx.fillStyle = "#808080";
+                ctx.fillStyle = '#25262d';
                 ctx.fillRect(rectx, 0, w, canvas.height);
             }
             // 更新spectrum
@@ -133,8 +134,36 @@ function App() {
         } */
         selected: [],   // 选中的音符 无序即可
         midi: [],       // 所有音符 需要维护有序性
-        // 撤销相关 需要在移动后、长度改变后
-        snapshot: new Snapshot(10, '[]'),
+        // 多音轨
+        channelDiv: (() => {
+            const cd = new ChannelList(document.getElementById('channel-sider'), this.synthesizer);
+            const saveOnReorder = () => this.snapshot.save(3);
+            cd.addEventListener('reorder', ({detail})=>{
+                for(const nt of this.MidiAction.midi) {
+                    nt.ch = detail[nt.ch];
+                }
+            });
+            cd.addEventListener('reorder', saveOnReorder);
+            cd.addEventListener('remove', ({detail}) => {
+                cd.removeEventListener('reorder', saveOnReorder);
+                let len = this.MidiAction.midi.length;
+                this.MidiAction.midi = this.MidiAction.midi.filter((nt) => nt.ch != detail.index);
+                this.MidiAction.selected = this.MidiAction.selected.filter((nt) => nt.ch != detail.index);
+                let mode = len === this.MidiAction.midi.length ? 2 : 3; // 可能没有删除任何音符，就不必存midi
+                setTimeout(() => {
+                    this.snapshot.save(mode);
+                    cd.addEventListener('reorder', saveOnReorder);
+                }, 0); // 等待reorder的发生
+            });
+            cd.addEventListener('add', () => {
+                cd.removeEventListener('reorder', saveOnReorder);
+                setTimeout(() => {
+                    this.snapshot.save(2);
+                    cd.addEventListener('reorder', saveOnReorder);
+                }, 0); // 等待reorder的发生
+            });
+            return cd;
+        })(),
 
         update: () => {
             const m = this.MidiAction.midi;
@@ -214,6 +243,7 @@ function App() {
          */
         addNoteAction: () => {
             const m = this.MidiAction;
+            if(!m.channelDiv.selected && !m.channelDiv.selectChannel(0)) return;   // 如果没有选中则默认第一个
             // 取消已选
             m.clearSelected();
             // 添加新音符，设置已选
@@ -221,6 +251,7 @@ function App() {
                 y: m.clickYid,
                 x1: m.clickXid,
                 x2: m.clickXid + 1,
+                ch: m.channelDiv.selected.index,
                 selected: true
             }; m.selected.push(note);
             {   // 二分插入
@@ -238,7 +269,7 @@ function App() {
                 this.spectrum.removeEventListener('mousemove', m.changeNoteY);
                 document.removeEventListener('mouseup', removeEvent);
                 // 鼠标松开则存档
-                if (m._anyAction) this.MidiAction.snapshot.add(JSON.stringify(this.MidiAction.midi));
+                if (m._anyAction)  this.snapshot.save(1);
             }; document.addEventListener('mouseup', removeEvent);
         },
         onclick_L: (e) => {
@@ -312,7 +343,7 @@ function App() {
                     this.spectrum.removeEventListener('mousemove', m.changeNoteY);
                     document.removeEventListener('mouseup', removeEvent);
                     // 鼠标松开则存档
-                    if (m._anyAction) this.MidiAction.snapshot.add(JSON.stringify(this.MidiAction.midi));
+                    if (m._anyAction) this.snapshot.save(1);
                 }; document.addEventListener('mouseup', removeEvent);
             } else {    // 靠近左侧，调整位置
                 this.spectrum.addEventListener('mousemove', m.changeNoteX);
@@ -323,11 +354,22 @@ function App() {
                     document.removeEventListener('mouseup', removeEvent);
                     this.MidiAction.midi.sort((a, b) => a.x1 - b.x1);   // 排序非常重要 因为查找被点击的音符依赖顺序
                     // 鼠标松开则存档
-                    if (m._anyAction) this.MidiAction.snapshot.add(JSON.stringify(this.MidiAction.midi));
+                    if (m._anyAction) this.snapshot.save(1);
                 }; document.addEventListener('mouseup', removeEvent);
             }
         },
     };
+    // 撤销相关
+    this.snapshot = new Snapshot(10, {
+        midi: JSON.stringify(this.MidiAction.midi),     // 音符移动、长度改变、channel改变后
+        channel: JSON.stringify(this.MidiAction.channelDiv.channel) // 音轨改变序号、增删、修改参数后
+    });
+    this.snapshot.save = (mode) => {
+        let state = {};
+        if(mode&1) state.midi = JSON.stringify(this.MidiAction.midi);
+        if(mode&2) state.channel = JSON.stringify(this.MidiAction.channelDiv.channel);
+        this.snapshot.add(state);
+    }
     this.AudioPlayer = {
         name: "请上传文件", // 在this.Analyser.onfile中赋值
         audio: document.createElement('audio'),
@@ -380,6 +422,26 @@ function App() {
                     if (baseY < 0) return;
                 }
             }
+        },
+        mousedown: () => {  // 鼠标点击后发声
+            let ch = this.MidiAction.channelDiv.selected;
+            ch = ch ? ch.ch : this.synthesizer;
+            let nt = ch.play({ f: this.Keyboard.freqTable[this.Keyboard.highlight - 24] });
+            let last = this.Keyboard.highlight;     // 除颤
+            const tplay = this.audioContext.currentTime;
+            const move = () => {
+                if(last === this.Keyboard.highlight) return;
+                last = this.Keyboard.highlight;
+                let dt = this.audioContext.currentTime - tplay;
+                this.synthesizer.stop(nt, dt > 0.3 ? 0 : dt - 0.3);
+                nt = ch.play({ f: this.Keyboard.freqTable[this.Keyboard.highlight - 24] });
+            }; document.addEventListener('mousemove', move);
+            const up = () => {
+                let dt = this.audioContext.currentTime - tplay;
+                this.synthesizer.stop(nt, dt > 0.5 ? 0 : dt - 0.5);
+                document.removeEventListener('mousemove', move);
+                document.removeEventListener('mouseup', up);
+            }; document.addEventListener('mouseup', up);
         }
     }; this.height = this._height; // 更新this.Keyboard._ychange
     this.TimeBar = {
@@ -408,13 +470,23 @@ function App() {
             let dp = this.width * tb.interval;      // 像素的步长
             let timeAt = dt * idstart;              // 对应的毫秒
             let p = idstart * dp - this.scrollX;    // 对应的像素
-            ctx.fillStyle = '#f0f0f0';
+            ctx.fillStyle = '#25262d';
             ctx.fillRect(0, 0, canvas.width, canvas.height);
-            ctx.fillStyle = 'black';
+            ctx.fillStyle = '#8e95a6';
+            // 画小刻度
+            ctx.strokeStyle = '#8e95a6';
+            ctx.beginPath();
+            for (let i = (this.idXstart + 1) * this._width - this.scrollX,
+                y2 = canvas.height - canvas.height * 0.3,
+                di = Math.max(1, Math.round(16 / this._width)) * this._width; i < canvas.width; i += di) {
+                ctx.moveTo(i, y2);
+                ctx.lineTo(i, canvas.height);
+            } ctx.stroke();
+            // 画大刻度，标时间
             ctx.strokeStyle = '#ff0000';
             ctx.beginPath();
-            for (endPix = canvas.width + (dp >> 1); p < endPix; p += dp, timeAt += dt) {
-                ctx.moveTo(p, 0);
+            for (endPix = canvas.width + (dp >> 1), y2 = canvas.height * 0.35; p < endPix; p += dp, timeAt += dt) {
+                ctx.moveTo(p, y2);
                 ctx.lineTo(p, canvas.height);
                 const t = tb.msToClock(timeAt);
                 let str = `${t[0].toString().padStart(2, "0")}:${t[1].toString().padStart(2, "0")}:${t[2].toString().padStart(3, "0")}`;
@@ -523,17 +595,25 @@ function App() {
     };
     this.shortcutActions = {    // 快捷键动作
         'Ctrl+Z': () => {   // 撤销
-            let lastState = this.MidiAction.snapshot.undo();
-            if (lastState) {
-                this.MidiAction.midi = JSON.parse(lastState);
+            let lastState = this.snapshot.undo();
+            if(!lastState) return;
+            if (lastState.midi) {
+                this.MidiAction.midi = JSON.parse(lastState.midi);
                 this.MidiAction.selected = this.MidiAction.midi.filter((obj) => obj.selected);
+            }
+            if (lastState.channel) {
+                this.MidiAction.channelDiv.fromArray(JSON.parse(lastState.channel));
             }
         },
         'Ctrl+Y': () => {
-            let nextState = this.MidiAction.snapshot.redo();
-            if (nextState) {
-                this.MidiAction.midi = JSON.parse(nextState);
+            let nextState = this.snapshot.redo();
+            if(!nextState) return;
+            if (nextState.midi) {
+                this.MidiAction.midi = JSON.parse(nextState.midi);
                 this.MidiAction.selected = this.MidiAction.midi.filter((obj) => obj.selected);
+            }
+            if (nextState.channel) {
+                this.MidiAction.channelDiv.fromArray(JSON.parse(nextState.channel));
             }
         },
         'Ctrl+A': () => {
@@ -551,10 +631,14 @@ function App() {
     };
     /**
      * 改变工作区(频谱、键盘、时间轴)大小
-     * @param {Number} w 工作区的新宽度 默认撑满页面
-     * @param {Number} h 工作区的新高度 默认充满父容器 父容器需设置flex:1;overflow:hidden;
+     * @param {Number} w 工作区的新宽度 默认充满父容器
+     * @param {Number} h 工作区的新高度 默认充满父容器
+     * 充满父容器，父容器需设置flex:1;overflow:hidden;
      */
-    this.resize = (w = window.innerWidth, h = document.getElementById('Canvases-Container').getBoundingClientRect().height) => {
+    this.resize = (w = undefined, h = undefined) => {
+        const box = document.getElementById('Canvases-Container').getBoundingClientRect();
+        w = w || box.width;
+        h = h || box.height;
         if (w > 80) {
             this.spectrum.width = w - 80;
             this.keyboard.width = 80;
@@ -571,6 +655,7 @@ function App() {
         }
         this.keyboard.height = this.spectrum.height;
         this.timeBar.width = this.spectrum.width;
+        document.getElementById('play-btn').style.width = this.keyboard.width + 'px';
         // 改变画布长宽之后，设置的值会重置，需要重新设置
         this.spectrum.ctx.lineWidth = 1;
         this.keyboard.ctx.lineWidth = 1; this.keyboard.ctx.font = `${this._height + 2}px Arial`;
@@ -711,7 +796,6 @@ function App() {
                 </div>
             </div>`;
             this.AudioPlayer.name = file.name;
-            if (!this.audioBuffer) this.audioContext = new AudioContext({ sampleRate: 44100 });
             function close() { document.getElementById('request-cover').remove(); }
             const ui = tempDiv.firstChild;
             let btns = ui.getElementsByTagName('button');
@@ -807,11 +891,13 @@ function App() {
                 this.spectrum.removeEventListener('mousemove', moveWindow);
                 document.removeEventListener('mouseup', up);
             }; document.addEventListener('mouseup', up);
+            return;
         }
         // 以下在没有频谱数据时不启用
         if (!this.Spectrogram._spectrogram) return;
         if (e.button == 0) this.MidiAction.onclick_L(e);    // midi音符相关
-        else this.MidiAction.clearSelected();
+        else this.MidiAction.clearSelected();    // 取消音符选中
+        this.Keyboard.mousedown();
     });
     this.spectrum.addEventListener('mousemove', this.trackMouse);
     this.spectrum.addEventListener('contextmenu', (e) => {
@@ -851,7 +937,18 @@ function App() {
     this.keyboard.addEventListener('mousemove', this.trackMouse);
     this.keyboard.addEventListener('contextmenu', (e) => {
         e.preventDefault();
-        // todo: 播放音符
+    });
+    this.keyboard.addEventListener('mousedown', (e) => {
+        if (e.button == 1) {    // 中键按下 动作同触摸板滑动 视窗移动
+            const moveWindow = (e) => {
+                this.scroll2(this.scrollX, this.scrollY + e.movementY);
+            }; this.keyboard.addEventListener('mousemove', moveWindow);
+            const up = () => {
+                this.keyboard.removeEventListener('mousemove', moveWindow);
+                document.removeEventListener('mouseup', up);
+            }; document.addEventListener('mouseup', up);
+            return;
+        } this.Keyboard.mousedown();
     });
     this.loopUpdate(true);
 }

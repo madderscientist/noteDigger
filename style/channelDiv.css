@@ -11,9 +11,22 @@ ul.drag_list {
     height: 100%;
     list-style: none;
     background-color: var(--bg-color);
-    padding: 0.6em;
+    padding: 0;
+    margin: 0;
     overflow: auto;
 }
+ul.drag_list::-webkit-scrollbar {
+    width: 12px;
+}
+ul.drag_list::-webkit-scrollbar-thumb {
+    background-color: rgb(50, 53, 62);
+    border: 3px solid rgb(37, 38, 45);
+    border-radius: 6px;
+}
+ul.drag_list::-webkit-scrollbar-track, ::-webkit-scrollbar-corner {
+    background-color: rgb(37, 38, 45);
+}
+
 ul.drag_list li.drag_list-item {
     width: 100%;
     transition: 0.3s;
@@ -31,7 +44,8 @@ ul.drag_list li.moving::before {
     bottom: 0;
     background-color: var(--bg-color);
     border: 0.125em dashed #ccc;
-    border-radius: 0.6em;
+    border-radius: 0.3em;   /* 和列表项保持一致 */
+    margin: 0 0.6em;
 }
 
 /* 列表项 */

@@ -30,8 +30,9 @@
     justify-content: space-between;
     align-items: center;
     padding: 10px 8px 0 8px;
-    color: inherit;
     margin: 0.2em;
+    background: inherit;
+    color: inherit;
 }
 
 .request-cover .card.hvCenter button {

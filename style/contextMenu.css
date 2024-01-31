@@ -21,6 +21,7 @@
     cursor: pointer;
     min-height: 26px;
     padding: 0px 8px;
+    color: black;
 }
 
 .contextMenuCard li:hover {

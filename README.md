@@ -4,7 +4,7 @@
 [demo](http://htmlpreview.github.io/?https://github.com/madderscientist/noteDigger/blob/main/index.html)
 
 ## 重要更新记录
-
+【比较+撤销】
 ### 2024 1 30
 完成了midi合成器tinySynth.js，实现了128种音色的播放。只有演奏音符的作用，控制器一点没做。<br>
 原理是多个基础波形合成一个音色。波形参数来自 https://github.com/g200kg/webaudio-tinysynth ，因此程序设计也参考了它的设计。修改记录在todo.md中<br>

@@ -80,16 +80,16 @@ wavetone中，每个音轨之间不存在明显的界限，而signal中，只有
 音轨的添加采用动态添加的方式还是静态？wavetone是静态，最大16。我做动态吧。
 动态音轨涉及很多ui的东西：音轨的位置（设计为可拖拽排序）、属性设置
 需要暴露的接口：
-- 音轨变化事件(顺序、个数)：用于触发存档点，目前考虑封装成Event【todo】
+- 音轨变化事件(顺序、个数)：用于触发存档点，目前考虑封装成Event
 - 音轨状态(颜色、当前选中)
-- 序列化音轨、根据音轨参数数组创建音轨：用于实现音轨的快照【尚不完善，需要等midi播放器完成】
+- 序列化音轨、根据音轨参数数组创建音轨：用于实现音轨的快照
 ChannelList的音轨列表及其属性似乎不需要暴露
 下一步推进的关键：
 MidiPlayer！需要成为ChannelList和ChannelItem的公共可访问对象，然后完成ui和数据的绑定。ChannelItem的instrument是否需要用序号代替？
 耦合关系：
 MidiAction监听ChannelList的事件，而ChannelList不监听MidiAction，但受其控制
 - ChannelList->音轨变化(顺序、个数)->MidiAction&MidiPlayer
-    如何传递这个变化？改变顺序用reorder事件，删除用remove事件，添加似乎不涉及midi音符的操作。
+    如何传递这个变化？改变顺序用reorder事件，删除用remove事件，添加似乎不涉及midi音符的操作。【修正：新增channel也需要事件，用于存档】
     删除一个channel时，先触发remove，再触发reorder，remove事件用于删除midi列表对应通道的音符，reorder用于更改剩下的音符的音轨序号
     由于reorder只在序号发生变化时触发，如果是最后一个删除或添加就不会触发，这意味着对此事件监听不能响应所有变化，那如何设置存档点？存档单独注册一个reorder的监听，add/remove前先取消注册，由add/remove自行设置存档，操作结束再注册回来，防止两次存档。
 - ChannelList->音轨音量改变->MidiPlayer
@@ -98,7 +98,8 @@ MidiAction监听ChannelList的事件，而ChannelList不监听MidiAction，但�
 ### 绘制
 使用多音轨后，绘制逻辑需要改变
 重叠：序号越低的音轨图层越上 & 选中的音轨置于顶层？——还是不要后者了。后者可以通过移动音轨实现
-
+由于scroll相比刷新是稀疏的，可以维护一个“视野中的音符”列表insight，当scroll的时候更新其值。（有特例：批量移动音符的时候也需要更新）
+为了实现小序号音轨在上层，insight是一个列表的列表，每个列表中是一个音轨的视野内的音符。绘制的时候，倒序遍历绘制，同时查询是否显示。
 
 ## 音符播放技术要点
 参考 https://github.com/g200kg/webaudio-tinysynth 完成了精简版的合成器，相比原版，有如下变化：

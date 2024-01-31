@@ -1,20 +1,35 @@
 html, body {
+    --theme-light: #25262d;
+    --theme-dark: #1e1f24;
+    --theme-text: #8e95a6;
     height: 100%;
     margin: 0;
     padding: 0;
-    color: #333;
-    background-color: #fff;
+    color: var(--theme-text);
+    background-color: var(--theme-dark);
     overflow: hidden;
+
 }
 
-body {
-    display: flex;
-    flex-direction: column;
+canvas {
+    display: block;
+    margin: 0;
+    border: none;
 }
 
 /* flex */
 .f {
     display: flex;
+}
+
+.fc {
+    display: flex;
+    flex-direction: column;
+}
+
+.fr {
+    display: flex;
+    flex-direction: row;
 }
 
 /* width full */
@@ -51,7 +66,7 @@ body {
     border: none;
     position: relative;
     height: 1em;
-    background-color: lightgray;
+    background-color: rgb(37,38,45);
 }
 
 #scrollbar-thumb {
@@ -61,16 +76,27 @@ body {
     position: absolute;
     height: 100%;
     width: 50px;
-    background-color: gray;
-    cursor: pointer;
+    background-color: rgb(69,72,81);
+    cursor: ew-resize;
 }
 
 #play-btn {
-    width: 80px;
+    background-color: var(--theme-light);
+    color: var(--theme-text);
+    border: none;
+    border-right: var(--theme-dark) solid 3px;
 }
 
-#Canvases-Container {
+.flexfull {
     flex: 1;
     /* 下面这行必须加 不然被画布撑开了就缩不回去了 */
     overflow: hidden;
+}
+
+#channel-sider {
+    background-color: transparent;
+    width: 205px;
+    height: 100%;
+    overflow: hidden;
+    border-right: var(--theme-dark) solid 3px;
 }

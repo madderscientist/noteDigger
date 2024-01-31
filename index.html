@@ -9,30 +9,39 @@
     <script src="./dataProcess/analyser.js"></script>
     <script src="./snapshot.js"></script>
     <script src="./contextMenu.js"></script>
+    <script src="./tinySynth.js"></script>
+    <script src="./channelDiv.js"></script>
     <script src="./app.js"></script>
     <link rel="stylesheet" href="./style/style.css">
     <link rel="stylesheet" href="./style/askUI.css">
     <link rel="stylesheet" href="./style/contextMenu.css">
+    <link rel="stylesheet" href="./style/channelDiv.css">
+    <link rel="stylesheet" href="./style/icon/iconfont.css">
 </head>
 
-<body>
+<body class="fc">
     <div style="height: 80px;">
         <input type="file" id="audioInput" accept="audio/*">
         速度<input type="range" id="speedControl" max="2" min="0.5" step="0.1">
         倍率<input type="range" id="multiControl" max="2" min="0.5" step="0.1">
     </div>
-    <div class="wf" id="Canvases-Container">
-        <div class="f wf" style="height: 40px;">
-            <button id="play-btn">当前时间<br>总时长</button>
-            <canvas id="timeBar" width="1000px" height="40px"></canvas>
+    <div class="flexfull fr">
+        <div id="channel-sider"></div>
+        <div class="flexfull fc">
+            <div id="Canvases-Container" class="flexfull">
+                <div class="f wf" style="height: 40px;">
+                    <button id="play-btn">当前时间<br>总时长</button>
+                    <canvas id="timeBar" width="1000px" height="40px"></canvas>
+                </div>
+                <div class="f wf">
+                    <canvas id="piano" width="80px" height="500px"></canvas>
+                    <canvas id="spectrum" width="1000px" height="500px"></canvas>
+                </div>
+            </div>
+            <div id="scrollbar-track">
+                <div id="scrollbar-thumb"></div>
+            </div>
         </div>
-        <div class="f wf">
-            <canvas id="piano" width="80px" height="500px"></canvas>
-            <canvas id="spectrum" width="1000px" height="500px"></canvas>
-        </div>
-    </div>
-    <div id="scrollbar-track">
-        <div id="scrollbar-thumb"></div>
     </div>
 </body>
 <script>
