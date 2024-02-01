@@ -20,10 +20,19 @@
 </head>
 
 <body class="fc">
-    <div style="height: 80px;">
+    <div class="tools">
         <input type="file" id="audioInput" accept="audio/*">
         速度<input type="range" id="speedControl" max="2" min="0.5" step="0.1">
         倍率<input type="range" id="multiControl" max="2" min="0.5" step="0.1">
+        midi音量<input type="range" id="midivolumeControl" max="1" min="0" step="0.02" value="1">
+        <div class="switch-bar" id="actMode">
+            <button class="selected">
+                <div class="iconfont icon-pen-l"></div>
+            </button>
+            <button>
+                <div class="iconfont icon-select"></div>
+            </button>
+        </div>
     </div>
     <div class="flexfull fr">
         <div id="channel-sider"></div>

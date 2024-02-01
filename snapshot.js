@@ -44,4 +44,23 @@ class Snapshot extends Array {
         this.pointer = (this.pointer + 1) % this.length;
         return this[this.pointer];
     }
+    /**
+     * 查看上一个快照状态，相当于撤销但不改变当前状态
+     * @returns 上一个状态的快照。如果无法回退则返回null
+     */
+    lastState() {
+        if (this.now <= 1) return null;
+        return this[(this.pointer + this.length - 1) % this.length];
+    }
+    /**
+     * 查看下一个快照状态，相当于重做但不改变当前状态
+     * @returns 下一个状态的快照。如果下一状态则返回null
+     */
+    nextState() {
+        if (this.now >= this.size) return null;
+        return this[(this.pointer + 1) % this.length]; 
+    }
+    nowState() {
+        return this[this.pointer];
+    }
 }

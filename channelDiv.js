@@ -403,7 +403,7 @@ class ChannelList extends EventTarget {
         </div>`;
         const card = tempDiv.firstElementChild;
         const btns = card.getElementsByTagName('button');
-        card.addEventListener('keydown', (e)=>{
+        card.addEventListener('keydown', (e) => {
             if (e.keyCode === 13) btns[1].click();  // 回车则点击btns[1]
         });
         btns[0].addEventListener('click', () => { card.remove(); });
@@ -437,7 +437,8 @@ class ChannelList extends EventTarget {
             visible: this.visible,
             mute: this.mute,
             instrument: this.ch.instrument,
-            volume: Math.round(Math.sqrt(this.ch.out.gain.value * 16129))
+            volume: Math.round(Math.sqrt(this.ch.out.gain.value * 16129)),
+            selected: this.classList.contains('selected') ? 1 : undefined
         };
     }
     /**
@@ -466,6 +467,7 @@ class ChannelList extends EventTarget {
             ch.ch = this.synthesizer.addChannel(i, item.instrument, item.volume * item.volume / 16129);
             this.channel[i] = ch;
             ch.dataset.tabIndex = i + 1;
+            if (item.selected) ch.click();
             this.container.appendChild(ch);
         }
         if (failed) {

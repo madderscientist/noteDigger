@@ -12,15 +12,17 @@ class ContextMenu {
      *   }, // 返回true/false控制本项是否显示
      *   event: "click" // 确认触发本项的事件，默认是click
      * },...]
+     * @param {Array} mustShow 如果菜单项为空，是否显示
      */
-    constructor(items = []) {
+    constructor(items = [], mustShow = false) {
         this.items = items;
+        this.mustShow = mustShow;
     }
 
     addItem(name, callback, onshow = null, event = "click") {
         let existingItem = this.items.find(item => item.name === name);
         if (existingItem) existingItem.callback = callback;
-        else this.items.push({ name: name, callback: callback, onshow: onshow, event: event});
+        else this.items.push({ name: name, callback: callback, onshow: onshow, event: event });
     }
     removeItem(name) {
         for (let i = 0; i < this.items.length; i++) {
@@ -47,6 +49,7 @@ class ContextMenu {
             });
             contextMenuCard.appendChild(listItem);
         });
+        if (contextMenuCard.children.length === 0 && !this.mustShow) return;
 
         contextMenuCard.style.top = `${e.clientY}px`;
         contextMenuCard.style.left = `${e.clientX}px`;
@@ -61,9 +64,10 @@ class ContextMenu {
             }
             contextMenuCard.remove();
         }
-        document.body.appendChild(contextMenuCard);
-
-        // 使元素立即获取焦点(要设置css:focue属性：outline:none;)
-        contextMenuCard.focus();
+        setTimeout(() => {
+            document.body.appendChild(contextMenuCard);
+            // 使元素立即获取焦点(要设置css:focue属性：outline:none;)
+            contextMenuCard.focus();
+        }, 0);  // 延时是因为让show可以被mousedown事件调用（否则mousedown触发后再触发contextmenu将导致菜单消失）
     }
 }

@@ -3,8 +3,24 @@
 推进ing……目标是全部自己造轮子！即：不使用框架、不使用外部库；目的是减小项目大小，并掌握各个环节。目前频谱分析的软件非常多，功能也超级强大，自知比不过……所以唯一能一战的就是项目体积了！作为一个纯前端项目，就要把易用的优点完全发扬！<br>
 [demo](http://htmlpreview.github.io/?https://github.com/madderscientist/noteDigger/blob/main/index.html)
 
+## 快捷键
+- Ctrl+Z: 撤销(音轨状态的改变不会引发存档，且只记录16次历史)
+- Ctrl+Y: 重做
+- Ctrl+A: 全选当前音轨
+- Ctrl+Shift+A: 全选所有音轨
+- Ctrl+D: 取消选中
+- Ctrl+C: 复制选中的音符
+- Ctrl+X: 剪贴选中的音符
+- Ctrl+V: 粘贴到选中的音轨上
+- Ctrl+B: 呼出/收回音轨面板
+- delete: 删除选中的音符
+- Shift+右键: 菜单，包含撤销/重做、复制/粘贴、删除
+
 ## 重要更新记录
-【比较+撤销】
+### 2024 2 1
+完成了多音轨、合成器和主线的整合，象征着midi系统的完成！<br>
+统一了UI风格；完善了快捷键功能；新增框选功能；修复了大部分bug。
+
 ### 2024 1 30
 完成了midi合成器tinySynth.js，实现了128种音色的播放。只有演奏音符的作用，控制器一点没做。<br>
 原理是多个基础波形合成一个音色。波形参数来自 https://github.com/g200kg/webaudio-tinysynth ，因此程序设计也参考了它的设计。修改记录在todo.md中<br>

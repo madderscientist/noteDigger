@@ -36,7 +36,7 @@ function App() {
     this.scrollY = 0;   // 视野下边和世界下边的距离
     this.idXstart = 0;  // 开始的X序号
     this.idYstart = 0;  // 开始的Y序号
-    this.idXend = 0;
+    this.idXend = 0;    // 在scroll2中更新
     this.idYend = 0;
     this.rectXstart = 0;// 目前只有Spectrogram.update在使用
     this.rectYstart = 0;// 画布开始的具体y坐标(因为最下面一个不完整) 迭代应该减height 被画频谱、画键盘共享
@@ -49,6 +49,14 @@ function App() {
         set: function (y) {
             this._mouseY = y;
             this.Keyboard.highlight = Math.floor((this.scrollY + this.spectrum.height - y) / this._height) + 24;
+        }
+    });
+    this._mouseX = 0;   // 鼠标当前x坐标
+    Object.defineProperty(this, 'mouseX', {
+        get: function () { return this._mouseX; },
+        set: function (x) {
+            this._mouseX = x;
+            this.MidiAction.frameXid = Math.floor((x + this.scrollX) / this._width);
         }
     });
     this.audioContext = new AudioContext({ sampleRate: 44100 });
@@ -124,6 +132,11 @@ function App() {
     this.MidiAction = {
         clickXid: 0,
         clickYid: 0,
+
+        mode: 0,    // 0: 笔模式 1: 选择模式
+        frameMode: 0,   // 0: 框选 1: 列选 2: 行选
+        frameXid: -1,   // 框选的终点的X序号(Y序号=this.Keyboard.highlight-24) 此变量便于绘制 如果是负数则不绘制
+
         _tempdx: 0, // 鼠标移动记录上次
         _tempdy: 0,
         _anyAction: false,  // 用于在选中多个后判断松开鼠标时应该如何处理选中
@@ -131,76 +144,130 @@ function App() {
             y: 离散 和spectrum的y一致
             x1: 离散 起点
             x2: 离散 终点
+            ch: 音轨序号
+            selected: 是否选中
         } */
         selected: [],   // 选中的音符 无序即可
         midi: [],       // 所有音符 需要维护有序性
         // 多音轨
         channelDiv: (() => {
             const cd = new ChannelList(document.getElementById('channel-sider'), this.synthesizer);
-            const saveOnReorder = () => this.snapshot.save(3);
-            cd.addEventListener('reorder', ({detail})=>{
-                for(const nt of this.MidiAction.midi) {
-                    nt.ch = detail[nt.ch];
-                }
-            });
-            cd.addEventListener('reorder', saveOnReorder);
-            cd.addEventListener('remove', ({detail}) => {
-                cd.removeEventListener('reorder', saveOnReorder);
-                let len = this.MidiAction.midi.length;
-                this.MidiAction.midi = this.MidiAction.midi.filter((nt) => nt.ch != detail.index);
-                this.MidiAction.selected = this.MidiAction.selected.filter((nt) => nt.ch != detail.index);
-                let mode = len === this.MidiAction.midi.length ? 2 : 3; // 可能没有删除任何音符，就不必存midi
+            const saveOnReorder = () => this.snapshot.save();
+            const waitReorder = () => {
                 setTimeout(() => {
-                    this.snapshot.save(mode);
+                    this.snapshot.save();
+                    this.MidiAction.updateView();
                     cd.addEventListener('reorder', saveOnReorder);
                 }, 0); // 等待reorder的发生
+            }
+            cd.addEventListener('reorder', ({ detail }) => {
+                for (const nt of this.MidiAction.midi) {
+                    nt.ch = detail[nt.ch];
+                } this.MidiAction.updateView();
+            });
+            cd.addEventListener('reorder', saveOnReorder);
+            cd.addEventListener('remove', ({ detail }) => {
+                cd.removeEventListener('reorder', saveOnReorder);
+                this.MidiAction.midi = this.MidiAction.midi.filter((nt) => nt.ch != detail.index);
+                this.MidiAction.selected = this.MidiAction.selected.filter((nt) => nt.ch != detail.index);
+                waitReorder();
             });
             cd.addEventListener('add', () => {
                 cd.removeEventListener('reorder', saveOnReorder);
-                setTimeout(() => {
-                    this.snapshot.save(2);
-                    cd.addEventListener('reorder', saveOnReorder);
-                }, 0); // 等待reorder的发生
+                waitReorder();
             });
             return cd;
         })(),
-
-        update: () => {
+        insight: [],    // 二维数组，每个元素为一个音轨视野内的音符 音符拾取依赖此数组
+        /**
+         * 更新this.MidiAction.insight
+         * 步骤繁琐，不必每次更新。触发时机:
+         * 1. channelDiv的reorder
+         * 2. midi的增删移动改变长度。由于都会调用且最后调用changeNoteY，所以只需要在changeNoteY中调用
+         * 3. scroll2
+         * 4. deleteNote
+         * 5. ctrlZ、ctrlY、ctrlV
+         */
+        updateView: () => {
             const m = this.MidiAction.midi;
+            const channel = Array.from(this.MidiAction.channelDiv.channel, () => []);
+            this.MidiAction.insight = channel;
             if (m.length == 0) return;   // 二分查找要求长度大于0
-            const s = this.spectrum.ctx;
-            let drawStart = m.length;
+            let viewStart = m.length;
             {   // 找到m中第一个x2值大于this.idXstart的音符的起始位置 由于m中元素较多 用二分查找
-                let l = 0, r = drawStart - 1;
+                let l = 0, r = viewStart - 1;
                 while (l <= r) {
                     let mid = (l + r) >> 1;
                     if (m[mid].x2 > this.idXstart) {
                         r = mid - 1;
-                        drawStart = mid;
+                        viewStart = mid;
                     } else l = mid + 1;
                 }
             }
-            for (; drawStart < m.length; drawStart++) {
-                const note = m[drawStart];
-                if (note.x1 >= this.idXend) break;
-                if (note.y < this.idYstart || note.y >= this.idYend) continue;
-                const params = [note.x1 * this._width - this.scrollX, this.spectrum.height - note.y * this._height + this.scrollY, (note.x2 - note.x1) * this._width, -this._height];
-                if (note.selected) {
-                    s.fillStyle = '#ffffff';
-                    s.fillRect(...params);
-                } else {    // 画白框红内矩形
-                    s.fillStyle = '#FF0000';
-                    s.fillRect(...params);
-                    s.strokeRect(...params);
-                }
+            let viewEnd = viewStart;
+            for (; viewEnd < m.length; viewEnd++) {
+                if (m[viewEnd].x1 >= this.idXend) break;
+            }
+            const all = m.slice(viewStart, viewEnd);
+            for (const nt of all) {
+                if (nt.y < this.idYstart || nt.y >= this.idYend) continue;
+                channel[nt.ch].push(nt);
             }
         },
-        deleteNote: () => {
+        update: () => {     // 按照insight绘制音符
+            const M = this.MidiAction;
+            const m = M.insight;
+            const s = this.spectrum.ctx;
+            const c = M.channelDiv.channel;
+            for (let ch = m.length - 1; ch >= 0; ch--) {
+                if (m[ch].length === 0 || !c[ch].visible) continue;
+                let ntcolor = c[ch].color;
+                for (const note of m[ch]) {
+                    const params = [note.x1 * this._width - this.scrollX, this.spectrum.height - note.y * this._height + this.scrollY, (note.x2 - note.x1) * this._width, -this._height];
+                    if (note.selected) {
+                        s.fillStyle = '#ffffff';
+                        s.fillRect(...params);
+                        s.strokeStyle = ntcolor;
+                        s.strokeRect(...params);
+                    } else {
+                        s.fillStyle = ntcolor;
+                        s.fillRect(...params);
+                        s.strokeStyle = '#ffffff';
+                        s.strokeRect(...params);
+                    }
+                }
+            } if (!M.mode || M.frameXid < 0) return;
+            // 绘制框选动作
+            s.fillStyle = '#f0f0f088';
+            let [xmin, xmax] = M.clickXid <= M.frameXid ? [M.clickXid, M.frameXid + 1] : [M.frameXid, M.clickXid + 1];
+            const Y = this.Keyboard.highlight - 24;
+            let [ymin, ymax] = Y <= M.clickYid ? [Y, M.clickYid + 1] : [M.clickYid, Y + 1];
+            let x1, x2, y1, y2;
+            if (M.frameMode == 1) {  // 列选
+                x1 = xmin * this._width - this.scrollX;
+                x2 = (xmax - xmin) * this._width;
+                y1 = 0;
+                y2 = this.spectrum.height;
+            } else if (M.frameMode == 2) {   // 行选
+                x1 = 0;
+                x2 = this.spectrum.width;
+                y1 = this.spectrum.height - ymax * this._height + this.scrollY;
+                y2 = (ymax - ymin) * this._height;
+            } else {    // 框选
+                x1 = xmin * this._width - this.scrollX;
+                x2 = (xmax - xmin) * this._width;
+                y1 = this.spectrum.height - ymax * this._height + this.scrollY;
+                y2 = (ymax - ymin) * this._height;
+            } s.fillRect(x1, y1, x2, y2);
+        },
+        deleteNote: (save = true) => {
             this.MidiAction.selected.forEach((v) => {
                 let i = this.MidiAction.midi.indexOf(v);
                 if (i != -1) this.MidiAction.midi.splice(i, 1);
             });
             this.MidiAction.selected.length = 0;
+            if (save) this.snapshot.save();
+            this.MidiAction.updateView();
         },
         clearSelected: () => {  // 取消已选
             this.MidiAction.selected.forEach(v => { v.selected = false; });
@@ -227,6 +294,7 @@ function App() {
                 v.y += dy - this.MidiAction._tempdy;
             });
             this.MidiAction._tempdy = dy;
+            this.MidiAction.updateView();
         },
         changeNoteX: (e) => {
             this.MidiAction._anyAction = true;
@@ -239,11 +307,60 @@ function App() {
             this.MidiAction._tempdx = dx;
         },
         /**
-         * 添加音符的鼠标动作 由this.MidiAction.onclick调用
+         * 框选音符的鼠标动作 由this.MidiAction.onclick_L调用
+         * 选中的标准：框住了音头
+         */
+        selectAction: (mode = 0) => {
+            const m = this.MidiAction;
+            m.frameXid = m.clickXid; // 先置大于零，表示开始绘制
+            if (mode == 1) {    // 列选
+                this.spectrum.addEventListener('mousemove', this.trackMouseX);
+                const up = () => {
+                    this.spectrum.removeEventListener('mousemove', this.trackMouseX);
+                    document.removeEventListener('mouseup', up);
+                    let ch = m.channelDiv.selected;
+                    if (ch) {
+                        ch = ch.index;
+                        let [xmin, xmax] = m.clickXid <= m.frameXid ? [m.clickXid, m.frameXid + 1] : [m.frameXid, m.clickXid + 1];
+                        for (const nt of m.midi) nt.selected = (nt.x1 >= xmin && nt.x1 < xmax && nt.ch == ch);
+                        m.selected = m.midi.filter(v => v.selected);
+                    } m.frameXid = -1;
+                }; document.addEventListener('mouseup', up);
+            } else if (mode == 2) { // 行选
+                const up = () => {
+                    document.removeEventListener('mouseup', up);
+                    let ch = m.channelDiv.selected;
+                    if (ch) {
+                        ch = ch.index;
+                        const Y = this.Keyboard.highlight - 24;
+                        let [ymin, ymax] = Y <= m.clickYid ? [Y, m.clickYid + 1] : [m.clickYid, Y + 1];
+                        for (const nt of m.midi) nt.selected = (nt.y >= ymin && nt.y < ymax && nt.ch == ch);
+                        m.selected = m.midi.filter(v => v.selected);
+                    } m.frameXid = -1;
+                }; document.addEventListener('mouseup', up);
+            } else {    // 框选
+                this.spectrum.addEventListener('mousemove', this.trackMouseX);
+                const up = () => {
+                    this.spectrum.removeEventListener('mousemove', this.trackMouseX);
+                    document.removeEventListener('mouseup', up);
+                    let ch = m.channelDiv.selected;
+                    if (ch) {
+                        ch = ch.index;
+                        const Y = this.Keyboard.highlight - 24;
+                        let [xmin, xmax] = m.clickXid <= m.frameXid ? [m.clickXid, m.frameXid + 1] : [m.frameXid, m.clickXid + 1];
+                        let [ymin, ymax] = Y <= m.clickYid ? [Y, m.clickYid + 1] : [m.clickYid, Y + 1];
+                        for (const nt of m.midi) nt.selected = (nt.x1 >= xmin && nt.x1 < xmax && nt.y >= ymin && nt.y < ymax && nt.ch == ch);
+                        m.selected = m.midi.filter(v => v.selected);
+                    } m.frameXid = -1;    // 表示不在框选
+                }; document.addEventListener('mouseup', up);
+            }
+        },
+        /**
+         * 添加音符的鼠标动作 由this.MidiAction.onclick_L调用
          */
         addNoteAction: () => {
             const m = this.MidiAction;
-            if(!m.channelDiv.selected && !m.channelDiv.selectChannel(0)) return;   // 如果没有选中则默认第一个
+            if (!m.channelDiv.selected && !m.channelDiv.selectChannel(0)) return;   // 如果没有选中则默认第一个
             // 取消已选
             m.clearSelected();
             // 添加新音符，设置已选
@@ -262,6 +379,8 @@ function App() {
                     else r = mid;
                 } m.midi.splice(l, 0, note);
             }
+            m._anyAction = true;
+            m.updateView();
             this.spectrum.addEventListener('mousemove', m.changeNoteDuration);
             this.spectrum.addEventListener('mousemove', m.changeNoteY);
             const removeEvent = () => {
@@ -269,7 +388,7 @@ function App() {
                 this.spectrum.removeEventListener('mousemove', m.changeNoteY);
                 document.removeEventListener('mouseup', removeEvent);
                 // 鼠标松开则存档
-                if (m._anyAction)  this.snapshot.save(1);
+                if (m._anyAction) this.snapshot.save();
             }; document.addEventListener('mouseup', removeEvent);
         },
         onclick_L: (e) => {
@@ -283,9 +402,23 @@ function App() {
             if (x >= this.xnum) {   // 越界
                 m.clearSelected(); return;
             }
-            const y = m.clickYid = ((this.scrollY + this.spectrum.height - e.offsetY) / this._height) | 0;
-            // 找到点击的最近的音符 由于点击不经常，所以用遍历足矣
+            const y = m.clickYid = this.Keyboard.highlight - 24;
+            // 找到点击的最近的音符 由于点击不经常，所以用遍历足矣 只需要遍历insight的音符
             let n = null;
+            for (const ch of m.insight) {
+                // 每层挑选左侧最靠近的（如果有多个）
+                let distance = this._width * this.xnum;
+                for (const nt of ch) {  // 由于来自midi，因此每个音轨内部是有序的
+                    let dis = x - nt.x1;
+                    if (dis < 0) break;
+                    if (y == nt.y && x <= nt.x2) {
+                        if (dis < distance) {
+                            distance = dis;
+                            n = nt;
+                        }
+                    }
+                } if (n) break; // 只找最上层的
+            }
             for (let i = 0, distance = this._width * this.xnum; i < midi.length; i++) {
                 let note = midi[i];
                 let dis = x - note.x1;
@@ -297,7 +430,11 @@ function App() {
                     }
                 }
             }
-            if (!n) { m.addNoteAction(); return; }
+            if (!n) {   // 添加或框选音符
+                if (m.mode) m.selectAction(m.frameMode);
+                else m.addNoteAction();
+                return;
+            }
             //== step 2: 如果点击到了音符，ctrl是否按下 ==/
             if (e.ctrlKey) {        // 有ctrl表示多选
                 if (n.selected) {   // 已经选中了，取消选中
@@ -343,7 +480,7 @@ function App() {
                     this.spectrum.removeEventListener('mousemove', m.changeNoteY);
                     document.removeEventListener('mouseup', removeEvent);
                     // 鼠标松开则存档
-                    if (m._anyAction) this.snapshot.save(1);
+                    if (m._anyAction) this.snapshot.save();
                 }; document.addEventListener('mouseup', removeEvent);
             } else {    // 靠近左侧，调整位置
                 this.spectrum.addEventListener('mousemove', m.changeNoteX);
@@ -354,22 +491,22 @@ function App() {
                     document.removeEventListener('mouseup', removeEvent);
                     this.MidiAction.midi.sort((a, b) => a.x1 - b.x1);   // 排序非常重要 因为查找被点击的音符依赖顺序
                     // 鼠标松开则存档
-                    if (m._anyAction) this.snapshot.save(1);
+                    if (m._anyAction) this.snapshot.save();
                 }; document.addEventListener('mouseup', removeEvent);
             }
         },
     };
     // 撤销相关
-    this.snapshot = new Snapshot(10, {
+    this.snapshot = new Snapshot(16, {
         midi: JSON.stringify(this.MidiAction.midi),     // 音符移动、长度改变、channel改变后
         channel: JSON.stringify(this.MidiAction.channelDiv.channel) // 音轨改变序号、增删、修改参数后
     });
-    this.snapshot.save = (mode) => {
-        let state = {};
-        if(mode&1) state.midi = JSON.stringify(this.MidiAction.midi);
-        if(mode&2) state.channel = JSON.stringify(this.MidiAction.channelDiv.channel);
-        this.snapshot.add(state);
-    }
+    this.snapshot.save = () => {
+        this.snapshot.add({
+            channel: JSON.stringify(this.MidiAction.channelDiv.channel),
+            midi: JSON.stringify(this.MidiAction.midi)
+        });
+    };
     this.AudioPlayer = {
         name: "请上传文件", // 在this.Analyser.onfile中赋值
         audio: document.createElement('audio'),
@@ -425,12 +562,13 @@ function App() {
         },
         mousedown: () => {  // 鼠标点击后发声
             let ch = this.MidiAction.channelDiv.selected;
+            if (ch.mute) return;
             ch = ch ? ch.ch : this.synthesizer;
             let nt = ch.play({ f: this.Keyboard.freqTable[this.Keyboard.highlight - 24] });
             let last = this.Keyboard.highlight;     // 除颤
             const tplay = this.audioContext.currentTime;
             const move = () => {
-                if(last === this.Keyboard.highlight) return;
+                if (last === this.Keyboard.highlight) return;
                 last = this.Keyboard.highlight;
                 let dt = this.audioContext.currentTime - tplay;
                 this.synthesizer.stop(nt, dt > 0.3 ? 0 : dt - 0.3);
@@ -593,10 +731,11 @@ function App() {
             this.HscrollBar.thumb.style.width = Math.max(nw, 10) + 'px';    // 限制最小宽度
         }
     };
+    this._copy = '';  // 用于复制音符 会是JSON字符串
     this.shortcutActions = {    // 快捷键动作
         'Ctrl+Z': () => {   // 撤销
             let lastState = this.snapshot.undo();
-            if(!lastState) return;
+            if (!lastState) return;
             if (lastState.midi) {
                 this.MidiAction.midi = JSON.parse(lastState.midi);
                 this.MidiAction.selected = this.MidiAction.midi.filter((obj) => obj.selected);
@@ -604,10 +743,11 @@ function App() {
             if (lastState.channel) {
                 this.MidiAction.channelDiv.fromArray(JSON.parse(lastState.channel));
             }
+            this.MidiAction.updateView();
         },
         'Ctrl+Y': () => {
             let nextState = this.snapshot.redo();
-            if(!nextState) return;
+            if (!nextState) return;
             if (nextState.midi) {
                 this.MidiAction.midi = JSON.parse(nextState.midi);
                 this.MidiAction.selected = this.MidiAction.midi.filter((obj) => obj.selected);
@@ -615,18 +755,68 @@ function App() {
             if (nextState.channel) {
                 this.MidiAction.channelDiv.fromArray(JSON.parse(nextState.channel));
             }
+            this.MidiAction.updateView();
         },
-        'Ctrl+A': () => {
+        'Ctrl+A': () => {           // 选中该通道的所有音符
+            let ch = this.MidiAction.channelDiv.selected;
+            if (ch) {
+                ch = ch.index;
+                this.MidiAction.midi.forEach((note) => {
+                    note.selected = note.ch == ch;
+                });
+                this.MidiAction.selected = this.MidiAction.midi.filter((nt) => nt.selected);
+            } else this.shortcutActions['Ctrl+Shift+A']();
+        },
+        'Ctrl+Shift+A': () => {     // 真正意义上的全选
             this.MidiAction.midi.forEach((note) => {
                 note.selected = true;
             });
             this.MidiAction.selected = [...this.MidiAction.midi];
         },
+        'Ctrl+D': () => {           // 取消选中
+            this.MidiAction.clearSelected();
+        },
         'Ctrl+C': () => {
-
+            if (this.MidiAction.selected.length == 0) return;
+            this._copy = JSON.stringify(this.MidiAction.selected);
+        },
+        'Ctrl+X': () => {
+            if (this.MidiAction.selected.length == 0) return;
+            this._copy = JSON.stringify(this.MidiAction.selected);
+            this.MidiAction.deleteNote();   // deleteNote会更新view和存档
         },
         'Ctrl+V': () => {
-
+            if (!this._copy) return;    // 空字符串或null
+            const ch = this.MidiAction.channelDiv.selected;
+            if (!ch) { alert("请先选择一个音轨!"); return; }
+            let chid = ch.index;
+            let copy = JSON.parse(this._copy);
+            // 找到第一个
+            let minX = Infinity;
+            copy.forEach((note) => {
+                note.ch = chid;
+                note.selected = true;
+                if (note.x1 < minX) minX = note.x1;
+            });
+            this.MidiAction.clearSelected();
+            this.MidiAction.selected = copy;
+            // 粘贴到光标位置 目前没有做播放 因此假设位置是this.idXstart
+            minX = this.idXstart - minX;
+            copy.forEach((note) => {
+                note.x1 += minX;
+                note.x2 += minX;
+            });
+            this.MidiAction.midi.push(...copy);
+            this.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
+            this.MidiAction.updateView();
+        },
+        'Ctrl+B': () => {       // 收回面板
+            const channelDiv = this.MidiAction.channelDiv.container.parentNode;
+            if (channelDiv.style.display == 'none') {
+                channelDiv.style.display = 'block';
+            } else {
+                channelDiv.style.display = 'none';
+            } this.resize();
         }
     };
     /**
@@ -681,6 +871,7 @@ function App() {
         this.rectYstart = this.spectrum.height - this.idYstart * this._height + this.scrollY;   // 画图的y从左上角开始
         // 滑动条
         this.HscrollBar.refreshPosition();
+        this.MidiAction.updateView();
     };
     /**
      * 按倍数横向缩放时频图 以鼠标指针为中心
@@ -705,8 +896,11 @@ function App() {
         this.MidiAction.update();
         this.TimeBar.update();  // 必须在Spectrogram后更新，因为涉及时间指示的绘制
     };
-    this.trackMouse = (e) => {  // onmousemove
+    this.trackMouseY = (e) => { // onmousemove
         this.mouseY = e.offsetY;
+    };
+    this.trackMouseX = (e) => {
+        this.mouseX = e.offsetX;
     };
     /**
      * 动画循环绘制
@@ -834,10 +1028,13 @@ function App() {
     };
     //========= 事件注册 =========//
     document.getElementById('speedControl').oninput = (e) => { // 变速
-        this.AudioPlayer.audio.playbackRate = e.target.value;
+        this.AudioPlayer.audio.playbackRate = parseFloat(e.target.value);
     };
     document.getElementById('multiControl').oninput = (e) => { // 变画频谱的倍率
-        this.Spectrogram.multiple = e.target.value;
+        this.Spectrogram.multiple = parseFloat(e.target.value);
+    };
+    document.getElementById('midivolumeControl').oninput = (e) => { // midi音量
+        this.synthesizer.out.gain.value = parseFloat(e.target.value) ** 2;
     };
     document.addEventListener('keydown', (e) => { // 键盘事件
         // 以下在没有频谱数据时不启用……【目前的实现是补丁。之后视情况升级：在获取到频谱数据后注册事件回调】
@@ -864,9 +1061,37 @@ function App() {
     this.AudioPlayer.play_btn.onclick = () => {
         // todo: 播放
     };
-    window.addEventListener('resize', () => {
-        this.resize();
-    }); this.resize();
+    let actMode = document.getElementById('actMode').children;
+    actMode[0].onclick = () => {
+        this.MidiAction.mode = 0;
+        actMode[1].classList.remove('selected');
+        actMode[0].classList.add('selected');
+    };
+    actMode[1].onclick = () => {
+        if (this.MidiAction.mode == 0) this.MidiAction.mode = 1;
+        else {
+            this.MidiAction.frameXid = -1;
+            switch (this.MidiAction.frameMode) {
+                case 0:
+                    this.MidiAction.frameMode = 1;
+                    actMode[1].firstElementChild.className = 'iconfont icon-range';
+                    break;
+                case 1:
+                    this.MidiAction.frameMode = 2;
+                    actMode[1].firstElementChild.style.rotate = '90deg';
+                    break;
+                case 2:
+                    this.MidiAction.frameMode = 0;
+                    actMode[1].firstElementChild.style.rotate = '0deg';
+                    actMode[1].firstElementChild.className = 'iconfont icon-select';
+                    break;
+            }
+        }
+        actMode[0].classList.remove('selected');
+        actMode[1].classList.add('selected');
+    };
+    window.addEventListener('load', () => { this.resize(); });
+    window.addEventListener('resize', () => { this.resize(); });
     this.HscrollBar.thumb.addEventListener('mousedown', this.HscrollBar.thumbMousedown);
     this.HscrollBar.track.addEventListener('mousedown', this.HscrollBar.trackMousedown);
     this.spectrum.addEventListener('wheel', (e) => {
@@ -880,8 +1105,35 @@ function App() {
         } else {    // 触摸板的滑动也是wheel
             this.scroll2(this.scrollX + e.deltaX, this.scrollY - e.deltaY);
         }   // 只改状态，但不绘图。绘图交给固定时间刷新完成
-        this.trackMouse(e);
+        this.trackMouseY(e);
     });
+    this.spectrum.contextMenu = new ContextMenu([
+        {
+            name: "撤销", callback: () => {
+                this.shortcutActions['Ctrl+Z']();
+            }, onshow: () => this.Spectrogram._spectrogram && this.snapshot.lastState()
+        }, {
+            name: "重做", callback: () => {
+                this.shortcutActions['Ctrl+Y']();
+            }, onshow: () => this.Spectrogram._spectrogram && this.snapshot.nextState()
+        }, {
+            name: "粘贴", callback: () => {
+                this.shortcutActions['Ctrl+V']();
+            }, onshow: () => this.Spectrogram._spectrogram && this._copy != ''
+        }, {
+            name: "复制", callback: () => {
+                this.shortcutActions['Ctrl+C']();
+            }, onshow: () => this.Spectrogram._spectrogram && this.MidiAction.selected.length > 0
+        }, {
+            name: '<span style="color: red;">删除</span>', callback: () => {
+                this.MidiAction.deleteNote();
+            }, onshow: () => this.Spectrogram._spectrogram && this.MidiAction.selected.length > 0
+        }, {
+            name: "导入音频", callback: () => {
+                document.getElementById('audioInput').click();
+            }, onshow: () => !this.Spectrogram._spectrogram
+        },
+    ]);
     this.spectrum.addEventListener('mousedown', (e) => {
         if (e.button == 1) {    // 中键按下 动作同触摸板滑动 视窗移动
             const moveWindow = (e) => {
@@ -896,14 +1148,14 @@ function App() {
         // 以下在没有频谱数据时不启用
         if (!this.Spectrogram._spectrogram) return;
         if (e.button == 0) this.MidiAction.onclick_L(e);    // midi音符相关
-        else this.MidiAction.clearSelected();    // 取消音符选中
+        else if (e.button == 2 && e.shiftKey) {
+            this.spectrum.contextMenu.show(e);
+            return;
+        } else this.MidiAction.clearSelected();    // 取消音符选中
         this.Keyboard.mousedown();
     });
-    this.spectrum.addEventListener('mousemove', this.trackMouse);
-    this.spectrum.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-        // todo: 播放音符或者菜单
-    });
+    this.spectrum.addEventListener('mousemove', this.trackMouseY);
+    this.spectrum.addEventListener('contextmenu', (e) => { e.preventDefault(); });
     this.timeBar.addEventListener('dblclick', (e) => {
         // todo: 双击在此开始播放
     });
@@ -934,7 +1186,7 @@ function App() {
     this.keyboard.addEventListener('wheel', (e) => {
         this.scroll2(this.scrollX, this.scrollY - e.deltaY);    // 只能上下移动
     });
-    this.keyboard.addEventListener('mousemove', this.trackMouse);
+    this.keyboard.addEventListener('mousemove', this.trackMouseY);
     this.keyboard.addEventListener('contextmenu', (e) => {
         e.preventDefault();
     });
