@@ -118,3 +118,17 @@ MidiAction监听ChannelList的事件，而ChannelList不监听MidiAction，但�
 - 没有做成midi的形式，音符频率依赖外部传参
 - 没有实现通道的调制、左右声道、混响。
 - 没有做鼓的音色。
+
+## 音频播放
+使用<audio>管理，因为方便。为了实现EQ效果：
+```js
+var source = audioContext.createMediaElementSource(audioElement);
+var filter = audioContext.createBiquadFilter();
+filter.type = 'lowpass';
+filter.frequency.value = 1000;
+source.connect(filter);
+filter.connect(audioContext.destination);
+```
+仍然可以通过audioElement控制整体的播放。需要注意audioContext的状态：
+如果是suspend，则需要resume(); audioContext刚创建就是这个状态，此时调用audioElement.play()无效。
+但只要有osc被调用了start()，audioContext就会变成running。

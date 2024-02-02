@@ -21,10 +21,10 @@
 
 <body class="fc">
     <div class="tools">
-        <input type="file" id="audioInput" accept="audio/*">
-        速度<input type="range" id="speedControl" max="2" min="0.5" step="0.1">
-        倍率<input type="range" id="multiControl" max="2" min="0.5" step="0.1">
+        速度<input type="range" id="speedControl" max="2" min="0.25" step="0.05" value="1">
+        倍率<input type="range" id="multiControl" max="11000" min="100" step="10" value="7000">
         midi音量<input type="range" id="midivolumeControl" max="1" min="0" step="0.02" value="1">
+        音频音量<input type="range" id="audiovolumeControl" max="1" min="0" step="0.02" value="1">
         <div class="switch-bar" id="actMode">
             <button class="selected">
                 <div class="iconfont icon-pen-l"></div>
@@ -55,16 +55,6 @@
 </body>
 <script>
     const app = new App();
-    // 创建测试时频数据
-    var data = [];
-    for (let i = 0; i < 100; i++) {
-        let item = new Uint8Array(84);
-        for (let j = 0; j < 84; j++) {
-            item[j] = j + i + Math.random() * 50;
-        }
-        data.push(item);
-    } data[0][0] = 255; data[0][83] = 255;
-    app.Spectrogram.spectrogram = data;
 </script>
 <script>
     const dragEvents = {
@@ -88,12 +78,7 @@
             e.preventDefault();
             document.body.classList.remove('dragIn');
             if (Array.from(e.dataTransfer.types).includes('Files')) {   // 判断是否有文件被拖入
-                const file = e.dataTransfer.files[0];
-                if (file.type.startsWith('audio/')) {   // 判断是否为音频文件
-                    dragEvents.deRegistDrag();
-                    // decodeMusic(file);
-                    console.log(file);
-                } else alert('请选择音乐文件！');
+                app.Analyser.onfile(e.dataTransfer.files[0]);
             }
         },
         registDrag: function () {
@@ -109,6 +94,13 @@
             document.body.removeEventListener('drop', dragEvents.drop);
         }
     }; dragEvents.registDrag();
+
+    app.event.addEventListener('fileui', dragEvents.deRegistDrag);
+    app.event.addEventListener('filecancel', dragEvents.registDrag);
+    app.event.addEventListener('fileerror', () => {
+        dragEvents.registDrag();
+        alert("文件错误！");
+    });
 </script>
 
 </html>

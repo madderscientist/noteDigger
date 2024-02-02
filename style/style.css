@@ -86,6 +86,9 @@ canvas {
     color: var(--theme-text);
     border: none;
     border-right: var(--theme-dark) solid 3px;
+    position: relative;
+    font-size: 0.8em;
+    cursor: pointer;
 }
 
 .flexfull {

@@ -395,10 +395,10 @@ class ChannelList extends EventTarget {
         tempDiv.innerHTML = `
         <div class="request-cover">
             <div class="card hvCenter"><label class="title">音轨${ch.dataset.tabIndex}设置</label>
-                <div><span>音轨名:</span><input type="text" name="ui-ask"></div>
-                <div><span>音量：&nbsp;</span><input type="number" name="ui-ask" value="100" step="1" min="0" max="127"></div>
-                <div><span>音色：&nbsp;</span><select name="ui-ask"></select></div>
-                <div><button class="ui-cancel">取消</button><button class="ui-confirm">确定</button></div>
+                <div class="layout"><span>音轨名:</span><input type="text" name="ui-ask"></div>
+                <div class="layout"><span>音量：&nbsp;</span><input type="number" name="ui-ask" value="100" step="1" min="0" max="127"></div>
+                <div class="layout"><span>音色：&nbsp;</span><select name="ui-ask"></select></div>
+                <div class="layout"><button class="ui-cancel">取消</button><button class="ui-confirm">确定</button></div>
             </div>
         </div>`;
         const card = tempDiv.firstElementChild;
@@ -406,14 +406,18 @@ class ChannelList extends EventTarget {
         card.addEventListener('keydown', (e) => {
             if (e.keyCode === 13) btns[1].click();  // 回车则点击btns[1]
         });
-        btns[0].addEventListener('click', () => { card.remove(); });
+        const close = () => {   // 渐变消失
+            card.style.opacity = 0;
+            setTimeout(()=>card.remove(), 200);
+        }
+        btns[0].addEventListener('click', close);
         btns[1].addEventListener('click', () => {
             ch.name = inputs[0].value;
             ch.ch.out.gain.value = inputs[1].value ** 2 / 16129;   // 平方律设置振幅增益
             let inst = parseInt(inputs[2].value);
             ch.ch.instrument = inst;
             ch.instrument = TinySynth.instrument[inst];
-            card.remove();
+            close();
         });
         const inputs = card.querySelectorAll('[name="ui-ask"]');
         inputs[0].value = ch.name;

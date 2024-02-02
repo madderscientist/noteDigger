@@ -1,13 +1,14 @@
 // 用这种方式(原始构造函数)的原因：解耦太难了，不解了。this全部指同一个
 // 防止在html初始化之前getElement，所以封装成了构造函数，而不是直接写obj
 function App() {
+    this.event = new EventTarget();
     this.spectrum = document.getElementById('spectrum');
     this.spectrum.ctx = this.spectrum.getContext('2d'); // 绘制相关参数的更改在this.resize中
     this.keyboard = document.getElementById('piano');
     this.keyboard.ctx = this.keyboard.getContext('2d', { alpha: false, desynchronized: true });
     this.timeBar = document.getElementById('timeBar');
     this.timeBar.ctx = this.timeBar.getContext('2d', { alpha: false, desynchronized: true });
-    this._width = 16;    // 每格的宽度
+    this._width = 5;    // 每格的宽度
     Object.defineProperty(this, 'width', {
         get: function () { return this._width; },
         set: function (w) {
@@ -17,7 +18,7 @@ function App() {
             this.HscrollBar.refreshSize();  // 刷新横向滑动条
         }
     });
-    this._height = 16;   // 每格的高度
+    this._height = 15;   // 每格的高度
     Object.defineProperty(this, 'height', {
         get: function () { return this._height; },
         set: function (h) {
@@ -41,7 +42,7 @@ function App() {
     this.rectXstart = 0;// 目前只有Spectrogram.update在使用
     this.rectYstart = 0;// 画布开始的具体y坐标(因为最下面一个不完整) 迭代应该减height 被画频谱、画键盘共享
     this.loop = 0;      // 接收requestAnimationFrame的返回
-    this.time = -1;     // 当前时间
+    this.time = -1;     // 当前时间 单位：毫秒 在this.AudioPlayer.update中更新
     this.dt = 100;      // 每次分析的时间间隔 单位毫秒 在this.Analyser.analyse中更新
     this._mouseY = 0;   // 鼠标当前y坐标
     Object.defineProperty(this, 'mouseY', {
@@ -65,7 +66,7 @@ function App() {
         parent: this,
         colorStep1: 100,
         colorStep2: 240,
-        multiple: 1,         // 幅度的倍数
+        multiple: parseFloat(document.getElementById('multiControl').value),// 幅度的倍数
         _spectrogram: null,
         getColor: (value) => {  // 0-step1，是蓝色的亮度从0变为50%；step1-step2，是颜色由蓝色变为红色；step2-255，保持红色
             value = value || 0;
@@ -509,10 +510,78 @@ function App() {
     };
     this.AudioPlayer = {
         name: "请上传文件", // 在this.Analyser.onfile中赋值
-        audio: document.createElement('audio'),
+        audio: (() => {
+            const a = document.createElement('audio');
+            a.loop = false;
+            a.ondurationchange = () => {
+                this.AudioPlayer.durationString = this.TimeBar.msToClockString(a.duration * 1000);
+            };
+            a.addEventListener('ended', () => {
+                this.time = 0;
+                this.AudioPlayer.stop();
+            });
+            a.addEventListener('loadeddata', () => {
+                this.AudioPlayer.setEQ();
+                if (this.audioContext.state == 'suspended') this.audioContext.resume().then(() => a.pause());
+                document.title = this.AudioPlayer.name + "扒谱";
+            });
+            return a;
+        })(),
         play_btn: document.getElementById('play-btn'),
+        durationString: '', // 在this.Analyser.audio.ondurationchange中更新
+        repeat: true,       // 是否区间循环
+        _crossFlag: false,  // 上一时刻是否在重复区间终点左侧
         update: () => {
-            // this.timeBar.ctx.clearRect(0, 0, this.timeBar.width, this.timeBar.height);
+            const A = this.AudioPlayer;
+            const a = A.audio;
+            const btn = A.play_btn;
+            if (a.readyState != 4 || a.paused) return;
+            this.time = a.currentTime * 1000;  // 【重要】更新时间
+            // 重复区间
+            let crossFlag = this.time < this.TimeBar.repeatEnd;
+            if (A.repeat && this.TimeBar.repeatEnd >= this.TimeBar.repeatStart) {   // 重复且重复区间有效
+                let crossFlag = this.time < this.TimeBar.repeatEnd;
+                if (A._crossFlag && !crossFlag) {  // 从重复区间终点左侧到右侧
+                    this.time = this.TimeBar.repeatStart;
+                    a.currentTime = this.time / 1000;
+                }
+            }
+            A._crossFlag = crossFlag;
+            btn.firstChild.textContent = this.TimeBar.msToClockString(this.time);
+            btn.lastChild.textContent = A.durationString;
+        },
+        start: (at) => {
+            const a = this.AudioPlayer.audio;
+            if (a.readyState != 4) return;
+            if (at >= 0) a.currentTime = at / 1000;
+            this.AudioPlayer._crossFlag = false;    // 置此为假可以暂时取消重复区间
+            a.play();
+        },
+        stop: () => {
+            this.AudioPlayer.audio.pause();
+        },
+        setEQ: (f = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]) => {
+            const a = this.AudioPlayer.audio;
+            if (a.EQ) {
+                a.EQ.source.disconnect();
+                for (const filter of a.EQ.filter) {
+                    filter.disconnect();
+                }
+            }
+            const source = this.audioContext.createMediaElementSource(a);
+            a.EQ = {
+                source: source,
+                filter: f.map((v) => {
+                    const filter = this.audioContext.createBiquadFilter();
+                    filter.type = "peaking";
+                    filter.frequency.value = v;
+                    filter.Q.value = 1;
+                    filter.gain.value = 0;
+                    source.connect(filter);
+                    filter.connect(this.audioContext.destination);
+                    return filter;
+                })
+            };
         }
     };
     this.Keyboard = {
@@ -596,8 +665,12 @@ function App() {
             return [
                 Math.floor(ms / 60000),
                 Math.floor((ms % 60000) / 1000),
-                ms % 1000
+                ms % 1000 | 0
             ];
+        },
+        msToClockString: (ms) => {
+            const t = this.TimeBar.msToClock(ms);
+            return `${t[0].toString().padStart(2, "0")}:${t[1].toString().padStart(2, "0")}:${t[2].toString().padStart(3, "0")}`;
         },
         update: () => {
             const canvas = this.timeBar;
@@ -626,9 +699,7 @@ function App() {
             for (endPix = canvas.width + (dp >> 1), y2 = canvas.height * 0.35; p < endPix; p += dp, timeAt += dt) {
                 ctx.moveTo(p, y2);
                 ctx.lineTo(p, canvas.height);
-                const t = tb.msToClock(timeAt);
-                let str = `${t[0].toString().padStart(2, "0")}:${t[1].toString().padStart(2, "0")}:${t[2].toString().padStart(3, "0")}`;
-                ctx.fillText(str, p - 28, 18);
+                ctx.fillText(tb.msToClockString(timeAt), p - 28, 18);
             } ctx.stroke();
             // 画重复区间
             let begin = this._width * tb.repeatStart / this.dt - this.scrollX;  // 单位：像素
@@ -651,14 +722,24 @@ function App() {
                 ctx.stroke(); spectrum.stroke();
             }
             // 画区间 如果begin>end则区间不起作用，不绘制
-            if (begin >= end) return;
-            begin = Math.max(begin + 1, 0); end = Math.min(end - 1, canvas.width);
-            ctx.fillStyle = spectrum.fillStyle = '#80808044';
-            ctx.fillRect(begin, 0, end - begin, canvas.height);
-            spectrum.fillRect(begin, 0, end - begin, spectrumHeight);
+            if (begin < end) {
+                begin = Math.max(begin + 1, 0); end = Math.min(end - 1, canvas.width);
+                ctx.fillStyle = spectrum.fillStyle = '#80808044';
+                ctx.fillRect(begin, 0, end - begin, canvas.height);
+                spectrum.fillRect(begin, 0, end - begin, spectrumHeight);
+            }
+            // 画当前时间
+            spectrum.strokeStyle = 'white';
+            begin = this.time / this.dt * this._width - this.scrollX;
+            if (begin >= 0 && begin < canvas.width) {
+                spectrum.beginPath();
+                spectrum.moveTo(begin, 0);
+                spectrum.lineTo(begin, spectrumHeight);
+                spectrum.stroke();
+            }
         },
         updateInterval: () => {    // 根据this.width改变 在width的setter中调用
-            const fontWidth = this.timeBar.ctx.measureText('00:00:000').width * 1.1;
+            const fontWidth = this.timeBar.ctx.measureText('00:00:000').width * 1.2;
             // 如果间距小于fontWidth则细分
             this.TimeBar.interval = Math.max(1, Math.ceil(fontWidth / this._width));
         },
@@ -851,7 +932,7 @@ function App() {
         this.keyboard.ctx.lineWidth = 1; this.keyboard.ctx.font = `${this._height + 2}px Arial`;
         this.timeBar.ctx.font = '14px Arial';
         // 更新滑动条大小
-        this.HscrollBar.refreshSize();
+        this.width = this._width;   // 除了触发滑动条更新，还能在初始化的时候保证timeBar的文字间隔
         this.scroll2(this.scrollX, this.scrollY);
     };
     /**
@@ -880,7 +961,7 @@ function App() {
      */
     this.scaleX = (mouseX, times) => {
         let nw = this._width * times;
-        if (nw < 3) return;
+        if (nw < 2) return;
         if (nw > this.spectrum.width >> 2) return;
         this.width = nw;
         this.scroll2((this.scrollX + mouseX) * times - mouseX, this.scrollY);
@@ -934,23 +1015,31 @@ function App() {
             var fft = new realFFT(fftPoints); // 8192点在44100采样率下，最低能分辨F#2，但是足矣
             if (this.Keyboard.freqTable.A4 != A4) this.Keyboard.freqTable.A4 = A4;   // 更新频率表
             var analyser = new NoteAnalyser(audioBuffer.sampleRate / fftPoints, this.Keyboard.freqTable);
-            function a(t) { // 对t执行小波变化，并整理为时频谱
+            let progressTrans = (x) => x;   // 如果分阶段执行则需要自定义进度的变换
+            const a = async (t) => { // 对t执行小波变化，并整理为时频谱
                 let nFinal = t.length - fftPoints;
                 const result = new Array(((nFinal / dN) | 0) + 1);
                 for (let n = 0, k = 0; n <= nFinal; n += dN) {
                     result[k++] = analyser.analyse(...fft.fft(t, n));
-                } return result;
+                    this.event.dispatchEvent(new CustomEvent("progress", {
+                        detail: progressTrans(k / (result.length - 1))
+                    }));
+                    await new Promise(resolve => setTimeout(resolve, 0));
+                }
+                this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));  // 通知完成
+                return result;
             }
+            await new Promise(resolve => setTimeout(resolve, 0));   // 等待UI
             switch (channel) {
-                case 0: return a(audioBuffer.getChannelData(0));
-                case 1: return a(audioBuffer.getChannelData(1));
+                case 0: return await a(audioBuffer.getChannelData(0));
+                case 1: return await a(audioBuffer.getChannelData(1));
                 case 2: {   // L+R
                     let length = audioBuffer.length;
                     const timeDomain = new Float32Array(audioBuffer.getChannelData(0));
                     if (audioBuffer.numberOfChannels > 1) {
                         let channelData = audioBuffer.getChannelData(1);
                         for (let i = 0; i < length; i++) timeDomain[i] = (timeDomain[i] + channelData[i]) * 0.5;
-                    } return a(timeDomain);
+                    } return await a(timeDomain);
                 }
                 case 3: {   // L-R
                     let length = audioBuffer.length;
@@ -958,11 +1047,13 @@ function App() {
                     if (audioBuffer.numberOfChannels > 1) {
                         let channelData = audioBuffer.getChannelData(1);
                         for (let i = 0; i < length; i++) timeDomain[i] = (timeDomain[i] - channelData[i]) * 0.5;
-                    } return a(timeDomain);
+                    } return await a(timeDomain);
                 }
                 default: {  // fft(L) + fft(R)
-                    const l = a(audioBuffer.getChannelData(0));
-                    const r = a(audioBuffer.getChannelData(1));
+                    progressTrans = (x) => x / 2;
+                    const l = await a(audioBuffer.getChannelData(0));
+                    progressTrans = (x) => 0.5 + x / 2;
+                    const r = await a(audioBuffer.getChannelData(1));
                     for (let i = 0; i < l.length; i++) {
                         const li = l[i];
                         for (let j = 0; j < li.length; j++)
@@ -972,29 +1063,35 @@ function App() {
             }
         },
         onfile: (file) => {     // 依赖askUI.css
+            if (!file.type.startsWith('audio/')) {
+                this.event.dispatchEvent(new Event('fileerror'));
+                return;
+            }
+            this.event.dispatchEvent(new Event('fileui'));
             let tempDiv = document.createElement('div');
             tempDiv.innerHTML = `
             <div class="request-cover">
                 <div class="card hvCenter"><label class="title">${file.name}</label>
-                    <div><span>每秒的次数：</span><input type="number" name="ui-ask" value="10" min="1" max="100"></div>
-                    <div><span>标准频率A4=</span><input type="number" name="ui-ask" value="440" step="0.1" min="55"></div>
-                    <div>分析声道：</div>
-                    <div>
+                    <div class="layout"><span>每秒的次数：</span><input type="number" name="ui-ask" value="10" min="1" max="100"></div>
+                    <div class="layout"><span>标准频率A4=</span><input type="number" name="ui-ask" value="440" step="0.1" min="55"></div>
+                    <div class="layout">分析声道：</div>
+                    <div class="layout">
                         <input type="radio" name="ui-ask" value="4" checked>Stereo
                         <input type="radio" name="ui-ask" value="2">L+R
                         <input type="radio" name="ui-ask" value="3">L-R
                         <input type="radio" name="ui-ask" value="0">L
                         <input type="radio" name="ui-ask" value="1">R
                     </div>
-                    <div><button class="ui-cancel">取消</button><button class="ui-confirm">解析</button></div>
+                    <div class="layout"><button class="ui-cancel">取消</button><button class="ui-confirm">解析</button></div>
                 </div>
             </div>`;
             this.AudioPlayer.name = file.name;
-            function close() { document.getElementById('request-cover').remove(); }
-            const ui = tempDiv.firstChild;
+            const ui = tempDiv.firstElementChild;
+            function close() { ui.remove(); }
             let btns = ui.getElementsByTagName('button');
             btns[0].onclick = () => {
                 close(); this.AudioPlayer.audio.src = '';
+                this.event.dispatchEvent(new Event('filecancel'));  // 为了恢复drag功能
             };
             btns[1].onclick = () => {
                 // 获取分析参数
@@ -1009,18 +1106,56 @@ function App() {
                     }
                 }
                 close();
+                this.event.dispatchEvent(new Event('fileaccept'));
                 // 打开另一个ui analyse加入回调以显示进度
+                let tempDiv = document.createElement('div');
+                tempDiv.innerHTML = `
+                <div class="request-cover">
+                    <div class="card hvCenter"><label class="title">解析中</label>
+                        <span>00%</span>
+                        <div class="layout">
+                            <div class="porgress-track">
+                                <div class="porgress-value"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+                const progressUI = tempDiv.firstElementChild;
+                const progress = progressUI.querySelector('.porgress-value');
+                const percent = progressUI.querySelector('span');
+                document.body.insertBefore(progressUI, document.body.firstChild);
+                const onprogress = ({ detail }) => {
+                    console.log(detail);
+                    if (detail < 0) {
+                        this.event.removeEventListener('progress', onprogress);
+                        progress.style.width = '100%';
+                        percent.textContent = '100%';
+                        progressUI.style.opacity = 0;
+                        setTimeout(() => progressUI.remove(), 200);
+                    } else {
+                        detail = Math.min(1, detail);
+                        progress.style.width = (detail * 100) + '%';
+                        percent.textContent = (detail * 100).toFixed(2) + '%';
+                    }
+                };
+                this.event.addEventListener('progress', onprogress);
                 // 读取文件
                 const fileReader = new FileReader();
                 fileReader.onload = (e) => {
                     // 解码音频文件为音频缓冲区
-                    this.audioContext.decodeAudioData(e.target.result, (decodedData) => {
-                        this.Spectrogram.spectrogram = this.Analyser.analyse(
+                    this.audioContext.decodeAudioData(e.target.result).then((decodedData) => {
+                        this.Analyser.analyse(
                             decodedData, tNum, A4, channel, 8192    // 可以考虑加一个“精度”选项
-                        );
+                        ).then((v) => {
+                            this.Spectrogram.spectrogram = v;
+                            fileReader.onload = (e) => {
+                                // 设置音频源 缓存到浏览器
+                                this.AudioPlayer.audio.src = e.target.result;
+                            }; fileReader.readAsDataURL(file);
+                        });
+                    }).catch((e) => {
+                        this.event.dispatchEvent(new Event('fileerror'));
                     });
-                    // 设置音频源 缓存到浏览器
-                    this.AudioPlayer.audio.src = URL.createObjectURL(new Blob([e.target.result]));
                 }; fileReader.readAsArrayBuffer(file);
             };
             document.body.insertBefore(ui, document.body.firstChild);   // 插入body的最前面
@@ -1036,6 +1171,9 @@ function App() {
     document.getElementById('midivolumeControl').oninput = (e) => { // midi音量
         this.synthesizer.out.gain.value = parseFloat(e.target.value) ** 2;
     };
+    document.getElementById('audiovolumeControl').oninput = (e) => {// 音频音量
+        this.AudioPlayer.audio.volume = parseFloat(e.target.value);
+    }
     document.addEventListener('keydown', (e) => { // 键盘事件
         // 以下在没有频谱数据时不启用……【目前的实现是补丁。之后视情况升级：在获取到频谱数据后注册事件回调】
         if (!this.Spectrogram._spectrogram) return;
@@ -1055,11 +1193,13 @@ function App() {
                 case 'ArrowLeft': this.scroll2(this.scrollX - this._width, this.scrollY); break;
                 case 'ArrowRight': this.scroll2(this.scrollX + this._width, this.scrollY); break;
                 case 'Delete': this.MidiAction.deleteNote(); break;
+                case ' ': this.AudioPlayer.play_btn.click(); break;
             }
         }
     });
     this.AudioPlayer.play_btn.onclick = () => {
-        // todo: 播放
+        if (this.AudioPlayer.audio.paused) this.AudioPlayer.start(-1);
+        else this.AudioPlayer.stop();
     };
     let actMode = document.getElementById('actMode').children;
     actMode[0].onclick = () => {
@@ -1128,11 +1268,7 @@ function App() {
             name: '<span style="color: red;">删除</span>', callback: () => {
                 this.MidiAction.deleteNote();
             }, onshow: () => this.Spectrogram._spectrogram && this.MidiAction.selected.length > 0
-        }, {
-            name: "导入音频", callback: () => {
-                document.getElementById('audioInput').click();
-            }, onshow: () => !this.Spectrogram._spectrogram
-        },
+        }
     ]);
     this.spectrum.addEventListener('mousedown', (e) => {
         if (e.button == 1) {    // 中键按下 动作同触摸板滑动 视窗移动
@@ -1145,23 +1281,27 @@ function App() {
             }; document.addEventListener('mouseup', up);
             return;
         }
+        this.Keyboard.mousedown();
         // 以下在没有频谱数据时不启用
         if (!this.Spectrogram._spectrogram) return;
         if (e.button == 0) this.MidiAction.onclick_L(e);    // midi音符相关
         else if (e.button == 2 && e.shiftKey) {
             this.spectrum.contextMenu.show(e);
+            e.stopPropagation();
             return;
         } else this.MidiAction.clearSelected();    // 取消音符选中
-        this.Keyboard.mousedown();
     });
     this.spectrum.addEventListener('mousemove', this.trackMouseY);
-    this.spectrum.addEventListener('contextmenu', (e) => { e.preventDefault(); });
+    this.spectrum.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
     this.timeBar.addEventListener('dblclick', (e) => {
-        // todo: 双击在此开始播放
+        if (this.AudioPlayer.audio.readyState != 4) return;
+        let position = (e.offsetX + this.scrollX) * this.AudioPlayer.audio.duration / (this.xnum * this._width)
+        this.AudioPlayer.start(position * 1000);
     });
     this.timeBar.addEventListener('contextmenu', (e) => {
         e.preventDefault(); // 右键菜单
         this.TimeBar.contextMenu.show(e);
+        e.stopPropagation();
     });
     this.timeBar.addEventListener('mousedown', (e) => {
         if (e.button) return;   // 左键拖拽
@@ -1187,9 +1327,7 @@ function App() {
         this.scroll2(this.scrollX, this.scrollY - e.deltaY);    // 只能上下移动
     });
     this.keyboard.addEventListener('mousemove', this.trackMouseY);
-    this.keyboard.addEventListener('contextmenu', (e) => {
-        e.preventDefault();
-    });
+    this.keyboard.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
     this.keyboard.addEventListener('mousedown', (e) => {
         if (e.button == 1) {    // 中键按下 动作同触摸板滑动 视窗移动
             const moveWindow = (e) => {
@@ -1210,9 +1348,12 @@ function App() {
 #spectrum canvas 画频谱
 #piano canvas 画琴键
 #timeBar canvas 画时间轴
+#channel-sider div 音轨选择的容器
 #speedControl input[type=range] 变速
 #multiControl input[type=range] 变画频谱的倍率
+#midivolumeControl input[type=range] midi音量
 #play-btn button 播放
+#actMode div 动作模式选择，其下有两个btn
 #scrollbar-track div 滑动条轨道
 #scrollbar-thumb div 滑动条
 */

@@ -7,6 +7,8 @@
     left: 0;
     background-color: #6c6c6c78;
     z-index: 99;
+    opacity: 1;
+    transition: opacity 0.2s ease-in-out;
 }
 
 .request-cover .card {
@@ -25,7 +27,7 @@
     color: white;
 }
 
-.card.hvCenter div {
+.card.hvCenter .layout {
     display: flex;
     justify-content: space-between;
     align-items: center;
@@ -65,4 +67,20 @@
     color: inherit;
     margin: 0 0.8em;
     padding-left: 0.6em;
+}
+
+/* 进度条 */
+.porgress-track {
+    display: block;
+    width: 16em;
+    height: 1em;
+    border-radius: 2em;
+    background-color: #1e1f24;
+    overflow: hidden;
+}
+
+.porgress-value {
+    width: 0;
+    height: inherit;
+    background-color: #761fc8;
 }
