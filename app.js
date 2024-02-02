@@ -109,7 +109,10 @@ function App() {
                 ctx.fillStyle = '#25262d';
                 ctx.fillRect(rectx, 0, w, canvas.height);
             }
-            // 更新spectrum
+            // 铺底色以凸显midi音符
+            ctx.fillStyle = '#25262daa';
+            ctx.fillRect(0, 0, rectx, canvas.height);
+            // 更新note
             ctx.fillStyle = "#ffffff4f";
             rectx = canvas.height - (this.Keyboard.highlight - 24) * this._height + this.scrollY;
             ctx.fillRect(0, rectx, canvas.width, -this._height);
@@ -412,24 +415,13 @@ function App() {
                 for (const nt of ch) {  // 由于来自midi，因此每个音轨内部是有序的
                     let dis = x - nt.x1;
                     if (dis < 0) break;
-                    if (y == nt.y && x <= nt.x2) {
+                    if (y == nt.y && x < nt.x2) {
                         if (dis < distance) {
                             distance = dis;
                             n = nt;
                         }
                     }
                 } if (n) break; // 只找最上层的
-            }
-            for (let i = 0, distance = this._width * this.xnum; i < midi.length; i++) {
-                let note = midi[i];
-                let dis = x - note.x1;
-                if (dis < 0) break;
-                if (y == note.y && x <= note.x2) {
-                    if (dis < distance) {
-                        distance = dis;
-                        n = note;
-                    }
-                }
             }
             if (!n) {   // 添加或框选音符
                 if (m.mode) m.selectAction(m.frameMode);
@@ -508,6 +500,53 @@ function App() {
             midi: JSON.stringify(this.MidiAction.midi)
         });
     };
+    this.MidiPlayer = {
+        priorT: 1000 / 59,      // 实际稳定在60帧，波动极小
+        realT: 1000 / 59,
+        _last: performance.now(),
+        lastID: -1,
+        restart: () => {
+            this.MidiPlayer.lastID = (this.AudioPlayer.audio.currentTime / this.dt) | 0;
+        },
+        update: () => {
+            const mp = this.MidiPlayer;
+            // 一阶预测
+            let tnow = performance.now();
+            // 由于requestAnimationFrame在离开界面的时候会停止，所以要设置必要的限定
+            if (tnow < (mp.priorT << 1)) mp.realT = 0.2 * (tnow - mp._last) + 0.8 * mp.realT;   // IIR低通滤波
+            mp._last = tnow;
+            if (this.AudioPlayer.audio.paused) return;
+            let predictT = this.time + 0.5 * (mp.realT + mp.priorT); // 先验和实测的加权和
+            let predictID = (predictT / this.dt) | 0;
+            // 寻找(mp.lastID, predictID]之间的音符
+            const m = this.MidiAction.midi;
+            if (m.length > 0) { // 二分查找要求长度大于0
+                let lastAt = m.length;
+                {   // 二分查找到第一个x1>mp.lastID的音符
+                    let l = 0, r = lastAt - 1;
+                    while (l <= r) {
+                        let mid = (l + r) >> 1;
+                        if (m[mid].x1 > mp.lastID) {
+                            r = mid - 1;
+                            lastAt = mid;
+                        } else l = mid + 1;
+                    }
+                }
+                for (; lastAt < m.length; lastAt++) {
+                    const nt = m[lastAt];
+                    if (nt.x1 > predictID) break;
+                    if (this.MidiAction.channelDiv.channel[nt.ch].mute) continue;
+                    this.synthesizer.play({
+                        id: nt.ch,
+                        f: this.Keyboard.freqTable[nt.y],
+                        t: this.AudioPlayer.audio.currentTime - (nt.x1 * this.dt) / 1000,
+                        last: (nt.x2 - nt.x1) * this.dt / 1000
+                    });
+                }
+            }
+            mp.lastID = predictID;
+        }
+    };
     this.AudioPlayer = {
         name: "请上传文件", // 在this.Analyser.onfile中赋值
         audio: (() => {
@@ -524,6 +563,7 @@ function App() {
                 this.AudioPlayer.setEQ();
                 if (this.audioContext.state == 'suspended') this.audioContext.resume().then(() => a.pause());
                 document.title = this.AudioPlayer.name + "扒谱";
+                this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));  // 通知完成
             });
             return a;
         })(),
@@ -559,6 +599,7 @@ function App() {
         },
         stop: () => {
             this.AudioPlayer.audio.pause();
+            this.synthesizer.stopAll();
         },
         setEQ: (f = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]) => {
             const a = this.AudioPlayer.audio;
@@ -764,7 +805,7 @@ function App() {
             }, {
                 name: "从此处播放",
                 callback: (e_father, e_self) => {
-                    // todo
+                    this.AudioPlayer.start((e_father.offsetX + this.scrollX) * this.dt / this._width);
                 }
             }
         ])
@@ -972,6 +1013,7 @@ function App() {
     this.update = () => {
         // 首先要同步时间 如果音频播放了，就同步音频时间
         this.AudioPlayer.update();
+        this.MidiPlayer.update();
         this.Spectrogram.update();
         this.Keyboard.update();
         this.MidiAction.update();
@@ -1021,15 +1063,21 @@ function App() {
                 const result = new Array(((nFinal / dN) | 0) + 1);
                 for (let n = 0, k = 0; n <= nFinal; n += dN) {
                     result[k++] = analyser.analyse(...fft.fft(t, n));
-                    this.event.dispatchEvent(new CustomEvent("progress", {
-                        detail: progressTrans(k / (result.length - 1))
-                    }));
-                    await new Promise(resolve => setTimeout(resolve, 0));
-                }
-                this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));  // 通知完成
+                    // 一帧一次也太慢了。这里固定更新帧率
+                    let tnow = performance.now();
+                    if (tnow - lastFrame > 250) {
+                        lastFrame = tnow;
+                        // 打断分析 更新UI 等待下一周期
+                        this.event.dispatchEvent(new CustomEvent("progress", {
+                            detail: progressTrans(k / (result.length - 1))
+                        }));
+                        await new Promise(resolve => setTimeout(resolve, 0));
+                    }
+                }   // 通知UI关闭的事件分发移到了audio.onloadeddata中
                 return result;
             }
             await new Promise(resolve => setTimeout(resolve, 0));   // 等待UI
+            var lastFrame = performance.now();
             switch (channel) {
                 case 0: return await a(audioBuffer.getChannelData(0));
                 case 1: return await a(audioBuffer.getChannelData(1));
@@ -1125,15 +1173,17 @@ function App() {
                 const percent = progressUI.querySelector('span');
                 document.body.insertBefore(progressUI, document.body.firstChild);
                 const onprogress = ({ detail }) => {
-                    console.log(detail);
                     if (detail < 0) {
                         this.event.removeEventListener('progress', onprogress);
                         progress.style.width = '100%';
                         percent.textContent = '100%';
                         progressUI.style.opacity = 0;
                         setTimeout(() => progressUI.remove(), 200);
+                    } else if (detail >= 1) {
+                        detail = 1;
+                        progress.style.width = '100%';
+                        percent.textContent = "加载界面……";
                     } else {
-                        detail = Math.min(1, detail);
                         progress.style.width = (detail * 100) + '%';
                         percent.textContent = (detail * 100).toFixed(2) + '%';
                     }
@@ -1197,9 +1247,15 @@ function App() {
             }
         }
     });
+    // audio可以后台播放，但是requestAnimationFrame不行，而时间同步在requestAnimationFrame中
+    // 还有一个办法：在可见状态变化时，将update绑定到audio.ontimeupdate上，但是这个事件触发频率很低，而预测器根据60帧设计的
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) this.AudioPlayer.stop();
+    });
     this.AudioPlayer.play_btn.onclick = () => {
         if (this.AudioPlayer.audio.paused) this.AudioPlayer.start(-1);
         else this.AudioPlayer.stop();
+        this.AudioPlayer.play_btn.blur();   // 防止焦点在按钮上导致空格响应失败
     };
     let actMode = document.getElementById('actMode').children;
     actMode[0].onclick = () => {

@@ -277,9 +277,18 @@ class TinySynth {
         this.channel.splice(at, 0, ch);
         return ch;
     }
-    play({ id, f = 440, v = 127, t = 0, last = 9999 } = {}) {  // t表示声音发出的时间
+    /**
+     * 播放声音
+     * @param {Object} options 音符播放参数
+     * @param {Number} [options.id] - channel的id，如果不传或违规则用自身 决定了音色
+     * @param {Number} [options.f=440] - 发生频率
+     * @param {Number} [options.t=0] - 发声时间(秒) 如果小于零则在this.actx.currentTime基础上加其绝对值
+     * @param {Number} [options.last=9999] - 持续时间(秒)
+     * @returns {Object} note = {ch, end, gain, release}
+     */
+    play({ id, f = 440, v = 127, t = 0, last = 9999 } = {}) {
         if (last <= 0) return;
-        const ch = id === void 0 ? this : (this.channel ? this.channel[id] : this);
+        const ch = id === void 0 ? this : (this.channel && this.channel[id] ? this.channel[id] : this);
         const instrument = TinySynth.soundFont[TinySynth.instrument[ch.instrument]];
         const osc = new Array(instrument.length);
         const gain = new Array(instrument.length);

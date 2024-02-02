@@ -4,6 +4,7 @@
 [demo](http://htmlpreview.github.io/?https://github.com/madderscientist/noteDigger/blob/main/index.html)
 
 ## 快捷键
+只有在导入并分析音频之后才能使用这些快捷键
 - Ctrl+Z: 撤销(音轨状态的改变不会引发存档，且只记录16次历史)
 - Ctrl+Y: 重做
 - Ctrl+A: 全选当前音轨
@@ -24,7 +25,7 @@
 ### 2024 1 30
 完成了midi合成器tinySynth.js，实现了128种音色的播放。只有演奏音符的作用，控制器一点没做。<br>
 原理是多个基础波形合成一个音色。波形参数来自 https://github.com/g200kg/webaudio-tinysynth ，因此程序设计也参考了它的设计。修改记录在todo.md中<br>
-对于reference的解析（作者注释一点没写，变量命名极为简单，因此主要是变量解释）存放于[解析.md](./tone/解析.md)。文件夹中还有tinySynth的测试页面。在下一次push时将删除tone文件夹。<br>
+对于reference的解析（作者注释一点没写，变量命名极为简单，因此主要是变量解释）存放于“./tone/解析.md”(文件夹已被删除，请去历史提交查看)。文件夹中还有tinySynth的测试页面。在下一次push时将删除tone文件夹。<br>
 这段时间内还完成了以下内容（全部记录在commit history的comments内）：
 - 基本程序界面(三个画布：键盘、时频图、时间轴；UI界面：右键菜单、多音轨、滑动条)
 - 基本逻辑功能：音符交互绘制、快捷键以及模块的关联协同

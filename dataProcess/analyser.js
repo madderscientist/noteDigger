@@ -33,7 +33,7 @@ class NoteAnalyser {    // 负责解析频谱数据
      */
     constructor(df, freq) {
         this.df = df;
-        if(typeof freq === 'number') {
+        if (typeof freq === 'number') {
             this.freqTable = new FreqTable(freq);
         } else {
             this.freqTable = freq;
@@ -65,7 +65,7 @@ class NoteAnalyser {    // 负责解析频谱数据
         let at = this.rangeTable[0];
         for (let i = 0; i < this.rangeTable.length; i++) {
             let end = this.rangeTable[i];
-            if(at==end) {   // 如果相等则就算一次 乘法比幂运算快
+            if (at == end) {   // 如果相等则就算一次 乘法比幂运算快
                 noteAm[i] = real[at] * real[at] + imag[at] * imag[at];
             } else {
                 for (; at < end; at++) {
@@ -77,8 +77,8 @@ class NoteAnalyser {    // 负责解析频谱数据
                     if (i < noteAm.length - 1) noteAm[i + 1] += a2;
                 }
             }
-            // FFT的结果需要除以N才是DTFT的结果
-            noteAm[i] = Math.sqrt(noteAm[i])/real.length;
+            // FFT的结果需要除以N才是DTFT的结果 由于结果太小，统一放大10倍 经验得到再乘700可在0~255得到较好效果
+            noteAm[i] = Math.sqrt(noteAm[i]) * 10 / real.length;
         } return noteAm;
     }
 }
