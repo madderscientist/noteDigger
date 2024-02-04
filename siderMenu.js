@@ -39,7 +39,7 @@ class SiderContent extends HTMLDivElement {
     _mouseup() {
         document.removeEventListener('mousemove', this.resize);
         document.removeEventListener('mouseup', this.mouseup);
-        bar.blur();
+        this.bar.blur();
         window.dispatchEvent(new Event("resize"));  // 触发app.resize
     }
     get display() {
@@ -98,6 +98,7 @@ class SiderMenu extends HTMLDivElement {
         this.appendChild(tab);
         if(this.tabs.push(tab) == 1) {
             tab.classList.add('selected');
+            dom.style.display = 'block';
         } return this;  // 供链式调用
     }
     _tabClick(e) {
