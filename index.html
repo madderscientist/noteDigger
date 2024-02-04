@@ -5,6 +5,8 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>在线扒谱</title>
+    <script src="./siderMenu.js"></script>
+    <script src="./myRange.js"></script>
     <script src="./dataProcess/fft_real.js"></script>
     <script src="./dataProcess/analyser.js"></script>
     <script src="./snapshot.js"></script>
@@ -14,17 +16,36 @@
     <script src="./app.js"></script>
     <link rel="stylesheet" href="./style/style.css">
     <link rel="stylesheet" href="./style/askUI.css">
+    <link rel="stylesheet" href="./style/myRange.css">
+    <link rel="stylesheet" href="./style/siderMenu.css">
     <link rel="stylesheet" href="./style/contextMenu.css">
     <link rel="stylesheet" href="./style/channelDiv.css">
     <link rel="stylesheet" href="./style/icon/iconfont.css">
 </head>
-
 <body class="fc">
+    <!-- 上半部分 工具区 -->
     <div class="tools">
-        速度<input type="range" id="speedControl" max="2" min="0.25" step="0.05" value="1">
-        倍率<input type="range" id="multiControl" max="1100" min="10" step="1" value="700">
-        midi音量<input type="range" id="midivolumeControl" max="1" min="0" step="0.02" value="1">
-        音频音量<input type="range" id="audiovolumeControl" max="1" min="0" step="0.02" value="1">
+        <div>
+            <div class="rangeBox">
+                速度<input type="range" id="speedControl" max="2" min="0.25" step="0.05" value="1">
+            </div>
+            <div class="rangeBox">
+                显示<input type="range" id="multiControl" max="1100" min="10" step="1" value="700">
+            </div>
+        </div>
+        <div class="fr">
+            <div style="width: 1em;">音量</div>
+            <div>
+                <div class="rangeBox">
+                    音符<input type="range" id="midivolumeControl" max="1.5" min="0" step="0.02" value="1">
+                </div>
+                <div class="rangeBox">
+                    音频<input type="range" id="audiovolumeControl" max="1" min="0" step="0.02" value="0.3">
+                </div>            
+            </div>
+        </div>
+
+
         <div class="switch-bar" id="actMode">
             <button class="selected">
                 <div class="iconfont icon-pen-l"></div>
@@ -34,9 +55,13 @@
             </button>
         </div>
     </div>
+    <!-- 下半部分 操作区 -->
     <div class="flexfull fr">
-        <div id="channel-sider"></div>
-        <div class="flexfull fc">
+        <!-- 菜单由函数创建 包括样式管理 -->
+        <div id="funcTab"></div>
+        <div id="funcSider" style="position: relative; z-index: 0;"></div>
+
+        <div class="flexfull fc" style="position: relative; z-index: 0; border-left: var(--theme-dark) solid 3px;">
             <div id="Canvases-Container" class="flexfull">
                 <div class="f wf" style="height: 40px;">
                     <button id="play-btn">当前时间<br>总时长</button>
@@ -53,8 +78,23 @@
         </div>
     </div>
 </body>
+<div id="tab-Contents">
+    <div>第一个内容</div>
+    <div>第二个内容</div>
+</div>
 <script>
+    const menu = SiderMenu.new(funcTab, funcSider, 206);
     const app = new App();
+    // 添加菜单内容
+    const tabContents = document.getElementById('tab-Contents').children;
+    menu.add('音轨', 'iconfont icon-list', app.MidiAction.channelDiv.container);
+    menu.add('EQ', 'iconfont icon-mixer', tabContents[0]);
+    menu.add('设置', 'iconfont icon-setting', tabContents[0]);
+    // 在后面初始化range; reset触发oninput事件同步app中的值
+    LableRange.new(speedControl).reset();
+    myRange.new(multiControl).reset();
+    hideLableRange.new(midivolumeControl).reset();
+    hideLableRange.new(audiovolumeControl).reset();
 </script>
 <script>
     const dragEvents = {

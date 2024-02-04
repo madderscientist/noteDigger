@@ -1,15 +1,18 @@
-html,
-body {
-    --theme-light: #25262d;
+:root {
+    --theme-light: #2e3039;
+    --theme-middle: #25262d;
     --theme-dark: #1e1f24;
     --theme-text: #8e95a6;
+}
+
+html,
+body {
     height: 100%;
     margin: 0;
     padding: 0;
     color: var(--theme-text);
     background-color: var(--theme-dark);
     overflow: hidden;
-
 }
 
 canvas {
@@ -82,7 +85,7 @@ canvas {
 }
 
 #play-btn {
-    background-color: var(--theme-light);
+    background-color: var(--theme-middle);
     color: var(--theme-text);
     border: none;
     border-right: var(--theme-dark) solid 3px;
@@ -98,19 +101,23 @@ canvas {
     overflow: hidden;
 }
 
-#channel-sider {
-    background-color: transparent;
-    width: 205px;
-    height: 100%;
-    overflow: hidden;
-    border-right: var(--theme-dark) solid 3px;
-}
-
 .tools {
     background-color: transparent;
     display: flex;
+    justify-content: space-around;
+    align-items: center;
 }
 
+/* 可以套在外面的盒子，盒子中可以放属性名 */
+.rangeBox {
+    height: 1em;
+    line-height: 1em;
+    display: flex;
+    flex-direction: row;
+    align-items: center;
+    justify-content: left;
+    margin: 0.25em;
+}
 
 /* 工具选择 */
 .switch-bar {

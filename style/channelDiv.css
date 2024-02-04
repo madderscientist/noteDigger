@@ -1,7 +1,7 @@
 /* 可拖拽的列表 */
 .drag_list {
-    --bg-color: #25262d;
-    --li-hover: #2e3039;
+    --bg-color: var(--theme-middle);
+    --li-hover: var(--theme-light);
 }
 .drag_list .takeplace {
     height: 8em;

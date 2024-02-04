@@ -1,0 +1,93 @@
+.siderTabs {
+    --tab-width: 48px;
+    width: var(--tab-width);
+    height: 100%;
+    background-color: var(--theme-dark);
+    position: relative;
+    z-index: 1;
+}
+
+.siderTab {
+    color: var(--theme-text);
+    width: var(--tab-width);
+    height: var(--tab-width);
+    position: relative;
+    cursor: pointer;
+}
+
+/* 图标位置与大小 */
+.siderTab::before {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    font-size: calc(var(--tab-width) * 0.5);
+}
+
+.siderTab.selected {
+    color: white;
+    background-color: var(--theme-middle);
+    border-left: white solid 2px;
+}
+.siderTab.selected {
+    color: white;
+    background-color: var(--theme-middle);
+    border-left: white solid 2px;
+}
+
+
+.siderTab:hover {
+    color: white;
+}
+
+.siderTab::after {
+    content: attr(data-name);
+    font-size: calc(var(--tab-width) * 0.25);
+    color: var(--theme-text);
+    background-color: var(--theme-light);
+    white-space: nowrap;
+    padding: 4px 8px;
+    position: absolute;
+    z-index: 3;
+    top: calc(var(--tab-width) * 0.5);
+    left: calc(var(--tab-width) + 2px);
+    transform: translateY(-50%);
+    border-radius: 4px;
+    border: var(--theme-dark) solid 2px;
+    display: none;
+}
+.siderTab:hover::after {
+    display: block;
+}
+
+/* 展示内容 */
+.siderContent {
+    background-color: transparent;
+    width: 206px;
+    height: 100%;
+    overflow: hidden;
+}
+
+.siderBar {
+    opacity: 0;
+    transition: 0.3s;
+    width: 4px;
+    margin-left: -2px;
+    margin-right: -2px;
+    height: 100%;
+    background-color: royalblue;
+    cursor: ew-resize;
+    user-select: none;
+    position: relative;
+    z-index: 2;
+}
+
+.siderBar:hover {
+    opacity: 1;
+}
+
+.siderContent .siderItem {
+    background-color: var(--theme-middle);
+    width: 100%;
+    height: 100%;
+}

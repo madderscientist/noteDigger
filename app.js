@@ -155,7 +155,7 @@ function App() {
         midi: [],       // 所有音符 需要维护有序性
         // 多音轨
         channelDiv: (() => {
-            const cd = new ChannelList(document.getElementById('channel-sider'), this.synthesizer);
+            const cd = new ChannelList(document.getElementById('funcSider'), this.synthesizer);
             const saveOnReorder = () => this.snapshot.save();
             const waitReorder = () => {
                 setTimeout(() => {
@@ -562,6 +562,7 @@ function App() {
             a.addEventListener('loadeddata', () => {
                 this.AudioPlayer.setEQ();
                 if (this.audioContext.state == 'suspended') this.audioContext.resume().then(() => a.pause());
+                a.playbackRate = document.getElementById('speedControl').value; // load之后会重置速度
                 document.title = this.AudioPlayer.name + "扒谱";
                 this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));  // 通知完成
             });
@@ -1212,24 +1213,25 @@ function App() {
         }
     };
     //========= 事件注册 =========//
-    document.getElementById('speedControl').oninput = (e) => { // 变速
+    document.getElementById('speedControl').addEventListener('input', (e) => { // 变速
         this.AudioPlayer.audio.playbackRate = parseFloat(e.target.value);
-    };
-    document.getElementById('multiControl').oninput = (e) => { // 变画频谱的倍率
+    });
+    document.getElementById('multiControl').addEventListener('input', (e) => { // 变画频谱的倍率
         this.Spectrogram.multiple = parseFloat(e.target.value);
-    };
-    document.getElementById('midivolumeControl').oninput = (e) => { // midi音量
+    });
+    document.getElementById('midivolumeControl').addEventListener('input', (e) => { // midi音量
         this.synthesizer.out.gain.value = parseFloat(e.target.value) ** 2;
-    };
-    document.getElementById('audiovolumeControl').oninput = (e) => {// 音频音量
+    });
+    document.getElementById('audiovolumeControl').addEventListener('input', (e) => {// 音频音量
         this.AudioPlayer.audio.volume = parseFloat(e.target.value);
-    }
+    });
     document.addEventListener('keydown', (e) => { // 键盘事件
         // 以下在没有频谱数据时不启用……【目前的实现是补丁。之后视情况升级：在获取到频谱数据后注册事件回调】
         if (!this.Spectrogram._spectrogram) return;
         let shortcut = '';
         if (e.ctrlKey) shortcut += 'Ctrl+';  // Ctrl优先
         if (e.shiftKey) shortcut += 'Shift+';
+        if (e.altKey) shortcut += 'Alt+';
         if (shortcut != '') {   // 组合键
             shortcut += e.key.toUpperCase();    // 大小写一视同仁
             if (this.shortcutActions.hasOwnProperty(shortcut)) {
@@ -1404,7 +1406,7 @@ function App() {
 #spectrum canvas 画频谱
 #piano canvas 画琴键
 #timeBar canvas 画时间轴
-#channel-sider div 音轨选择的容器
+#funcSider div 音轨选择的容器
 #speedControl input[type=range] 变速
 #multiControl input[type=range] 变画频谱的倍率
 #midivolumeControl input[type=range] midi音量
