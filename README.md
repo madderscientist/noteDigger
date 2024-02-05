@@ -1,9 +1,9 @@
 <div align="center">
   <a href="https://madderscientist.github.io/noteDigger/" target="_blank">
-    <img width="200" src="./img/logo.png" alt="logo" style="display:block;">
-    <img width="180" src="./img/logo_text.png" alt="noteDigger" style="display:block; margin: 1em;">
+    <img width="240" src="./img/logo.png" alt="logo"><br>
+    <img width="260" src="./img/logo_text.png" alt="noteDigger"><br>
   </a>
-  前端辅助人工扒谱工具~
+  ~前端辅助人工扒谱工具~
 </div>
 
 # noteDigger!
@@ -51,7 +51,7 @@
 ### 2024 2 5
 已经能用于扒谱了！完成了midi和原曲的播放与同步，填补了扒谱过程最重要的一环。<br>
 UI基本完成！将侧边栏、滑动条封装成了js类。在此基础上，设计了类似VScode的菜单，用于存放不常用的功能和界面；而顶部窄窄一条用于放置常用功能。<br>
-此外，完成了logo的设计。在2月4日的commit记录中可以看到设计的多种logo，最终选定了“在勺子里的音符”，这是一个被勺子dig出来的音符。其他思路可以概括为：“音符和铲子的组合”(logo2)、“埋在地里的音符”(logo5 logo6)、“像植物一样生长的八分音符”(logo8 logo10)、“音符和铲子结合”(logo12)。
+此外，完成了logo的设计。在2月4日的commit记录中(因为现在已经删除)可以看到设计的多种logo，最终选定了“在勺子里的音符”，这是一个被勺子dig出来的音符。其他思路可以概括为：“音符和铲子的组合”(logo2)、“埋在地里的音符”(logo5 logo6)、“像植物一样生长的八分音符”(logo8 logo10)、“音符和铲子结合”(logo12)。
 
 ### 2024 2 1
 完成了多音轨、合成器和主线的整合，象征着midi系统的完成！<br>
