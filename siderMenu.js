@@ -67,7 +67,7 @@ class SiderMenu extends HTMLDivElement {
     /**
      * 构造tabMenu和container
      * @param {HTMLDivElement} menu 存放tab的 样式: .siderTabs 每一个tab: .siderTab
-     * @param {HTMLDivElement} container 展示具体内容的 样式: .siderContent 拖动条: .siderBar
+     * @param {HTMLDivElement} container 展示具体内容的 样式: .siderContent 拖动条: .siderBar 每一个子内容都会加上siderItem类
      * @param {Number} minWidth 展示具体内容的最小宽度
      * @returns 
      */

@@ -104,8 +104,19 @@ canvas {
 .tools {
     background-color: transparent;
     display: flex;
-    justify-content: space-around;
+    justify-content: space-between;
     align-items: center;
+    padding: 2px;
+}
+
+.top-logo {
+    height: 36px;
+    padding: 0 8px;
+    cursor: pointer;
+}
+
+#LOGO:hover {
+    background-color: var(--theme-middle);
 }
 
 /* 可以套在外面的盒子，盒子中可以放属性名 */
@@ -137,6 +148,8 @@ canvas {
     padding: 0.5em 0.6em;
     border-radius: 0;
     background: rgb(50, 53, 62);
+    /* 恢复默认大小 */
+    font-size: 16px;
 }
 
 .switch-bar button:first-child {
@@ -152,7 +165,39 @@ canvas {
 .switch-bar .selected {
     background-color: rgb(60, 87, 221);
 }
-.switch-bar div {
-    margin: 0;
+
+/* EQ控制面板 */
+#EQcontrol {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+}
+/* 频率值 */
+#EQcontrol h5 {
+    margin: 0.4em 0 0 0;
     padding: 0;
+}
+#EQcontrol .myrange {
+    width: 100%;
+    margin: 0 0 0.3em 0;
+}
+#EQcontrol input {
+    width: 100%;
+    margin: 0 5px 0 0;
+}
+
+/* 漂亮的滑动条 */
+.niceScroll {
+    overflow: auto;
+}
+.niceScroll::-webkit-scrollbar {
+    width: 12px;
+}
+.niceScroll::-webkit-scrollbar-thumb {
+    background-color: rgb(50, 53, 62);
+    border: 3px solid rgb(37, 38, 45);
+    border-radius: 6px;
+}
+.niceScroll::-webkit-scrollbar-track, ::-webkit-scrollbar-corner {
+    background-color: rgb(37, 38, 45);
 }

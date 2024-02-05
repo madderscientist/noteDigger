@@ -1,7 +1,35 @@
+<div align="center">
+  <a href="https://madderscientist.github.io/noteDigger/" target="_blank">
+    <img width="200" src="./img/logo.png" alt="logo" style="display:block;">
+    <img width="180" src="./img/logo_text.png" alt="noteDigger" style="display:block; margin: 1em;">
+  </a>
+  前端辅助人工扒谱工具~
+</div>
+
 # noteDigger!
-前端扒谱。模仿的是软件wavetone。<br>
+“Note Digger”——音符挖掘者，即扒谱。模仿的是软件wavetone，但是是双击即用、现代UI的前端应用。<br>
 推进ing……目标是全部自己造轮子！即：不使用框架、不使用外部库；目的是减小项目大小，并掌握各个环节。目前频谱分析的软件非常多，功能也超级强大，自知比不过……所以唯一能一战的就是项目体积了！作为一个纯前端项目，就要把易用的优点完全发扬！<br>
-[demo](http://htmlpreview.github.io/?https://github.com/madderscientist/noteDigger/blob/main/index.html)
+[在线使用](https://madderscientist.github.io/noteDigger/)
+
+## 使用流程
+1. 在线or下载到本地，用主流现代浏览器打开(开发使用Chrome)。
+2. 导入音频——文件-上传，或直接将音频拖拽进去！
+3. 选择声道分析，或者导入之前分析的结果。【todo】
+4. 根据频谱分析，开始绘制midi音符！调整音量，反复比对。
+5. 导出为midi等，或者暂时导出项目(下次继续)【todo】
+
+## 常规操作
+- 空格: 播放
+- 双击时间轴: 从双击的位置开始播放
+- 在时间轴上拖拽: 设置重复区间
+- 按住空白拖动: 在当前音轨绘制一个音符
+- 按住音符左半边拖动: 改变位置
+- 按住音符右半边拖动: 改变时长
+- Ctrl+点击音符: 多选音符
+- delete: 删除选中的音符
+- Ctrl+滚轮: 横向缩放
+- 按住中键拖拽、触摸板滑动: 移动视野
+- ←↑→↓: 视野移动一格
 
 ## 快捷键
 只有在导入并分析音频之后才能使用这些快捷键
@@ -14,10 +42,17 @@
 - Ctrl+X: 剪贴选中的音符
 - Ctrl+V: 粘贴到选中的音轨上
 - Ctrl+B: 呼出/收回音轨面板
-- delete: 删除选中的音符
 - Shift+右键: 菜单，包含撤销/重做、复制/粘贴、删除
 
+## 小细节
+滑动条，如果旁边有数字，点击就可以恢复初始值。
+
 ## 重要更新记录
+### 2024 2 5
+已经能用于扒谱了！完成了midi和原曲的播放与同步，填补了扒谱过程最重要的一环。<br>
+UI基本完成！将侧边栏、滑动条封装成了js类。在此基础上，设计了类似VScode的菜单，用于存放不常用的功能和界面；而顶部窄窄一条用于放置常用功能。<br>
+此外，完成了logo的设计。在2月4日的commit记录中可以看到设计的多种logo，最终选定了“在勺子里的音符”，这是一个被勺子dig出来的音符。其他思路可以概括为：“音符和铲子的组合”(logo2)、“埋在地里的音符”(logo5 logo6)、“像植物一样生长的八分音符”(logo8 logo10)、“音符和铲子结合”(logo12)。
+
 ### 2024 2 1
 完成了多音轨、合成器和主线的整合，象征着midi系统的完成！<br>
 统一了UI风格；完善了快捷键功能；新增框选功能；修复了大部分bug。

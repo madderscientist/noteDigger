@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>在线扒谱</title>
+    <link rel="Shortcut Icon" href="./favicon.ico" type="image/x-icon" />
+    <title>noteDigger~在线扒谱</title>
     <script src="./siderMenu.js"></script>
     <script src="./myRange.js"></script>
     <script src="./dataProcess/fft_real.js"></script>
@@ -22,9 +23,11 @@
     <link rel="stylesheet" href="./style/channelDiv.css">
     <link rel="stylesheet" href="./style/icon/iconfont.css">
 </head>
+
 <body class="fc">
     <!-- 上半部分 工具区 -->
     <div class="tools">
+        <img src="./img/logo-small.png" alt="noteDigger" class="top-logo" id="LOGO">
         <div>
             <div class="rangeBox">
                 速度<input type="range" id="speedControl" max="2" min="0.25" step="0.05" value="1">
@@ -40,23 +43,24 @@
                     音符<input type="range" id="midivolumeControl" max="1.5" min="0" step="0.02" value="1">
                 </div>
                 <div class="rangeBox">
-                    音频<input type="range" id="audiovolumeControl" max="1" min="0" step="0.02" value="0.3">
-                </div>            
+                    音频<input type="range" id="audiovolumeControl" max="1" min="0" step="0.02" value="0.2">
+                </div>
             </div>
         </div>
 
 
         <div class="switch-bar" id="actMode">
-            <button class="selected">
-                <div class="iconfont icon-pen-l"></div>
-            </button>
-            <button>
+            <button class="iconfont icon-pen-l selected"></button>
+            <button><!-- 要旋转，所以包裹了一层 -->
                 <div class="iconfont icon-select"></div>
             </button>
         </div>
+        <div class="switch-bar">
+            <button class="iconfont icon-repeat selected" id="repeat-btn"></button>
+        </div>
 
         <a href="https://github.com/madderscientist/noteDigger" class="f">
-            <img src="./style/github-mark-white.png" alt="项目地址" style="width: 34px; height: 34px;">
+            <img src="./img/github-mark-white.png" alt="项目地址" class="top-logo">
         </a>
     </div>
     <!-- 下半部分 操作区 -->
@@ -83,8 +87,14 @@
     </div>
 </body>
 <div id="tab-Contents">
-    <div>第一个内容</div>
-    <div>第二个内容</div>
+    <div class="paddingbox niceScroll">
+        <h3>EQ设置(dB)</h3>
+        <div id="EQcontrol">
+            请先上传音频！
+        </div>
+    </div>
+
+    <div class="paddingbox niceScroll">第二个内容</div>
 </div>
 <script>
     const menu = SiderMenu.new(funcTab, funcSider, 206);
@@ -93,12 +103,68 @@
     const tabContents = document.getElementById('tab-Contents').children;
     menu.add('音轨', 'iconfont icon-list', app.MidiAction.channelDiv.container);
     menu.add('EQ', 'iconfont icon-mixer', tabContents[0]);
-    menu.add('设置', 'iconfont icon-setting', tabContents[0]);
+    menu.add('设置', 'iconfont icon-setting', tabContents[0]);  // 内容是在变的
     // 在后面初始化range; reset触发oninput事件同步app中的值
     LableRange.new(speedControl).reset();
     myRange.new(multiControl).reset();
     hideLableRange.new(midivolumeControl).reset();
     hideLableRange.new(audiovolumeControl).reset();
+    // 事件
+    document.getElementById('repeat-btn').addEventListener('click', function () {
+        app.AudioPlayer.repeat = this.classList.toggle('selected');
+        this.blur();
+    });
+    let actMode = document.getElementById('actMode').children;
+    actMode[0].onclick = () => {
+        app.MidiAction.mode = 0;
+        actMode[1].classList.remove('selected');
+        actMode[0].classList.add('selected');
+    };
+    actMode[1].onclick = () => {
+        if (app.MidiAction.mode == 0) app.MidiAction.mode = 1;
+        else {
+            app.MidiAction.frameXid = -1;
+            switch (app.MidiAction.frameMode) {
+                case 0:
+                    app.MidiAction.frameMode = 1;
+                    actMode[1].firstElementChild.className = 'iconfont icon-range';
+                    break;
+                case 1:
+                    app.MidiAction.frameMode = 2;
+                    actMode[1].firstElementChild.style.rotate = '90deg';
+                    break;
+                case 2:
+                    app.MidiAction.frameMode = 0;
+                    actMode[1].firstElementChild.style.rotate = '0deg';
+                    actMode[1].firstElementChild.className = 'iconfont icon-select';
+                    break;
+            }
+        }
+        actMode[0].classList.remove('selected');
+        actMode[1].classList.add('selected');
+    };
+    // EQ
+    function addEQ({detail}) {
+        if (detail >= 0) return;
+        EQcontrol.innerHTML = '';
+        const filters = app.AudioPlayer.audio.EQ.filter;
+        function controlfilter() {
+            this.filter.gain.value = parseInt(this.value);
+        }
+        for (const f of filters) {
+            const Hz = document.createElement('h5');
+            Hz.textContent = f.frequency.value + ' Hz';
+            EQcontrol.appendChild(Hz);
+            const r = document.createElement('input'); r.type = 'range';
+            r.max = 40; r.min = -40;
+            r.value = f.gain.value;
+            r.step = 1;
+            r.filter = f;
+            r.addEventListener('input', controlfilter);
+            EQcontrol.appendChild(r);
+            LableRange.new(r).reset();
+        } app.event.removeEventListener('progress', addEQ);
+    } app.event.addEventListener('progress', addEQ);
 </script>
 <script>
     const dragEvents = {

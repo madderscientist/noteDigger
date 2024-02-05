@@ -611,6 +611,7 @@ function App() {
                 }
             }
             const source = this.audioContext.createMediaElementSource(a);
+            let last = source;
             a.EQ = {
                 source: source,
                 filter: f.map((v) => {
@@ -619,11 +620,12 @@ function App() {
                     filter.frequency.value = v;
                     filter.Q.value = 1;
                     filter.gain.value = 0;
-                    source.connect(filter);
-                    filter.connect(this.audioContext.destination);
+                    last.connect(filter);
+                    last = filter;
                     return filter;
                 })
             };
+            last.connect(this.audioContext.destination);
         }
     };
     this.Keyboard = {
@@ -1258,35 +1260,6 @@ function App() {
         if (this.AudioPlayer.audio.paused) this.AudioPlayer.start(-1);
         else this.AudioPlayer.stop();
         this.AudioPlayer.play_btn.blur();   // 防止焦点在按钮上导致空格响应失败
-    };
-    let actMode = document.getElementById('actMode').children;
-    actMode[0].onclick = () => {
-        this.MidiAction.mode = 0;
-        actMode[1].classList.remove('selected');
-        actMode[0].classList.add('selected');
-    };
-    actMode[1].onclick = () => {
-        if (this.MidiAction.mode == 0) this.MidiAction.mode = 1;
-        else {
-            this.MidiAction.frameXid = -1;
-            switch (this.MidiAction.frameMode) {
-                case 0:
-                    this.MidiAction.frameMode = 1;
-                    actMode[1].firstElementChild.className = 'iconfont icon-range';
-                    break;
-                case 1:
-                    this.MidiAction.frameMode = 2;
-                    actMode[1].firstElementChild.style.rotate = '90deg';
-                    break;
-                case 2:
-                    this.MidiAction.frameMode = 0;
-                    actMode[1].firstElementChild.style.rotate = '0deg';
-                    actMode[1].firstElementChild.className = 'iconfont icon-select';
-                    break;
-            }
-        }
-        actMode[0].classList.remove('selected');
-        actMode[1].classList.add('selected');
     };
     window.addEventListener('load', () => { this.resize(); });
     window.addEventListener('resize', () => { this.resize(); });
