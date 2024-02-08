@@ -47,7 +47,7 @@ class SiderContent extends HTMLDivElement {
     }
     // 设置display可以触发刷新 因为app.resize绑定在window.onresize上
     set display(state) {
-        if(this.style.display != state) {
+        if (this.style.display != state) {
             this.style.display = state;
             window.dispatchEvent(new Event("resize"));
         }
@@ -56,7 +56,7 @@ class SiderContent extends HTMLDivElement {
         return this.style.width;
     }
     set width(w) {
-        if(this.style.width != w) {
+        if (this.style.width != w) {
             this.style.width = w;
             window.dispatchEvent(new Event("resize"));
         }
@@ -83,7 +83,15 @@ class SiderMenu extends HTMLDivElement {
         this.tabClick = this._tabClick.bind(this);
         this.tabs = [];
     }
-    add(name, tabClass, dom) {
+    /**
+     * 添加一个菜单项及其内容
+     * @param {String} name tab的名字
+     * @param {String} tabClass tab的类名 用空格分隔
+     * @param {HTMLElement} dom tab对应的内容
+     * @param {Boolean} selected 是否默认选中
+     * @returns {HTMLDivElement} 添加的tab
+     */
+    add(name, tabClass, dom, selected = false) {
         const tab = document.createElement('div');
         tab.className = 'siderTab';
         tab.classList.add(...tabClass.split(' '));
@@ -96,18 +104,43 @@ class SiderMenu extends HTMLDivElement {
 
         tab.addEventListener('click', this.tabClick);
         this.appendChild(tab);
-        if(this.tabs.push(tab) == 1) {
+        if (this.tabs.push(tab) == 1) {
             tab.classList.add('selected');
             dom.style.display = 'block';
-        } return this;  // 供链式调用
+        } else if (selected) this.select(tab);
+        return tab;
     }
+    /**
+     * 选中一个标签
+     * @param {HTMLDivElement || Number} tab 
+     * @returns {HTMLDivElement} 选择的标签
+     */
+    select(tab) {
+        if (typeof tab == 'number') tab = this.tabs[tab];
+        if (!tab) return;
+        for (const t of this.tabs) {
+            t.classList.remove('selected');
+            t.item.style.display = 'none';
+        }
+        tab.classList.add('selected');
+        tab.item.style.display = 'block';
+        return tab;
+    }
+    /**
+     * 控制面板的显示
+     * @param {Boolean} ifshow 是否显示面板
+     */
+    show(ifshow = true) {
+        this.container.display = ifshow ? 'block' : 'none';
+    }
+    // 绑定给tab用，不应该用户被调用
     _tabClick(e) {
         const tab = e.target;
-        if(tab.classList.contains('selected')) {    // 如果显示的就是tab的，则隐藏
+        if (tab.classList.contains('selected')) {    // 如果显示的就是tab的，则隐藏
             // 用style.dispaly是读取，用.display = 是为了刷新
             this.container.display = this.container.style.display == 'none' ? 'block' : 'none';
         } else {    // 否则只显示tab的
-            for(const t of this.tabs) {
+            for (const t of this.tabs) {
                 t.classList.remove('selected');
                 t.item.style.display = 'none';
             }

@@ -17,7 +17,7 @@
 .myrange input[type="range"] {
     -webkit-appearance: none;
     appearance: none;
-    margin: 0;
+    margin: 0 5px 0 0;
     padding: 0;
     outline: none;
     border: none;

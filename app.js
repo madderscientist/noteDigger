@@ -428,6 +428,7 @@ function App() {
                 else m.addNoteAction();
                 return;
             }
+            m.channelDiv.selectChannel(n.ch);
             //== step 2: 如果点击到了音符，ctrl是否按下 ==/
             if (e.ctrlKey) {        // 有ctrl表示多选
                 if (n.selected) {   // 已经选中了，取消选中
@@ -506,14 +507,15 @@ function App() {
         _last: performance.now(),
         lastID: -1,
         restart: () => {
-            this.MidiPlayer.lastID = (this.AudioPlayer.audio.currentTime / this.dt) | 0;
+            // 需要-1，防止当前时刻开始的音符不被播放
+            this.MidiPlayer.lastID = ((this.AudioPlayer.audio.currentTime * 1000 / this.dt) | 0) - 1;
         },
         update: () => {
             const mp = this.MidiPlayer;
             // 一阶预测
             let tnow = performance.now();
             // 由于requestAnimationFrame在离开界面的时候会停止，所以要设置必要的限定
-            if (tnow < (mp.priorT << 1)) mp.realT = 0.2 * (tnow - mp._last) + 0.8 * mp.realT;   // IIR低通滤波
+            if (tnow - mp._last < (mp.priorT << 1)) mp.realT = 0.2 * (tnow - mp._last) + 0.8 * mp.realT;   // IIR低通滤波
             mp._last = tnow;
             if (this.AudioPlayer.audio.paused) return;
             let predictT = this.time + 0.5 * (mp.realT + mp.priorT); // 先验和实测的加权和
@@ -548,30 +550,52 @@ function App() {
         }
     };
     this.AudioPlayer = {
-        name: "请上传文件", // 在this.Analyser.onfile中赋值
-        audio: (() => {
-            const a = document.createElement('audio');
-            a.loop = false;
-            a.ondurationchange = () => {
-                this.AudioPlayer.durationString = this.TimeBar.msToClockString(a.duration * 1000);
-            };
-            a.addEventListener('ended', () => {
-                this.time = 0;
-                this.AudioPlayer.stop();
-            });
-            a.addEventListener('loadeddata', () => {
-                this.AudioPlayer.setEQ();
-                if (this.audioContext.state == 'suspended') this.audioContext.resume().then(() => a.pause());
-                a.playbackRate = document.getElementById('speedControl').value; // load之后会重置速度
-                document.title = this.AudioPlayer.name + "扒谱";
-                this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));  // 通知完成
-            });
-            return a;
-        })(),
+        name: "请上传文件",  // 在this.Analyser.onfile中赋值
+        audio: new Audio(), // 在this.Analyser.onfile中重新赋值 此处需要一个占位
         play_btn: document.getElementById('play-btn'),
         durationString: '', // 在this.Analyser.audio.ondurationchange中更新
+        autoPage: false,    // 自动翻页
         repeat: true,       // 是否区间循环
         _crossFlag: false,  // 上一时刻是否在重复区间终点左侧
+        EQfreq: [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000],
+        createAudio: (url) => {
+            return new Promise((resolve, reject) => {
+                const a = new Audio(url);
+                a.loop = false;
+                a.ondurationchange = () => {
+                    this.AudioPlayer.durationString = this.TimeBar.msToClockString(a.duration * 1000);
+                };
+                a.onended = () => {
+                    this.time = 0;
+                    this.AudioPlayer.stop();
+                };
+                a.onloadeddata = () => {
+                    this.AudioPlayer.setEQ();
+                    if (this.audioContext.state == 'suspended') this.audioContext.resume().then(() => a.pause());
+                    a.playbackRate = document.getElementById('speedControl').value; // load之后会重置速度
+                    document.title = this.AudioPlayer.name + "~扒谱";
+                    this.time = 0;
+                    resolve();
+                    this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));  // 通知完成
+                    a.onloadeddata = null;  // 一次性 防止多次构造
+                };
+                a.onerror = (e) => {    // 如果正常分析，是用不到这个回调的，因为WebAudioAPI读取就会报错。但上传已有结果不会再分析
+                    reject(e);
+                    this.event.dispatchEvent(new Event('fileerror'));
+                };
+                const A = this.AudioPlayer.audio;
+                if (A) {
+                    A.pause();
+                    A.onerror = null;   // 防止触发fileerror
+                    A.src = '';
+                    if (A.EQ) {
+                        A.EQ.source.disconnect();
+                        for (const filter of A.EQ.filter) filter.disconnect();
+                    }
+                }
+                this.AudioPlayer.audio = a;
+            });
+        },
         update: () => {
             const A = this.AudioPlayer;
             const a = A.audio;
@@ -590,26 +614,31 @@ function App() {
             A._crossFlag = crossFlag;
             btn.firstChild.textContent = this.TimeBar.msToClockString(this.time);
             btn.lastChild.textContent = A.durationString;
+            // 自动翻页
+            if (A.autoPage && (this.time > this.idXend * this.dt || this.time < this.idXstart * this.dt)) {
+                this.scroll2(((this.time / this.dt - 1) | 0) * this._width, this.scrollY);  // 留一点空位
+            }
         },
         start: (at) => {
             const a = this.AudioPlayer.audio;
             if (a.readyState != 4) return;
             if (at >= 0) a.currentTime = at / 1000;
             this.AudioPlayer._crossFlag = false;    // 置此为假可以暂时取消重复区间
-            a.play();
+            this.MidiPlayer.restart();
+            if(a.readyState == 4) a.play();
+            else a.oncanplay = () => {
+                a.play();
+                a.oncanplay = null;
+            };
         },
         stop: () => {
             this.AudioPlayer.audio.pause();
             this.synthesizer.stopAll();
         },
-        setEQ: (f = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000]) => {
+        setEQ: (f = this.AudioPlayer.EQfreq) => {
             const a = this.AudioPlayer.audio;
-            if (a.EQ) {
-                a.EQ.source.disconnect();
-                for (const filter of a.EQ.filter) {
-                    filter.disconnect();
-                }
-            }
+            if (a.EQ) return;
+            // 由于createMediaElementSource对一个audio只能调用一次，所以audio的EQ属性只能设置一次
             const source = this.audioContext.createMediaElementSource(a);
             let last = source;
             a.EQ = {
@@ -1053,7 +1082,7 @@ function App() {
          * @param {Number} fftPoints 实数fft点数
          * @returns {Array<Float32Array>} 时频谱数据
          */
-        analyse: async (audioBuffer, tNum = 10, A4 = 440, channel = -1, fftPoints = 8192) => {
+        analyse: async (audioBuffer, tNum = 20, A4 = 440, channel = -1, fftPoints = 8192) => {
             this.dt = 1000 / tNum;
             let dN = Math.round(audioBuffer.sampleRate / tNum);
             // 创建分析工具
@@ -1118,12 +1147,15 @@ function App() {
                 this.event.dispatchEvent(new Event('fileerror'));
                 return;
             }
+            if (this.Spectrogram._spectrogram && !confirm("本页面已加载音频，是否替换？")) {
+                return;
+            }
             this.event.dispatchEvent(new Event('fileui'));
             let tempDiv = document.createElement('div');
             tempDiv.innerHTML = `
             <div class="request-cover">
-                <div class="card hvCenter"><label class="title">${file.name}</label>
-                    <div class="layout"><span>每秒的次数：</span><input type="number" name="ui-ask" value="10" min="1" max="100"></div>
+                <div class="card hvCenter"><label class="title">${file.name}</label>&nbsp;&nbsp;<button class="ui-cancel">使用已有结果</button>
+                    <div class="layout"><span>每秒的次数：</span><input type="number" name="ui-ask" value="20" min="1" max="100"></div>
                     <div class="layout"><span>标准频率A4=</span><input type="number" name="ui-ask" value="440" step="0.1" min="55"></div>
                     <div class="layout">分析声道：</div>
                     <div class="layout">
@@ -1141,10 +1173,32 @@ function App() {
             function close() { ui.remove(); }
             let btns = ui.getElementsByTagName('button');
             btns[0].onclick = () => {
+                close();
+                const input = document.createElement("input");
+                input.type = "file";
+                input.onchange = () => {
+                    this.Saver.parse(input.files[0]).then((data) => {                        
+                        // 再读取音频看看是否成功
+                        const fileReader = new FileReader();
+                        fileReader.onload = (e) => {
+                            // 设置音频源 缓存到浏览器
+                            this.AudioPlayer.createAudio(e.target.result).then(() => {
+                                if(this.AudioPlayer.name != data[0].name &&
+                                    !confirm(`音频文件与分析结果(${data[0].name})不同，是否继续？`))
+                                    return;
+                                this.Saver.import(data);
+                            });
+                        }; fileReader.readAsDataURL(file);
+                    }).catch((e) => {
+                        this.event.dispatchEvent(new Event('fileerror'));
+                    });
+                }; input.click();
+            };
+            btns[1].onclick = () => {
                 close(); this.AudioPlayer.audio.src = '';
                 this.event.dispatchEvent(new Event('filecancel'));  // 为了恢复drag功能
             };
-            btns[1].onclick = () => {
+            btns[2].onclick = () => {
                 // 获取分析参数
                 const params = ui.querySelectorAll('[name="ui-ask"]');  // getElementsByName只能在document中用
                 let tNum = params[0].value;
@@ -1203,15 +1257,60 @@ function App() {
                             this.Spectrogram.spectrogram = v;
                             fileReader.onload = (e) => {
                                 // 设置音频源 缓存到浏览器
-                                this.AudioPlayer.audio.src = e.target.result;
+                                this.AudioPlayer.createAudio(e.target.result);
                             }; fileReader.readAsDataURL(file);
                         });
                     }).catch((e) => {
+                        this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));  // 关闭进度条
                         this.event.dispatchEvent(new Event('fileerror'));
                     });
                 }; fileReader.readAsArrayBuffer(file);
             };
             document.body.insertBefore(ui, document.body.firstChild);   // 插入body的最前面
+        }
+    };
+    //========= 导入导出 =========//
+    if (window.bSaver) this.Saver = {
+        export: () => {
+            if (!this.Spectrogram._spectrogram) return null;
+            const data = {
+                midi: this.MidiAction.midi,
+                channel: this.MidiAction.channelDiv.channel,
+                dt: this.dt,
+                A4: this.Keyboard.freqTable.A4,
+                name: this.AudioPlayer.name
+            }; return [data, this.Spectrogram._spectrogram];
+        },
+        import: (data) => {
+            const obj = data[0];
+            this.MidiAction.midi = obj.midi;
+            this.MidiAction.selected = this.MidiAction.midi.filter((obj) => obj.selected);
+            this.MidiAction.channelDiv.fromArray(obj.channel);
+            this.dt = obj.dt;
+            this.Keyboard.freqTable.A4 = obj.A4;
+            this.Spectrogram.spectrogram = data[1];
+        },
+        write: (fileName = this.AudioPlayer.name) => {
+            const data = this.Saver.export();
+            bSaver.saveArrayBuffer(bSaver.combineArrayBuffers([
+                bSaver.String2Buffer("noteDigger"),
+                bSaver.Object2Buffer(data[0]),
+                bSaver.Float32Mat2Buffer(data[1])
+            ]), fileName + '.nd');
+        },
+        parse: (file) => {
+            return new Promise((resolve, reject) => {
+                bSaver.readBinary(file, (b) => {
+                    let [name, o] = bSaver.Buffer2String(b, 0);
+                    if (name != "noteDigger") {
+                        reject(new Error("incompatible file!"));
+                        return;
+                    }
+                    let [obj, o1] = bSaver.Buffer2Object(b, o);
+                    let [f32, _] = bSaver.Buffer2Float32Mat(b, o1);
+                    resolve([obj, f32]);
+                });
+            });
         }
     };
     //========= 事件注册 =========//
@@ -1326,6 +1425,7 @@ function App() {
     this.spectrum.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
     this.timeBar.addEventListener('dblclick', (e) => {
         if (this.AudioPlayer.audio.readyState != 4) return;
+        this.AudioPlayer.stop();
         let position = (e.offsetX + this.scrollX) * this.AudioPlayer.audio.duration / (this.xnum * this._width)
         this.AudioPlayer.start(position * 1000);
     });

@@ -5,11 +5,16 @@
     --theme-text: #8e95a6;
 }
 
+* {
+    margin: 0;
+    padding: 0;
+    user-select: none;
+}
+
 html,
 body {
     height: 100%;
-    margin: 0;
-    padding: 0;
+    font-size: 16px;
     color: var(--theme-text);
     background-color: var(--theme-dark);
     overflow: hidden;
@@ -19,6 +24,18 @@ canvas {
     display: block;
     margin: 0;
     border: none;
+}
+
+ul {
+    list-style: none;
+}
+
+button {
+    background-color: var(--theme-dark);
+    border: none;
+    cursor: pointer;
+    color: var(--theme-text);
+    font-size: 16px;
 }
 
 /* flex */
@@ -92,7 +109,6 @@ canvas {
     position: relative;
     font-size: 0.8em;
     cursor: pointer;
-    user-select: none;
 }
 
 .flexfull {
@@ -107,16 +123,14 @@ canvas {
     justify-content: space-between;
     align-items: center;
     padding: 2px;
+    position: relative;
+    z-index: 1;
 }
 
 .top-logo {
     height: 36px;
     padding: 0 8px;
     cursor: pointer;
-}
-
-#LOGO:hover {
-    background-color: var(--theme-middle);
 }
 
 /* 可以套在外面的盒子，盒子中可以放属性名 */
@@ -134,20 +148,18 @@ canvas {
 .switch-bar {
     display: inline-block;
     background-color: transparent;
-    overflow: hidden;
     /* 消除因为换行和缩进带来的间隔 */
     white-space: nowrap;
     font-size: 0;
 }
 
 .switch-bar button {
-    border: none;
     color: white;
-    margin: 0;
-    cursor: pointer;
     padding: 0.5em 0.6em;
     border-radius: 0;
     background: rgb(50, 53, 62);
+    position: relative;
+    z-index: 0;
     /* 恢复默认大小 */
     font-size: 16px;
 }
@@ -165,15 +177,68 @@ canvas {
 .switch-bar .selected {
     background-color: rgb(60, 87, 221);
 }
+/* 下方标签 */
+.labeled::after {
+    content: attr(data-tooltip);
+    font-size: 12px;
+    color: var(--theme-text);
+    background-color: var(--theme-light);
+    white-space: nowrap;
+    padding: 4px 8px;
+    position: absolute;
+    z-index: 2;
+    bottom: 0;
+    left: 50%;
+    transform: translateY(105%) translateX(-50%);
+    border-radius: 4px;
+    border: var(--theme-dark) solid 2px;
+    display: none;
+}
+.labeled:hover::after {
+    display: block;
+}
+
+/* 用列表组织的菜单 */
+.btn-ul li {
+    margin: 0 -0.3em;
+    padding: 0.6em;
+    border-radius: 4px;
+}
+.btn-ul li:hover {
+    background-color: var(--theme-light);
+    color: white;
+}
+.btn-ul button {
+    padding: 0.25em 0.6em;
+    margin-bottom: 0.3em;
+    border-radius: 6px;
+    border: black solid 2px;
+}
+.btn-ul button:hover {
+    color: white;
+}
+.btn-ul button:active {
+    background-color: black;
+}
+li textarea {
+    width: calc(100% - 0.5em);
+    height: 100%;
+    padding: 0.3em;
+    border: none;
+    border-radius: 6px;
+    background-color: var(--theme-dark);
+    color: var(--theme-text);
+    resize: none;
+}
 
 /* EQ控制面板 */
 #EQcontrol {
     display: flex;
     flex-direction: column;
     align-items: center;
+    margin-bottom: 1em;
 }
-/* 频率值 */
-#EQcontrol h5 {
+#EQcontrol h5 { /* 频率值 */
     margin: 0.4em 0 0 0;
     padding: 0;
 }
@@ -183,7 +248,6 @@ canvas {
 }
 #EQcontrol input {
     width: 100%;
-    margin: 0 5px 0 0;
 }
 
 /* 漂亮的滑动条 */

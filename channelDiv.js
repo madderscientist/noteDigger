@@ -413,7 +413,7 @@ class ChannelList extends EventTarget {
         btns[0].addEventListener('click', close);
         btns[1].addEventListener('click', () => {
             ch.name = inputs[0].value;
-            ch.ch.out.gain.value = inputs[1].value ** 2 / 16129;   // 平方律设置振幅增益
+            ch.ch.volume = parseInt(inputs[1].value);
             let inst = parseInt(inputs[2].value);
             ch.ch.instrument = inst;
             ch.instrument = TinySynth.instrument[inst];
@@ -421,7 +421,7 @@ class ChannelList extends EventTarget {
         });
         const inputs = card.querySelectorAll('[name="ui-ask"]');
         inputs[0].value = ch.name;
-        inputs[1].value = Math.round(Math.sqrt(ch.ch.out.gain.value * 16129));
+        inputs[1].value = ch.ch.volume;
         // 给select添加选项
         for (let i = 0; i < 128; i++) {
             const option = document.createElement('option');

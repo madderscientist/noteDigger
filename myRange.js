@@ -31,7 +31,7 @@ class myRange extends HTMLInputElement {
     }
     reset() {
         this.value = this.default;
-        return this;    // 可以链式调用，比如myRange.new(document.querySelector('input')).reset();
+        return this;    // 可以链式调用，比如let r = myRange.new(document.querySelector('input')).reset();
     }
 }
 

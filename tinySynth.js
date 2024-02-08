@@ -262,6 +262,19 @@ class TinySynth {
         }
     }
     /**
+     * 平方律，根据增益获取音量，正常范围0~127
+     */
+    get volume() {
+        return Math.round(Math.sqrt(this.out.gain.value * 16129));
+    }
+    /**
+     * 平方律，根据音量设置增益
+     * @param {Number} v 自然数音量
+     */
+    set volume(v) {
+        this.out.gain.value = v * v / 16129;
+    }
+    /**
      * 创建一个节点
      * @param {Number} at 插入在native channel的位置，undefined表示最后，负数表示倒数
      * @returns {Object} {out: GainNode}

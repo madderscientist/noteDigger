@@ -14,6 +14,7 @@
     <script src="./contextMenu.js"></script>
     <script src="./tinySynth.js"></script>
     <script src="./channelDiv.js"></script>
+    <script src="./saver.js"></script>
     <script src="./app.js"></script>
     <link rel="stylesheet" href="./style/style.css">
     <link rel="stylesheet" href="./style/askUI.css">
@@ -24,16 +25,19 @@
     <link rel="stylesheet" href="./style/icon/iconfont.css">
 </head>
 
+<!-- 导出需要，和其他文件直接没有依赖关系 -->
+<script src="./midi.js"></script>
+
 <body class="fc">
     <!-- 上半部分 工具区 -->
     <div class="tools">
-        <img src="./img/logo-small.png" alt="noteDigger" class="top-logo" id="LOGO">
+        <img src="./img/logo-small.png" alt="noteDigger" class="top-logo">
         <div>
             <div class="rangeBox">
                 速度<input type="range" id="speedControl" max="2" min="0.25" step="0.05" value="1">
             </div>
             <div class="rangeBox">
-                显示<input type="range" id="multiControl" max="1100" min="10" step="1" value="700">
+                显示<input type="range" id="multiControl" max="1500" min="10" step="1" value="700">
             </div>
         </div>
         <div class="fr">
@@ -50,15 +54,17 @@
 
 
         <div class="switch-bar" id="actMode">
-            <button class="iconfont icon-pen-l selected"></button>
-            <button><!-- 要旋转，所以包裹了一层 -->
+            <button class="iconfont icon-pen-l labeled selected" data-tooltip="绘制音符"></button>
+            <button class="labeled" data-tooltip="选择模式"><!-- 要旋转，所以包裹了一层 -->
                 <div class="iconfont icon-select"></div>
             </button>
         </div>
         <div class="switch-bar">
-            <button class="iconfont icon-repeat selected" id="repeat-btn"></button>
+            <button class="iconfont icon-repeat labeled selected" id="repeat-btn" data-tooltip="重复区间:开"></button>
         </div>
-
+        <div class="switch-bar">
+            <button class="iconfont icon-pageTurns labeled" id="autopage-btn" data-tooltip="自动翻页:关"></button>
+        </div>
         <a href="https://github.com/madderscientist/noteDigger" class="f">
             <img src="./img/github-mark-white.png" alt="项目地址" class="top-logo">
         </a>
@@ -71,7 +77,7 @@
 
         <div class="flexfull fc" style="position: relative; z-index: 0; border-left: var(--theme-dark) solid 3px;">
             <div id="Canvases-Container" class="flexfull">
-                <div class="f wf" style="height: 40px;">
+                <div class="f wf">
                     <button id="play-btn" draggable="false">当前时间<br>总时长</button>
                     <canvas id="timeBar" width="1000px" height="40px"></canvas>
                 </div>
@@ -87,6 +93,17 @@
     </div>
 </body>
 <div id="tab-Contents">
+    <ul class="paddingbox niceScroll btn-ul" id="filePannel">
+        <li>导入音频</li>
+        <li>导入midi</li>
+        <li>导出当前进度</li>
+        <li>导出为midi</li>
+        <li id="numberedScore">
+            <button>转换为(更新)数字谱</button>
+            <textarea cols="30" rows="10"></textarea>
+        </li>
+    </ul>
+
     <div class="paddingbox niceScroll">
         <h3>EQ设置(dB)</h3>
         <div id="EQcontrol">
@@ -94,24 +111,61 @@
         </div>
     </div>
 
-    <div class="paddingbox niceScroll">第二个内容</div>
+    <div class="paddingbox niceScroll">
+        (￣ε(#￣) 还没做
+
+    </div>
+
+    <ul class="paddingbox niceScroll btn-ul" id="settingPannel">
+        <li><button>-</button>宽度<button>+</button></li>
+        <li><button>-</button>高度<button>+</button></li>
+        <li><button>-</button>遮罩透明度<button>+</button></li>
+        <li>
+            <h5>精准设置重复区间</h5>
+            <input type="text" value="00:00:000" name="set-repeat"> ~
+            <input type="text" value="00:00:000" name="set-repeat">
+            <button>取消</button><button>应用</button>
+        </li>
+    </ul>
 </div>
 <script>
     const menu = SiderMenu.new(funcTab, funcSider, 206);
     const app = new App();
-    // 添加菜单内容
-    const tabContents = document.getElementById('tab-Contents').children;
-    menu.add('音轨', 'iconfont icon-list', app.MidiAction.channelDiv.container);
-    menu.add('EQ', 'iconfont icon-mixer', tabContents[0]);
-    menu.add('设置', 'iconfont icon-setting', tabContents[0]);  // 内容是在变的
+    {   // 添加菜单内容
+        const tabContents = document.getElementById('tab-Contents').children;
+        menu.add('文件', 'iconfont icon-file', tabContents[0]);
+        menu.add('音轨', 'iconfont icon-list', app.MidiAction.channelDiv.container);
+        menu.add('EQ', 'iconfont icon-mixer', tabContents[0]);
+        menu.add('分析', 'iconfont icon-analysis', tabContents[0])
+        menu.add('设置', 'iconfont icon-setting', tabContents[0]);  // 内容是在变的
+        menu.show();
+        document.getElementById('tab-Contents').remove();
+    }
     // 在后面初始化range; reset触发oninput事件同步app中的值
     LableRange.new(speedControl).reset();
     myRange.new(multiControl).reset();
     hideLableRange.new(midivolumeControl).reset();
     hideLableRange.new(audiovolumeControl).reset();
     // 事件
+    // ==== 顶部按钮事件 ==== //
     document.getElementById('repeat-btn').addEventListener('click', function () {
-        app.AudioPlayer.repeat = this.classList.toggle('selected');
+        if (this.classList.toggle('selected')) {
+            app.AudioPlayer.repeat = true;
+            this.dataset.tooltip = '重复区间:开';
+        } else {
+            app.AudioPlayer.repeat = false;
+            this.dataset.tooltip = '重复区间:关';
+        }
+        this.blur();
+    });
+    document.getElementById('autopage-btn').addEventListener('click', function () {
+        if (this.classList.toggle('selected')) {
+            app.AudioPlayer.autoPage = true;
+            this.dataset.tooltip = '自动翻页:开';
+        } else {
+            app.AudioPlayer.autoPage = false;
+            this.dataset.tooltip = '自动翻页:关';
+        }
         this.blur();
     });
     let actMode = document.getElementById('actMode').children;
@@ -143,8 +197,9 @@
         actMode[0].classList.remove('selected');
         actMode[1].classList.add('selected');
     };
-    // EQ
-    function addEQ({detail}) {
+
+    // EQ的UI设置
+    function iniEQUI({ detail }) {
         if (detail >= 0) return;
         EQcontrol.innerHTML = '';
         const filters = app.AudioPlayer.audio.EQ.filter;
@@ -163,8 +218,130 @@
             r.addEventListener('input', controlfilter);
             EQcontrol.appendChild(r);
             LableRange.new(r).reset();
-        } app.event.removeEventListener('progress', addEQ);
-    } app.event.addEventListener('progress', addEQ);
+        } app.event.removeEventListener('progress', iniEQUI);
+    } app.event.addEventListener('progress', iniEQUI);
+
+    // ==== 文件界面 ==== //
+    function _uploadFile() {
+        const input = document.createElement('input');
+        input.type = 'file'; input.accept = 'audio/*';
+        input.onchange = function () {
+            app.Analyser.onfile(this.files[0]);
+        }; input.click();
+    }
+    {
+        const lis = document.getElementById('filePannel').children;
+        lis[0].onclick = _uploadFile;
+        lis[1].onclick = () => {    // 导入midi
+            if(!app.Spectrogram._spectrogram) {
+                alert("请先导入音频！");
+                return;
+            }
+            const input = document.createElement('input');
+            input.type = 'file'; input.accept = '.mid';
+            input.onchange = function () {
+                bSaver.readBinary(this.files[0], (data) => {
+                    const m = midi.import(new Uint8Array(data)).JSON();
+                    const chdiv = app.MidiAction.channelDiv;
+                    if(m.tracks.length + chdiv.channel.length > 16) {
+                        if(!confirm("导入后音轨数量超过16，是否覆盖后几轨以导入midi？")) return;
+                        for(let i = chdiv.channel.length - 1; m.tracks.length + chdiv.channel.length > 16; i--) chdiv.removeChannel(i);
+                    }
+                    let tickTimeTable = m.header.tempos;    // bpm会随着时间改变
+                    const chArray = new Array(m.tracks.length);
+                    for(const mt of m.tracks) {
+                        var tickTimeAt = -1;
+                        var nexttickTimeChange = 0;
+                        var tickTime = 0;   // 一个tick的毫秒数/app.dt
+                        function checkChange(tick) {
+                            if(tick > nexttickTimeChange) {
+                                tickTimeAt++;
+                                nexttickTimeChange = tickTimeTable[tickTimeAt + 1] ? tickTimeTable[tickTimeAt + 1].ticks : Infinity;
+                                tickTime = 60000 / (tickTimeTable[tickTimeAt].bpm * m.header.tick * app.dt);
+                            } return tickTime;
+                        } checkChange(1);
+
+                        const ch = chdiv.addChannel();
+                        const chid = ch.index;
+                        ch.name = `导入音轨${chid}`;
+                        ch.ch.instrument = mt.instruments[0].number;
+                        ch.instrument = TinySynth.instrument[ch.ch.instrument];
+
+                        chArray[chid] = mt.notes.map((nt) => {
+                            const t = checkChange(nt.ticks);
+                            return {
+                                x1: nt.ticks * t,
+                                x2: (nt.ticks + nt.durationTicks) * t,
+                                y: nt.midi - 24,
+                                ch: chid,
+                                selected: false
+                            };
+                        });
+                    }
+                    app.MidiAction.midi = chArray.flat().sort((a, b) => a.x1 - b.x1);
+                });
+            }; input.click();
+        };
+        lis[2].onclick = () => app.Saver.write();
+        lis[3].onclick = () => {    // midi导出
+            const newMidi = new midi(60,[4,4],Math.round(1000/app.dt),[],app.AudioPlayer.name);
+            const mts = []; 
+            for(const ch of app.synthesizer.channel) {
+                let mt = newMidi.addTrack();
+                mt.addEvent(midiEvent.instrument(0, ch.instrument));
+                mt._volume = ch.volume;
+                mts.push(mt);
+            }
+            for(const nt of app.MidiAction.midi) {
+                const midint = nt.y + 24;
+                mts[nt.ch].addEvent(midiEvent.note(nt.x1, nt.x2 - nt.x1, midint, mts[nt.ch]._volume));
+            }
+            bSaver.saveArrayBuffer(newMidi.export(1), app.AudioPlayer.name + '.mid');
+        };
+        numberedScore.querySelector('button').onclick = () => { // 转数字谱
+            const note = ["1", "#1", "2", "#2", "3", "4", "#4", "5", "#5", "6", "#6", "7"];
+            function indexToje(index) { // indexToje(0) -> "1"
+                let position = (index % 12 + 12) % 12;
+                let k = Math.floor(index / 12);
+                let brackets = '';
+                for (let i = 0; i < Math.abs(k); i++) {
+                    brackets = brackets + '[';
+                }
+                return ((k > 0) ? brackets : brackets.replace(/\[/g, '(')) + note[position] + ((k > 0) ? brackets.replace(/\[/g, ']') : brackets.replace(/\[/g, ')'));
+            }
+            const midi = app.MidiAction.midi;
+            const scores = Array.from(app.MidiAction.channelDiv.channel, () => '');
+            let time = Array.from(scores, () => 0);
+            for (const note of midi) {
+                let id = note.ch;
+                let interval = (note.x1 - time[id]) * app.dt;
+                if(interval > 1000) scores[id] += '\n';
+                else if(interval > 400) scores[id] += ' ';
+                scores[id] += indexToje(note.y - 36);   // C4认为是'1'
+                time[id] = note.x1;
+            }
+            let out = '';
+            for (let i = 0; i < scores.length; i++)
+                out += `音轨${i} :${app.MidiAction.channelDiv.channel[i].instrument}\n${scores[i]}\n`;
+            numberedScore.querySelector('textarea').value = out;
+        };
+    }
+
+    // ==== 交互细节 ==== //
+    document.querySelector('.top-logo').addEventListener('click', () => {
+        // 如果已经有分析数据了，就打开新的界面
+        if (app.Spectrogram._spectrogram) {
+            if (confirm('本页面已有分析结果，是否打开新页面进行分析？')) {
+                window.open(window.location.href, '_blank');
+            }
+        } else _uploadFile();
+    });
+    window.onbeforeunload = function (e) {
+        if (app.MidiAction.midi.length) {
+            e.preventDefault(); // 取消默认的关闭提示消息
+            e.returnValue = ''; // Chrome 需要在返回值上赋值            
+        }
+    };
 </script>
 <script>
     const dragEvents = {
