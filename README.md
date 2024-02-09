@@ -19,7 +19,7 @@
 5. 导出为midi等，或者暂时导出项目(下次继续)
 
 ## 导入导出说明
-- 导出进度: 结果是.nt的二进制文件，保存分析结果(频谱图)和音符音轨。导入的时候并不会强制要求匹配原曲！(会根据文件名判断一下，但不强制)
+- 导出进度: 结果是.nd的二进制文件，保存分析结果(频谱图)和音符音轨。导入的时候并不会强制要求匹配原曲！(会根据文件名判断一下，但不强制)
 - 导出为midi: 只保证能听，节拍默认4/4，bpm默认60，midi类型默认1(同步多音轨)。第10轨不会分配为鼓点轨(本项目设计并不考虑扒鼓)。
 - 导入midi: 将midi音符导入，只保证音轨、音符、音色能对应，音量默认127。如果导入后没有超过总音轨数，会在后面增加；否则会覆盖后面几轨(有提示)。
 
@@ -53,7 +53,53 @@
 - 滑动条，如果旁边有数字，点击就可以恢复初始值。
 - 多次点击“笔”右侧的选择工具，可以切换选择模式。
 
+
+## 文件结构
+```
+│  app.js: 最重要的文件，主程序
+│  channelDiv.js: 多音轨的UI界面类, 可拖拽列表
+│  contextMenu.js: 右键菜单类
+│  favicon.ico: 小图标
+│  index.html: 程序入口, 其js主要是按钮的onclick
+│  LICENSE
+│  midi.js: midi创建、解析类
+│  myRange.js: 横向滑动条的封装类
+│  README.md
+│  saver.js: 二进制保存相关
+│  siderMenu.js: 侧边栏菜单类
+│  snapshot.js: 快照类, 实现撤销和重做
+│  tinySynth.js: 合成器类, 负责播放音频
+│  todo.md: 一些设计思路和权衡
+│
+├─dataProcess
+│      analyser.js: 频域数据分析与简化
+│      fft_real.js: 执行实数FFT获取频域数据
+│
+├─img
+│      github-mark-white.png
+│      logo-small.png
+│      logo.png
+│      logo_text.png
+│
+└─style
+    │  askUI.css: 达到类似<dialog>效果
+    │  channelDiv.css: 多音轨UI样式
+    │  contextMenu.css: 右键菜单样式
+    │  myRange.css: 包装滑动条
+    │  siderMenu.css: 侧边菜单样式
+    │  style.css: index中独立元素的样式
+    │
+    └─icon: 从阿里图标库得到的icon
+            iconfont.css
+            iconfont.ttf
+            iconfont.woff
+            iconfont.woff2
+```
+
 ## 重要更新记录
+### 2024 2 9
+在今年完成了所有基本功能！本次更新了设置相关，简单地设计了调性分析的算法，已经完全可以用了！
+
 ### 2024 2 8
 文件系统已经完善！已经可以随心所欲导入导出保存啦！同时修复了一些小bug、完善了一些api。<br>
 界面上，本打算将文件相关选项放到logo上，但是侧边菜单似乎有些空了，于是就加入到侧边栏，而logo设置为刷新或开新界面（考察了其他网站的logo的用途）。同时给侧边菜单加入了“设置”和“分析”，但本次更新没做。<br>

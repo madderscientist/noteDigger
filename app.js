@@ -12,7 +12,7 @@ function App() {
     Object.defineProperty(this, 'width', {
         get: function () { return this._width; },
         set: function (w) {
-            if (w < 0) return;
+            if (w <= 0) return;
             this._width = w;
             this.TimeBar.updateInterval();
             this.HscrollBar.refreshSize();  // 刷新横向滑动条
@@ -22,7 +22,7 @@ function App() {
     Object.defineProperty(this, 'height', {
         get: function () { return this._height; },
         set: function (h) {
-            if (h < 0) return;
+            if (h <= 0) return;
             this._height = h;
             this.Keyboard._ychange.set([
                 -1.5 * h, -2 * h, -1.5 * h, -1.5 * h, -2 * h, -2 * h, -1.5 * h,
@@ -68,6 +68,7 @@ function App() {
         colorStep2: 240,
         multiple: parseFloat(document.getElementById('multiControl').value),// 幅度的倍数
         _spectrogram: null,
+        mask: '#25262daa',
         getColor: (value) => {  // 0-step1，是蓝色的亮度从0变为50%；step1-step2，是颜色由蓝色变为红色；step2-255，保持红色
             value = value || 0;
             let hue = 0, lightness = 50;    // Red hue
@@ -110,7 +111,7 @@ function App() {
                 ctx.fillRect(rectx, 0, w, canvas.height);
             }
             // 铺底色以凸显midi音符
-            ctx.fillStyle = '#25262daa';
+            ctx.fillStyle = sp.mask;
             ctx.fillRect(0, 0, rectx, canvas.height);
             // 更新note
             ctx.fillStyle = "#ffffff4f";
@@ -131,6 +132,13 @@ function App() {
                 this.parent.scroll2(0, (this.parent._height * this.parent.ynum - this.parent.spectrum.height) >> 1);  // 垂直方向上，视野移到中间
             }
             this.parent.HscrollBar.refreshSize();
+        },
+        get Alpha() {
+            return parseInt(this.mask.substring(7), 16);
+        },
+        set Alpha(a) {
+            a = Math.min(255, Math.max(a | 0, 0));
+            this.mask = '#25262d' + a.toString(16);
         }
     };
     this.MidiAction = {
@@ -837,6 +845,7 @@ function App() {
             }, {
                 name: "从此处播放",
                 callback: (e_father, e_self) => {
+                    this.AudioPlayer.stop();
                     this.AudioPlayer.start((e_father.offsetX + this.scrollX) * this.dt / this._width);
                 }
             }

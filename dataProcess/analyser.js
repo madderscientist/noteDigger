@@ -78,7 +78,56 @@ class NoteAnalyser {    // 负责解析频谱数据
                 }
             }
             // FFT的结果需要除以N才是DTFT的结果 由于结果太小，统一放大10倍 经验得到再乘700可在0~255得到较好效果
-            noteAm[i] = Math.sqrt(noteAm[i]) * 10 / real.length;
+            noteAm[i] = Math.sqrt(noteAm[i]) * 16 / real.length;
         } return noteAm;
+    }
+    /**
+     * 调性分析，原理是音符能量求和
+     * @param {Array<Float32Array>} noteTable
+     * @returns {Array<String, Float32Array>} 调性和音符的能量
+     */
+    static Tonality(noteTable) {
+        let energy = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
+        for (const atime of noteTable) {
+            energy[0]  +=  atime[0]**2 + atime[12]**2 + atime[24]**2 + atime[36]**2 + atime[48]**2 + atime[60]**2 + atime[72]**2;
+            energy[1]  +=  atime[1]**2 + atime[13]**2 + atime[25]**2 + atime[37]**2 + atime[49]**2 + atime[61]**2 + atime[73]**2;
+            energy[2]  +=  atime[2]**2 + atime[14]**2 + atime[26]**2 + atime[38]**2 + atime[50]**2 + atime[62]**2 + atime[74]**2;
+            energy[3]  +=  atime[3]**2 + atime[15]**2 + atime[27]**2 + atime[39]**2 + atime[51]**2 + atime[63]**2 + atime[75]**2;
+            energy[4]  +=  atime[4]**2 + atime[16]**2 + atime[28]**2 + atime[40]**2 + atime[52]**2 + atime[64]**2 + atime[76]**2;
+            energy[5]  +=  atime[5]**2 + atime[17]**2 + atime[29]**2 + atime[41]**2 + atime[53]**2 + atime[65]**2 + atime[77]**2;
+            energy[6]  +=  atime[6]**2 + atime[18]**2 + atime[30]**2 + atime[42]**2 + atime[54]**2 + atime[66]**2 + atime[78]**2;
+            energy[7]  +=  atime[7]**2 + atime[19]**2 + atime[31]**2 + atime[43]**2 + atime[55]**2 + atime[67]**2 + atime[79]**2;
+            energy[8]  +=  atime[8]**2 + atime[20]**2 + atime[32]**2 + atime[44]**2 + atime[56]**2 + atime[68]**2 + atime[80]**2;
+            energy[9]  +=  atime[9]**2 + atime[21]**2 + atime[33]**2 + atime[45]**2 + atime[57]**2 + atime[69]**2 + atime[81]**2;
+            energy[10] += atime[10]**2 + atime[22]**2 + atime[34]**2 + atime[46]**2 + atime[58]**2 + atime[70]**2 + atime[82]**2;
+            energy[11] += atime[11]**2 + atime[23]**2 + atime[35]**2 + atime[47]**2 + atime[59]**2 + atime[71]**2 + atime[83]**2;
+        }
+        // notes根据最大值归一化
+        let max = Math.max(...energy);
+        energy = energy.map((num) => num / max);
+        // 找到最大的前7个音符
+        const sortedIndices = energy.map((num, index) => index)
+            .sort((a, b) => energy[b] - energy[a])
+            .slice(0, 7);
+        sortedIndices.sort((a, b) => a - b);
+        // 判断调性
+        let tonality = sortedIndices.map((num) => {
+            return num.toString(16);
+        }).join('');
+        switch (tonality) {
+            case '024579b': tonality = 'C'; break;
+            case '013568a': tonality = 'C#'; break;
+            case '124679b': tonality = 'D'; break;
+            case '023578a': tonality = 'Eb'; break;
+            case '134689b': tonality = 'E'; break;
+            case '024579a': tonality = 'F'; break;
+            case '13568ab': tonality = 'Gb'; break;
+            case '024679b': tonality = 'G'; break;
+            case '013578a': tonality = 'Ab'; break;
+            case '124689b': tonality = 'A'; break;
+            case '023579a': tonality = 'Bb'; break;
+            case '13468ab': tonality = 'B'; break;
+            default: tonality = 'Unknown'; break;
+        } return [tonality, energy];
     }
 }

@@ -100,7 +100,7 @@
         <li>导出为midi</li>
         <li id="numberedScore">
             <button>转换为(更新)数字谱</button>
-            <textarea cols="30" rows="10"></textarea>
+            <textarea cols="30" rows="16"></textarea>
         </li>
     </ul>
 
@@ -111,20 +111,21 @@
         </div>
     </div>
 
-    <div class="paddingbox niceScroll">
-        (￣ε(#￣) 还没做
-
-    </div>
+    <ul class="paddingbox niceScroll btn-ul" id="analysePannel">
+        <li>调性分析</li>
+        (￣ε(#￣) 别的还没做
+    </ul>
 
     <ul class="paddingbox niceScroll btn-ul" id="settingPannel">
-        <li><button>-</button>宽度<button>+</button></li>
-        <li><button>-</button>高度<button>+</button></li>
-        <li><button>-</button>遮罩透明度<button>+</button></li>
+        <li data-value="5"><button>-</button>宽度<button>+</button></li>
+        <li data-value="15"><button>-</button>高度<button>+</button></li>
+        <li data-value="170"><button>-</button>遮罩厚度<button>+</button></li>
         <li>
-            <h5>精准设置重复区间</h5>
-            <input type="text" value="00:00:000" name="set-repeat"> ~
-            <input type="text" value="00:00:000" name="set-repeat">
-            <button>取消</button><button>应用</button>
+            精准设置重复区间
+            <div id="repeatRange">
+                <input type="text" value="00:01:000">~<input type="text" value="00:02:000">
+            </div>
+            <button>取消区间</button><button>应用</button>
         </li>
     </ul>
 </div>
@@ -282,8 +283,17 @@
                 });
             }; input.click();
         };
-        lis[2].onclick = () => app.Saver.write();
+        lis[2].onclick = () => {
+            if(!app.Spectrogram._spectrogram) {
+                alert("请先导入音频！");
+                return;
+            } app.Saver.write();
+        }
         lis[3].onclick = () => {    // midi导出
+            if(!app.Spectrogram._spectrogram) {
+                alert("请先导入音频！");
+                return;
+            }
             const newMidi = new midi(60,[4,4],Math.round(1000/app.dt),[],app.AudioPlayer.name);
             const mts = []; 
             for(const ch of app.synthesizer.channel) {
@@ -327,6 +337,92 @@
         };
     }
 
+    // ==== 分析界面 ==== //
+    {
+        const lis = document.getElementById('analysePannel').children;
+        lis[0].onclick = function() {
+            if(!app.Spectrogram._spectrogram) {
+                alert("请先导入音频！");
+                return;
+            }
+            let [tonality, energy] = NoteAnalyser.Tonality(app.Spectrogram._spectrogram);
+            const div = document.createElement('div');
+            div.innerHTML = `<h5>调性: ${tonality}</h5>
+            <div class="tonalityResult">
+                <div style="background:#FF4500;width:${energy[0]*100}%;">C</div>
+                <div style="background:#FFD700;width:${energy[1]*100}%;">C#</div>
+                <div style="background:#32CD32;width:${energy[2]*100}%;">D</div>
+                <div style="background:#00BFFF;width:${energy[3]*100}%;">D#</div>
+                <div style="background:#FF6347;width:${energy[4]*100}%;">E</div>
+                <div style="background:#FF1493;width:${energy[5]*100}%;">F</div>
+                <div style="background:#7FFF00;width:${energy[6]*100}%;">F#</div>
+                <div style="background:#1E90FF;width:${energy[7]*100}%;">G</div>
+                <div style="background:#FFA500;width:${energy[8]*100}%;">G#</div>
+                <div style="background:#EE82EE;width:${energy[9]*100}%;">A</div>
+                <div style="background:#ADFF2F;width:${energy[10]*100}%;">A#</div>
+                <div style="background:#87CEFA;width:${energy[11]*100}%;">B</div>
+            </div>`;
+            this.appendChild(div);
+        };
+    }
+
+    // ==== 设置界面 ==== //
+    {
+        const lis = document.getElementById('settingPannel').children;
+        lis[0].firstChild.onclick = () => {
+            --app.width;
+            lis[0].dataset.value = app.width;
+        };
+        lis[0].lastChild.onclick = () => {
+            ++app.width;
+            lis[0].dataset.value = app.width;
+        };
+        lis[1].firstChild.onclick = () => {
+            --app.height;
+            lis[1].dataset.value = app.height;
+        };
+        lis[1].lastChild.onclick = () => {
+            ++app.height;
+            lis[1].dataset.value = app.height;
+        };
+        lis[2].firstChild.onclick = () => {
+            --app.Spectrogram.Alpha;
+            lis[2].dataset.value = app.Spectrogram.Alpha;
+        };
+        lis[2].lastChild.onclick = () => {
+            ++app.Spectrogram.Alpha;
+            lis[2].dataset.value = app.Spectrogram.Alpha;
+        };
+        const repeatInput = lis[3].querySelectorAll('input');
+        function checkTime(time) {
+            const timeRegex = /^\d{1,2}:\d{1,2}:\d{1,3}$/;
+            return timeRegex.test(time);
+        }
+        function Time2Ms(time) {
+            const t = time.split(':');
+            return parseInt(t[0]) * 60000 + parseInt(t[1]) * 1000 + parseInt(t[2]);
+        }
+        repeatInput[0].oninput = repeatInput[1].oninput = function() {
+            this.style.color = checkTime(this.value) ? 'var(--theme-text)' : 'red';
+        };
+        const repbtn = lis[3].querySelectorAll('button');
+        repbtn[0].onclick = () => {
+            app.TimeBar.repeatStart = -1;
+            app.TimeBar.repeatEnd = -1;
+        };
+        repbtn[1].onclick = () => {
+            if(checkTime(repeatInput[0].value) && checkTime(repeatInput[1].value)) {
+                let i1 = Time2Ms(repeatInput[0].value);
+                let i2 = Time2Ms(repeatInput[1].value);
+                if(i1 > i2) {
+                    let temp = i2;
+                    i2 = i1; i1 = temp;
+                }
+                app.TimeBar.repeatStart = i1;
+                app.TimeBar.repeatEnd = i2;
+            } else alert('时间格式错误！');
+        }
+    }
     // ==== 交互细节 ==== //
     document.querySelector('.top-logo').addEventListener('click', () => {
         // 如果已经有分析数据了，就打开新的界面

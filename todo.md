@@ -132,7 +132,3 @@ filter.connect(audioContext.destination);
 仍然可以通过audioElement控制整体的播放。需要注意audioContext的状态：
 如果是suspend，则需要resume(); audioContext刚创建就是这个状态，此时调用audioElement.play()无效。
 但只要有osc被调用了start()，audioContext就会变成running。
-
-
-## icon
-缺少favicon.ico

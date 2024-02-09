@@ -228,7 +228,7 @@ li textarea {
     border-radius: 6px;
     background-color: var(--theme-dark);
     color: var(--theme-text);
-    resize: none;
+    resize: vertical;
 }
 
 /* EQ控制面板 */
@@ -264,4 +264,68 @@ li textarea {
 }
 .niceScroll::-webkit-scrollbar-track, ::-webkit-scrollbar-corner {
     background-color: rgb(37, 38, 45);
+}
+
+/* 分析面板 */
+.tonalityResult {
+    width: 100%;
+    border-left: white 1px solid;
+}
+
+.tonalityResult div {
+    color: var(--theme-dark);
+    height: 1em;
+    font-size: 1em;
+    line-height: 1em;
+    border-top-right-radius: 4px;
+    border-bottom-right-radius: 4px;
+}
+
+/* 设置面板 */
+#settingPannel button {
+    margin: 0;
+}
+#settingPannel li {
+    display: flex;
+    flex-direction: row;
+    justify-content: center;
+    align-items: center;
+    flex-wrap: wrap;
+    position: relative;
+}
+#settingPannel li::after {
+    content: attr(data-value);
+    position: absolute;
+    right: 0;
+    bottom: 0;
+    font-size: 10px;
+}
+#settingPannel li button:first-of-type {
+    font-family: monospace;
+    margin-right: 0.2em;
+}
+#settingPannel li button:last-of-type {
+    font-family: monospace;
+    margin-left: 0.2em;
+}
+#repeatRange {
+    display: flex;
+    flex-wrap: nowrap;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    margin: 0.4em 0;
+}
+#repeatRange input[type="text"] {
+    width: 46%;
+    border-radius: 4px;
+    padding-left: 4px;
+    border: none;
+    border: black solid 1px;
+    font-size: 0.9em;
+    color: var(--theme-text);
+    background: var(--theme-dark);
+}
+#repeatRange input[type="text"]:focus {
+    color: white;
 }
