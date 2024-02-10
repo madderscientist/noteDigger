@@ -204,25 +204,11 @@ function App() {
             const m = this.MidiAction.midi;
             const channel = Array.from(this.MidiAction.channelDiv.channel, () => []);
             this.MidiAction.insight = channel;
-            if (m.length == 0) return;   // 二分查找要求长度大于0
-            let viewStart = m.length;
-            {   // 找到m中第一个x2值大于this.idXstart的音符的起始位置 由于m中元素较多 用二分查找
-                let l = 0, r = viewStart - 1;
-                while (l <= r) {
-                    let mid = (l + r) >> 1;
-                    if (m[mid].x2 > this.idXstart) {
-                        r = mid - 1;
-                        viewStart = mid;
-                    } else l = mid + 1;
-                }
-            }
-            let viewEnd = viewStart;
-            for (; viewEnd < m.length; viewEnd++) {
-                if (m[viewEnd].x1 >= this.idXend) break;
-            }
-            const all = m.slice(viewStart, viewEnd);
-            for (const nt of all) {
-                if (nt.y < this.idYstart || nt.y >= this.idYend) continue;
+            // 原来用的二分有bug，所以干脆全部遍历
+            for (const nt of m) {
+                if(nt.x1 >= this.idXend) break;
+                if(nt.x2 < this.idXstart) continue;
+                if(nt.y < this.idYstart || nt.y >= this.idYend) continue;
                 channel[nt.ch].push(nt);
             }
         },
