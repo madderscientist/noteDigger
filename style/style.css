@@ -64,9 +64,12 @@ button {
     justify-content: center;
     align-items: center;
     position: absolute;
+    z-index: 98;
     width: 100%;
     height: 100%;
-    background-color: rgba(250, 250, 250, 0.55);
+    background-color: #1e1f24bb;
+    border: var(--theme-text) 3px dashed;
+    box-sizing: border-box;
     font-size: 2em;
 }
 
