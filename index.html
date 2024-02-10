@@ -321,12 +321,14 @@
             }
             const midi = app.MidiAction.midi;
             const scores = Array.from(app.MidiAction.channelDiv.channel, () => '');
-            let time = Array.from(scores, () => 0);
+            let time = Array.from(scores, () => -1);
             for (const note of midi) {
                 let id = note.ch;
-                let interval = (note.x1 - time[id]) * app.dt;
-                if(interval > 1000) scores[id] += '\n';
-                else if(interval > 400) scores[id] += ' ';
+                if(time[id] >= 0) {
+                    let interval = (note.x1 - time[id]) * app.dt;
+                    if(interval > 1000) scores[id] += '\n';
+                    else if(interval > 400) scores[id] += ' ';
+                }
                 scores[id] += indexToje(note.y - 36);   // C4认为是'1'
                 time[id] = note.x1;
             }

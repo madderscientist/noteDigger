@@ -627,13 +627,17 @@ function App() {
                 this.scroll2(((this.time / this.dt - 1) | 0) * this._width, this.scrollY);  // 留一点空位
             }
         },
+        /**
+         * 在指定的毫秒数开始播放
+         * @param {Number} at 开始的毫秒数 如果是负数，则从当下开始
+         */
         start: (at) => {
             const a = this.AudioPlayer.audio;
             if (a.readyState != 4) return;
             if (at >= 0) a.currentTime = at / 1000;
             this.AudioPlayer._crossFlag = false;    // 置此为假可以暂时取消重复区间
             this.MidiPlayer.restart();
-            if(a.readyState == 4) a.play();
+            if (a.readyState == 4) a.play();
             else a.oncanplay = () => {
                 a.play();
                 a.oncanplay = null;
@@ -963,8 +967,8 @@ function App() {
             });
             this.MidiAction.clearSelected();
             this.MidiAction.selected = copy;
-            // 粘贴到光标位置 目前没有做播放 因此假设位置是this.idXstart
-            minX = this.idXstart - minX;
+            // 粘贴到光标位置
+            minX = (this.time / this.dt - minX) | 0;
             copy.forEach((note) => {
                 note.x1 += minX;
                 note.x2 += minX;
@@ -972,6 +976,7 @@ function App() {
             this.MidiAction.midi.push(...copy);
             this.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
             this.MidiAction.updateView();
+            this.snapshot.save();
         },
         'Ctrl+B': () => {       // 收回面板
             const channelDiv = this.MidiAction.channelDiv.container.parentNode;
@@ -1186,13 +1191,13 @@ function App() {
                 const input = document.createElement("input");
                 input.type = "file";
                 input.onchange = () => {
-                    this.Saver.parse(input.files[0]).then((data) => {                        
+                    this.Saver.parse(input.files[0]).then((data) => {
                         // 再读取音频看看是否成功
                         const fileReader = new FileReader();
                         fileReader.onload = (e) => {
                             // 设置音频源 缓存到浏览器
                             this.AudioPlayer.createAudio(e.target.result).then(() => {
-                                if(this.AudioPlayer.name != data[0].name &&
+                                if (this.AudioPlayer.name != data[0].name &&
                                     !confirm(`音频文件与分析结果(${data[0].name})不同，是否继续？`))
                                     return;
                                 this.Saver.import(data);
@@ -1298,6 +1303,7 @@ function App() {
             this.dt = obj.dt;
             this.Keyboard.freqTable.A4 = obj.A4;
             this.Spectrogram.spectrogram = data[1];
+            this.snapshot.save();
         },
         write: (fileName = this.AudioPlayer.name) => {
             const data = this.Saver.export();
@@ -1420,15 +1426,14 @@ function App() {
             }; document.addEventListener('mouseup', up);
             return;
         }
-        this.Keyboard.mousedown();
         // 以下在没有频谱数据时不启用
-        if (!this.Spectrogram._spectrogram) return;
-        if (e.button == 0) this.MidiAction.onclick_L(e);    // midi音符相关
-        else if (e.button == 2 && e.shiftKey) {
-            this.spectrum.contextMenu.show(e);
-            e.stopPropagation();
-            return;
-        } else this.MidiAction.clearSelected();    // 取消音符选中
+        if (this.Spectrogram._spectrogram) {
+            if (e.button == 0) this.MidiAction.onclick_L(e);    // midi音符相关
+            else if (e.button == 2 && e.shiftKey) {
+                this.spectrum.contextMenu.show(e);
+                e.stopPropagation();
+            } else this.MidiAction.clearSelected();    // 取消音符选中
+        } this.Keyboard.mousedown();    // 将发声放到后面，因为onclick_L会改变选中的音轨
     });
     this.spectrum.addEventListener('mousemove', this.trackMouseY);
     this.spectrum.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
@@ -1444,24 +1449,31 @@ function App() {
         e.stopPropagation();
     });
     this.timeBar.addEventListener('mousedown', (e) => {
-        if (e.button) return;   // 左键拖拽
-        const x = (e.offsetX + this.scrollX) / this._width * this.dt;    // 毫秒数
-        let setRepeat = (e) => {
-            let newX = (e.offsetX + this.scrollX) / this._width * this.dt;
-            if (newX > x) {
-                this.TimeBar.repeatStart = x;
-                this.TimeBar.repeatEnd = newX;
-            } else {
-                this.TimeBar.repeatEnd = x;
-                this.TimeBar.repeatStart = newX;
-            }
-        };
-        let removeEvents = () => {
-            this.timeBar.removeEventListener('mousemove', setRepeat);
-            document.removeEventListener('mouseup', removeEvents);
-        };
-        this.timeBar.addEventListener('mousemove', setRepeat);
-        document.addEventListener('mouseup', removeEvents);
+        switch (e.button) {
+            case 0:
+                const x = (e.offsetX + this.scrollX) / this._width * this.dt;    // 毫秒数
+                let setRepeat = (e) => {
+                    let newX = (e.offsetX + this.scrollX) / this._width * this.dt;
+                    if (newX > x) {
+                        this.TimeBar.repeatStart = x;
+                        this.TimeBar.repeatEnd = newX;
+                    } else {
+                        this.TimeBar.repeatEnd = x;
+                        this.TimeBar.repeatStart = newX;
+                    }
+                };
+                let removeEvents = () => {
+                    this.timeBar.removeEventListener('mousemove', setRepeat);
+                    document.removeEventListener('mouseup', removeEvents);
+                };
+                this.timeBar.addEventListener('mousemove', setRepeat);
+                document.addEventListener('mouseup', removeEvents);
+                break;
+            case 1:     // 中键跳转位置但不改变播放状态
+                this.time = (e.offsetX + this.scrollX) / this._width * this.dt;
+                this.AudioPlayer.audio.currentTime = this.time / 1000;
+                break;
+        }
     });
     this.keyboard.addEventListener('wheel', (e) => {
         this.scroll2(this.scrollX, this.scrollY - e.deltaY);    // 只能上下移动
