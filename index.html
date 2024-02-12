@@ -374,18 +374,22 @@
         lis[0].firstChild.onclick = () => {
             --app.width;
             lis[0].dataset.value = app.width;
+            app.scroll2();
         };
         lis[0].lastChild.onclick = () => {
             ++app.width;
             lis[0].dataset.value = app.width;
+            app.scroll2();
         };
         lis[1].firstChild.onclick = () => {
             --app.height;
             lis[1].dataset.value = app.height;
+            app.scroll2();
         };
         lis[1].lastChild.onclick = () => {
             ++app.height;
             lis[1].dataset.value = app.height;
+            app.scroll2();
         };
         lis[2].firstChild.onclick = () => {
             --app.Spectrogram.Alpha;

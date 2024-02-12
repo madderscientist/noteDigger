@@ -1006,7 +1006,7 @@ function App() {
         this.timeBar.ctx.font = '14px Arial';
         // 更新滑动条大小
         this.width = this._width;   // 除了触发滑动条更新，还能在初始化的时候保证timeBar的文字间隔
-        this.scroll2(this.scrollX, this.scrollY);
+        this.scroll2();
     };
     /**
      * 移动到 scroll to (x, y)
@@ -1014,7 +1014,7 @@ function App() {
      * @param {Number} x 新视野左边和世界左边的距离
      * @param {Number} y 新视野下边和世界下边的距离
      */
-    this.scroll2 = (x = 0, y = 0) => {
+    this.scroll2 = (x = this.scrollX, y = this.scrollY) => {
         this.scrollX = Math.max(0, Math.min(x, this._width * this.xnum - this.spectrum.width));
         this.scrollY = Math.max(0, Math.min(y, this._height * this.ynum - this.spectrum.height));
         this.idXstart = (this.scrollX / this._width) | 0;
