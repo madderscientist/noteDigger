@@ -113,6 +113,15 @@
 
     <ul class="paddingbox niceScroll btn-ul" id="analysePannel">
         <li>调性分析</li>
+        <li>自动填充 <h5 style="display: inline-block;"><input type="checkbox">在新轨道中</h5>
+            <div class="wf fr">
+                黑<input type="range" max="255" min="0" value="255" step="1">红
+            </div>
+            <div class="wf fr" style="justify-content: space-around;">
+                <button>重复区间内</button>
+                <button>所有时间</button>
+            </div>
+        </li>
         (￣ε(#￣) 别的还没做
     </ul>
 
@@ -234,7 +243,7 @@
         const lis = document.getElementById('filePannel').children;
         lis[0].onclick = _uploadFile;
         lis[1].onclick = () => {    // 导入midi
-            if(!app.Spectrogram._spectrogram) {
+            if (!app.Spectrogram._spectrogram) {
                 alert("请先导入音频！");
                 return;
             }
@@ -244,18 +253,18 @@
                 bSaver.readBinary(this.files[0], (data) => {
                     const m = midi.import(new Uint8Array(data)).JSON();
                     const chdiv = app.MidiAction.channelDiv;
-                    if(m.tracks.length + chdiv.channel.length > 16) {
-                        if(!confirm("导入后音轨数量超过16，是否覆盖后几轨以导入midi？")) return;
-                        for(let i = chdiv.channel.length - 1; m.tracks.length + chdiv.channel.length > 16; i--) chdiv.removeChannel(i);
+                    if (m.tracks.length + chdiv.channel.length > 16) {
+                        if (!confirm("导入后音轨数量超过16，是否覆盖后几轨以导入midi？")) return;
+                        for (let i = chdiv.channel.length - 1; m.tracks.length + chdiv.channel.length > 16; i--) chdiv.removeChannel(i);
                     }
                     let tickTimeTable = m.header.tempos;    // bpm会随着时间改变
                     const chArray = new Array(m.tracks.length);
-                    for(const mt of m.tracks) {
+                    for (const mt of m.tracks) {
                         var tickTimeAt = -1;
                         var nexttickTimeChange = 0;
                         var tickTime = 0;   // 一个tick的毫秒数/app.dt
                         function checkChange(tick) {
-                            if(tick > nexttickTimeChange) {
+                            if (tick > nexttickTimeChange) {
                                 tickTimeAt++;
                                 nexttickTimeChange = tickTimeTable[tickTimeAt + 1] ? tickTimeTable[tickTimeAt + 1].ticks : Infinity;
                                 tickTime = 60000 / (tickTimeTable[tickTimeAt].bpm * m.header.tick * app.dt);
@@ -284,25 +293,25 @@
             }; input.click();
         };
         lis[2].onclick = () => {
-            if(!app.Spectrogram._spectrogram) {
+            if (!app.Spectrogram._spectrogram) {
                 alert("请先导入音频！");
                 return;
             } app.Saver.write();
         }
         lis[3].onclick = () => {    // midi导出
-            if(!app.Spectrogram._spectrogram) {
+            if (!app.Spectrogram._spectrogram) {
                 alert("请先导入音频！");
                 return;
             }
-            const newMidi = new midi(60,[4,4],Math.round(1000/app.dt),[],app.AudioPlayer.name);
-            const mts = []; 
-            for(const ch of app.synthesizer.channel) {
+            const newMidi = new midi(60, [4, 4], Math.round(1000 / app.dt), [], app.AudioPlayer.name);
+            const mts = [];
+            for (const ch of app.synthesizer.channel) {
                 let mt = newMidi.addTrack();
                 mt.addEvent(midiEvent.instrument(0, ch.instrument));
                 mt._volume = ch.volume;
                 mts.push(mt);
             }
-            for(const nt of app.MidiAction.midi) {
+            for (const nt of app.MidiAction.midi) {
                 const midint = nt.y + 24;
                 mts[nt.ch].addEvent(midiEvent.note(nt.x1, nt.x2 - nt.x1, midint, mts[nt.ch]._volume));
             }
@@ -324,10 +333,10 @@
             let time = Array.from(scores, () => -1);
             for (const note of midi) {
                 let id = note.ch;
-                if(time[id] >= 0) {
+                if (time[id] >= 0) {
                     let interval = (note.x1 - time[id]) * app.dt;
-                    if(interval > 1000) scores[id] += '\n';
-                    else if(interval > 400) scores[id] += ' ';
+                    if (interval > 1000) scores[id] += '\n';
+                    else if (interval > 400) scores[id] += ' ';
                 }
                 scores[id] += indexToje(note.y - 36);   // C4认为是'1'
                 time[id] = note.x1;
@@ -342,8 +351,8 @@
     // ==== 分析界面 ==== //
     {
         const lis = document.getElementById('analysePannel').children;
-        lis[0].onclick = function() {
-            if(!app.Spectrogram._spectrogram) {
+        lis[0].onclick = function () {
+            if (!app.Spectrogram._spectrogram) {
                 alert("请先导入音频！");
                 return;
             }
@@ -351,21 +360,73 @@
             const div = document.createElement('div');
             div.innerHTML = `<h5>调性: ${tonality}</h5>
             <div class="tonalityResult">
-                <div style="background:#FF4500;width:${energy[0]*100}%;">C</div>
-                <div style="background:#FFD700;width:${energy[1]*100}%;">C#</div>
-                <div style="background:#32CD32;width:${energy[2]*100}%;">D</div>
-                <div style="background:#00BFFF;width:${energy[3]*100}%;">D#</div>
-                <div style="background:#FF6347;width:${energy[4]*100}%;">E</div>
-                <div style="background:#FF1493;width:${energy[5]*100}%;">F</div>
-                <div style="background:#7FFF00;width:${energy[6]*100}%;">F#</div>
-                <div style="background:#1E90FF;width:${energy[7]*100}%;">G</div>
-                <div style="background:#FFA500;width:${energy[8]*100}%;">G#</div>
-                <div style="background:#EE82EE;width:${energy[9]*100}%;">A</div>
-                <div style="background:#ADFF2F;width:${energy[10]*100}%;">A#</div>
-                <div style="background:#87CEFA;width:${energy[11]*100}%;">B</div>
+                <div style="background:#FF4500;width:${energy[0] * 100}%;">C</div>
+                <div style="background:#FFD700;width:${energy[1] * 100}%;">C#</div>
+                <div style="background:#32CD32;width:${energy[2] * 100}%;">D</div>
+                <div style="background:#00BFFF;width:${energy[3] * 100}%;">D#</div>
+                <div style="background:#FF6347;width:${energy[4] * 100}%;">E</div>
+                <div style="background:#FF1493;width:${energy[5] * 100}%;">F</div>
+                <div style="background:#7FFF00;width:${energy[6] * 100}%;">F#</div>
+                <div style="background:#1E90FF;width:${energy[7] * 100}%;">G</div>
+                <div style="background:#FFA500;width:${energy[8] * 100}%;">G#</div>
+                <div style="background:#EE82EE;width:${energy[9] * 100}%;">A</div>
+                <div style="background:#ADFF2F;width:${energy[10] * 100}%;">A#</div>
+                <div style="background:#87CEFA;width:${energy[11] * 100}%;">B</div>
             </div>`;
             this.appendChild(div);
         };
+        const inputs = lis[1].querySelectorAll('input');
+        const btns = lis[1].querySelectorAll('button');
+        const checkbox = inputs[0];
+        const threshold = inputs[1];
+        threshold.addEventListener('input', function() {
+            this.style.background = app.Spectrogram.getColor(this.value)
+        })
+        hideLableRange.new(threshold).reset().parentElement.classList.add('fullRange');
+        function autoFill(from, to) {
+            let ch;
+            const chdiv = app.MidiAction.channelDiv;
+            if(checkbox.checked) {  // 新建音轨
+                if (chdiv.channel.length > 15) {
+                    alert("音轨已满！请删除音轨或选择在当前音轨");
+                    return;
+                } ch = chdiv.addChannel();
+            } else ch = chdiv.selected;
+            if(!ch) {
+                alert("未选中音轨！");
+                return;
+            }
+            let id = ch.index;
+            let notes = NoteAnalyser.autoFill(
+                app.Spectrogram._spectrogram,
+                parseInt(threshold.value)/app.Spectrogram.multiple,
+                from, to
+            );
+            for(const nt of notes) nt.ch = id;
+            app.MidiAction.midi.push(...notes);
+            app.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
+        }
+        btns[0].onclick = () => {   // 重复区间内
+            if(!app.Spectrogram._spectrogram) {
+                alert('请导入音频！');
+                return;
+            }
+            if (app.TimeBar.repeatEnd <= app.TimeBar.repeatStart) {
+                alert('区间错误！(起点不能晚于终点)');
+                return;
+            }
+            autoFill(
+                (app.TimeBar.repeatStart / app.dt) | 0,
+                app.TimeBar.repeatEnd / app.dt
+            );
+        };
+        btns[1].onclick = () => {
+            if(!app.Spectrogram._spectrogram) {
+                alert('请导入音频！');
+                return;
+            } autoFill();
+        }
+
     }
 
     // ==== 设置界面 ==== //
@@ -408,7 +469,7 @@
             const t = time.split(':');
             return parseInt(t[0]) * 60000 + parseInt(t[1]) * 1000 + parseInt(t[2]);
         }
-        repeatInput[0].oninput = repeatInput[1].oninput = function() {
+        repeatInput[0].oninput = repeatInput[1].oninput = function () {
             this.style.color = checkTime(this.value) ? 'var(--theme-text)' : 'red';
         };
         const repbtn = lis[3].querySelectorAll('button');
@@ -417,10 +478,10 @@
             app.TimeBar.repeatEnd = -1;
         };
         repbtn[1].onclick = () => {
-            if(checkTime(repeatInput[0].value) && checkTime(repeatInput[1].value)) {
+            if (checkTime(repeatInput[0].value) && checkTime(repeatInput[1].value)) {
                 let i1 = Time2Ms(repeatInput[0].value);
                 let i2 = Time2Ms(repeatInput[1].value);
-                if(i1 > i2) {
+                if (i1 > i2) {
                     let temp = i2;
                     i2 = i1; i1 = temp;
                 }

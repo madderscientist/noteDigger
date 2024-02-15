@@ -89,18 +89,18 @@ class NoteAnalyser {    // 负责解析频谱数据
     static Tonality(noteTable) {
         let energy = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0];
         for (const atime of noteTable) {
-            energy[0]  +=  atime[0]**2 + atime[12]**2 + atime[24]**2 + atime[36]**2 + atime[48]**2 + atime[60]**2 + atime[72]**2;
-            energy[1]  +=  atime[1]**2 + atime[13]**2 + atime[25]**2 + atime[37]**2 + atime[49]**2 + atime[61]**2 + atime[73]**2;
-            energy[2]  +=  atime[2]**2 + atime[14]**2 + atime[26]**2 + atime[38]**2 + atime[50]**2 + atime[62]**2 + atime[74]**2;
-            energy[3]  +=  atime[3]**2 + atime[15]**2 + atime[27]**2 + atime[39]**2 + atime[51]**2 + atime[63]**2 + atime[75]**2;
-            energy[4]  +=  atime[4]**2 + atime[16]**2 + atime[28]**2 + atime[40]**2 + atime[52]**2 + atime[64]**2 + atime[76]**2;
-            energy[5]  +=  atime[5]**2 + atime[17]**2 + atime[29]**2 + atime[41]**2 + atime[53]**2 + atime[65]**2 + atime[77]**2;
-            energy[6]  +=  atime[6]**2 + atime[18]**2 + atime[30]**2 + atime[42]**2 + atime[54]**2 + atime[66]**2 + atime[78]**2;
-            energy[7]  +=  atime[7]**2 + atime[19]**2 + atime[31]**2 + atime[43]**2 + atime[55]**2 + atime[67]**2 + atime[79]**2;
-            energy[8]  +=  atime[8]**2 + atime[20]**2 + atime[32]**2 + atime[44]**2 + atime[56]**2 + atime[68]**2 + atime[80]**2;
-            energy[9]  +=  atime[9]**2 + atime[21]**2 + atime[33]**2 + atime[45]**2 + atime[57]**2 + atime[69]**2 + atime[81]**2;
-            energy[10] += atime[10]**2 + atime[22]**2 + atime[34]**2 + atime[46]**2 + atime[58]**2 + atime[70]**2 + atime[82]**2;
-            energy[11] += atime[11]**2 + atime[23]**2 + atime[35]**2 + atime[47]**2 + atime[59]**2 + atime[71]**2 + atime[83]**2;
+            energy[0] += atime[0] ** 2 + atime[12] ** 2 + atime[24] ** 2 + atime[36] ** 2 + atime[48] ** 2 + atime[60] ** 2 + atime[72] ** 2;
+            energy[1] += atime[1] ** 2 + atime[13] ** 2 + atime[25] ** 2 + atime[37] ** 2 + atime[49] ** 2 + atime[61] ** 2 + atime[73] ** 2;
+            energy[2] += atime[2] ** 2 + atime[14] ** 2 + atime[26] ** 2 + atime[38] ** 2 + atime[50] ** 2 + atime[62] ** 2 + atime[74] ** 2;
+            energy[3] += atime[3] ** 2 + atime[15] ** 2 + atime[27] ** 2 + atime[39] ** 2 + atime[51] ** 2 + atime[63] ** 2 + atime[75] ** 2;
+            energy[4] += atime[4] ** 2 + atime[16] ** 2 + atime[28] ** 2 + atime[40] ** 2 + atime[52] ** 2 + atime[64] ** 2 + atime[76] ** 2;
+            energy[5] += atime[5] ** 2 + atime[17] ** 2 + atime[29] ** 2 + atime[41] ** 2 + atime[53] ** 2 + atime[65] ** 2 + atime[77] ** 2;
+            energy[6] += atime[6] ** 2 + atime[18] ** 2 + atime[30] ** 2 + atime[42] ** 2 + atime[54] ** 2 + atime[66] ** 2 + atime[78] ** 2;
+            energy[7] += atime[7] ** 2 + atime[19] ** 2 + atime[31] ** 2 + atime[43] ** 2 + atime[55] ** 2 + atime[67] ** 2 + atime[79] ** 2;
+            energy[8] += atime[8] ** 2 + atime[20] ** 2 + atime[32] ** 2 + atime[44] ** 2 + atime[56] ** 2 + atime[68] ** 2 + atime[80] ** 2;
+            energy[9] += atime[9] ** 2 + atime[21] ** 2 + atime[33] ** 2 + atime[45] ** 2 + atime[57] ** 2 + atime[69] ** 2 + atime[81] ** 2;
+            energy[10] += atime[10] ** 2 + atime[22] ** 2 + atime[34] ** 2 + atime[46] ** 2 + atime[58] ** 2 + atime[70] ** 2 + atime[82] ** 2;
+            energy[11] += atime[11] ** 2 + atime[23] ** 2 + atime[35] ** 2 + atime[47] ** 2 + atime[59] ** 2 + atime[71] ** 2 + atime[83] ** 2;
         }
         // notes根据最大值归一化
         let max = Math.max(...energy);
@@ -129,5 +129,42 @@ class NoteAnalyser {    // 负责解析频谱数据
             case '13468ab': tonality = 'B'; break;
             default: tonality = 'Unknown'; break;
         } return [tonality, energy];
+    }
+    /**
+     * 标记大于阈值的音符
+     * @param {Array<Float32Array>} noteTable 时频图
+     * @param {Number} threshold 阈值
+     * @param {Number} from 
+     * @param {Number} to 
+     * @returns {Array<Note>} {x1,x2,y,ch,selected}
+     */
+    static autoFill(noteTable, threshold, from = 0, to = 0) {
+        let notes = [];
+        let lastAt = new Uint16Array(noteTable[0].length).fill(65535);
+        let time = from;   // 迭代器指示
+        if (!to || to > noteTable.length) to = noteTable.length;
+        for (; time < to; time++) {
+            const t = noteTable[time];
+            for (let i = 0; i < lastAt.length; i++) {
+                let now = t[i] < threshold; // 现在不达标
+                if (lastAt[i] != 65535) {
+                    if (now) notes.push({   // 上一次有但是这次没有
+                        y: i,
+                        x1: lastAt[i],
+                        x2: time,
+                        ch: -1, selected: false
+                    }); lastAt[i] = 65535;
+                } else if (!now) lastAt[i] = time;  // 上次没有这次有
+            }
+        }
+        // 扫尾
+        for (let i = 0; i < lastAt.length; i++) {
+            if (lastAt[i] != 65535) notes.push({
+                y: i,
+                x1: lastAt[i],
+                x2: time,
+                ch: -1, selected: false
+            });
+        } return notes;
     }
 }

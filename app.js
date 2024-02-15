@@ -206,9 +206,9 @@ function App() {
             this.MidiAction.insight = channel;
             // 原来用的二分有bug，所以干脆全部遍历
             for (const nt of m) {
-                if(nt.x1 >= this.idXend) break;
-                if(nt.x2 < this.idXstart) continue;
-                if(nt.y < this.idYstart || nt.y >= this.idYend) continue;
+                if (nt.x1 >= this.idXend) break;
+                if (nt.x2 < this.idXstart) continue;
+                if (nt.y < this.idYstart || nt.y >= this.idYend) continue;
                 channel[nt.ch].push(nt);
             }
         },
@@ -556,6 +556,7 @@ function App() {
             return new Promise((resolve, reject) => {
                 const a = new Audio(url);
                 a.loop = false;
+                a.volume = parseInt(document.getElementById('audiovolumeControl').value);
                 a.ondurationchange = () => {
                     this.AudioPlayer.durationString = this.TimeBar.msToClockString(a.duration * 1000);
                 };
@@ -702,7 +703,7 @@ function App() {
         },
         mousedown: () => {  // 鼠标点击后发声
             let ch = this.MidiAction.channelDiv.selected;
-            if (ch.mute) return;
+            if (!ch || ch.mute) return;
             ch = ch ? ch.ch : this.synthesizer;
             let nt = ch.play({ f: this.Keyboard.freqTable[this.Keyboard.highlight - 24] });
             let last = this.Keyboard.highlight;     // 除颤
@@ -1395,6 +1396,15 @@ function App() {
             name: "复制", callback: () => {
                 this.shortcutActions['Ctrl+C']();
             }, onshow: () => this.Spectrogram._spectrogram && this.MidiAction.selected.length > 0
+        }, {
+            name: "反选", callback: () => {
+                let ch = this.MidiAction.channelDiv.selected;
+                let id = ch && ch.index;
+                ch = !ch;
+                for (const nt of this.MidiAction.midi)
+                    nt.selected = (ch || nt.ch == id) && !nt.selected;
+                this.MidiAction.selected = this.MidiAction.midi.filter(nt => nt.selected);
+            }, onshow: () => this.Spectrogram._spectrogram
         }, {
             name: '<span style="color: red;">删除</span>', callback: () => {
                 this.MidiAction.deleteNote();

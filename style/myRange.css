@@ -84,3 +84,11 @@
     left: 50%;
     transform: translateX(-50%) rotate(45deg);
 }
+
+.fullRange {
+    flex: 1;
+    width: 100%;
+    input {
+        width: 100%;
+    }
+}
