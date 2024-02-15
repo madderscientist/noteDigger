@@ -218,7 +218,7 @@ function App() {
             const s = this.spectrum.ctx;
             const c = M.channelDiv.channel;
             for (let ch = m.length - 1; ch >= 0; ch--) {
-                if (m[ch].length === 0 || !c[ch].visible) continue;
+                if (m[ch].length === 0 || (c[ch] && !c[ch].visible)) continue;
                 let ntcolor = c[ch].color;
                 for (const note of m[ch]) {
                     const params = [note.x1 * this._width - this.scrollX, this.spectrum.height - note.y * this._height + this.scrollY, (note.x2 - note.x1) * this._width, -this._height];
@@ -556,7 +556,7 @@ function App() {
             return new Promise((resolve, reject) => {
                 const a = new Audio(url);
                 a.loop = false;
-                a.volume = parseInt(document.getElementById('audiovolumeControl').value);
+                a.volume = parseFloat(document.getElementById('audiovolumeControl').value);
                 a.ondurationchange = () => {
                     this.AudioPlayer.durationString = this.TimeBar.msToClockString(a.duration * 1000);
                 };

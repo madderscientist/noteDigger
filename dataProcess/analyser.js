@@ -148,12 +148,14 @@ class NoteAnalyser {    // 负责解析频谱数据
             for (let i = 0; i < lastAt.length; i++) {
                 let now = t[i] < threshold; // 现在不达标
                 if (lastAt[i] != 65535) {
-                    if (now) notes.push({   // 上一次有但是这次没有
-                        y: i,
-                        x1: lastAt[i],
-                        x2: time,
-                        ch: -1, selected: false
-                    }); lastAt[i] = 65535;
+                    if (now) {
+                        notes.push({   // 上一次有但是这次没有
+                            y: i,
+                            x1: lastAt[i],
+                            x2: time,
+                            ch: -1, selected: false
+                        }); lastAt[i] = 65535;
+                    }
                 } else if (!now) lastAt[i] = time;  // 上次没有这次有
             }
         }

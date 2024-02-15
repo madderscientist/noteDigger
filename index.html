@@ -379,35 +379,35 @@
         const btns = lis[1].querySelectorAll('button');
         const checkbox = inputs[0];
         const threshold = inputs[1];
-        threshold.addEventListener('input', function() {
+        threshold.addEventListener('input', function () {
             this.style.background = app.Spectrogram.getColor(this.value)
         })
         hideLableRange.new(threshold).reset().parentElement.classList.add('fullRange');
         function autoFill(from, to) {
             let ch;
             const chdiv = app.MidiAction.channelDiv;
-            if(checkbox.checked) {  // 新建音轨
+            if (checkbox.checked) {  // 新建音轨
                 if (chdiv.channel.length > 15) {
                     alert("音轨已满！请删除音轨或选择在当前音轨");
                     return;
                 } ch = chdiv.addChannel();
             } else ch = chdiv.selected;
-            if(!ch) {
+            if (!ch) {
                 alert("未选中音轨！");
                 return;
             }
             let id = ch.index;
             let notes = NoteAnalyser.autoFill(
                 app.Spectrogram._spectrogram,
-                parseInt(threshold.value)/app.Spectrogram.multiple,
+                parseInt(threshold.value) / app.Spectrogram.multiple,
                 from, to
             );
-            for(const nt of notes) nt.ch = id;
+            for (const nt of notes) nt.ch = id;
             app.MidiAction.midi.push(...notes);
             app.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
         }
         btns[0].onclick = () => {   // 重复区间内
-            if(!app.Spectrogram._spectrogram) {
+            if (!app.Spectrogram._spectrogram) {
                 alert('请导入音频！');
                 return;
             }
@@ -421,7 +421,7 @@
             );
         };
         btns[1].onclick = () => {
-            if(!app.Spectrogram._spectrogram) {
+            if (!app.Spectrogram._spectrogram) {
                 alert('请导入音频！');
                 return;
             } autoFill();
