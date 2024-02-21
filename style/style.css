@@ -332,3 +332,7 @@ li textarea {
 #repeatRange input[type="text"]:focus {
     color: white;
 }
+
+canvas.selecting {
+    cursor: ew-resize;
+}

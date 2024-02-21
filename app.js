@@ -16,6 +16,8 @@ function App() {
             this._width = w;
             this.TimeBar.updateInterval();
             this.HscrollBar.refreshSize();  // 刷新横向滑动条
+            this.TperP = this.dt / this._width;  // 每个像素代表的时间
+            this.PperT = this._width / this.dt;  // 每个时间代表的像素
         }
     });
     this._height = 15;   // 每格的高度
@@ -43,7 +45,7 @@ function App() {
     this.rectYstart = 0;// 画布开始的具体y坐标(因为最下面一个不完整) 迭代应该减height 被画频谱、画键盘共享
     this.loop = 0;      // 接收requestAnimationFrame的返回
     this.time = -1;     // 当前时间 单位：毫秒 在this.AudioPlayer.update中更新
-    this.dt = 100;      // 每次分析的时间间隔 单位毫秒 在this.Analyser.analyse中更新
+    this.dt = 50;       // 每次分析的时间间隔 单位毫秒 在this.Analyser.analyse中更新
     this._mouseY = 0;   // 鼠标当前y坐标
     Object.defineProperty(this, 'mouseY', {
         get: function () { return this._mouseY; },
@@ -558,7 +560,9 @@ function App() {
                 a.loop = false;
                 a.volume = parseFloat(document.getElementById('audiovolumeControl').value);
                 a.ondurationchange = () => {
-                    this.AudioPlayer.durationString = this.TimeBar.msToClockString(a.duration * 1000);
+                    let ms = a.duration * 1000
+                    this.AudioPlayer.durationString = this.TimeBar.msToClockString(ms);
+                    this.BeatBar.beats.maxTime = ms;
                 };
                 a.onended = () => {
                     this.time = 0;
@@ -744,6 +748,7 @@ function App() {
             const t = this.TimeBar.msToClock(ms);
             return `${t[0].toString().padStart(2, "0")}:${t[1].toString().padStart(2, "0")}:${t[2].toString().padStart(3, "0")}`;
         },
+        // timeBar的上半部分画时间轴
         update: () => {
             const canvas = this.timeBar;
             const ctx = this.timeBar.ctx;
@@ -753,27 +758,19 @@ function App() {
             let dp = this.width * tb.interval;      // 像素的步长
             let timeAt = dt * idstart;              // 对应的毫秒
             let p = idstart * dp - this.scrollX;    // 对应的像素
+            let h = canvas.height >> 1;             // 上半部分
             ctx.fillStyle = '#25262d';
-            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillRect(0, 0, canvas.width, h);
             ctx.fillStyle = '#8e95a6';
-            // 画小刻度
-            ctx.strokeStyle = '#8e95a6';
-            ctx.beginPath();
-            for (let i = (this.idXstart + 1) * this._width - this.scrollX,
-                y2 = canvas.height - canvas.height * 0.3,
-                di = Math.max(1, Math.round(16 / this._width)) * this._width; i < canvas.width; i += di) {
-                ctx.moveTo(i, y2);
-                ctx.lineTo(i, canvas.height);
-            } ctx.stroke();
-            // 画大刻度，标时间
+            //== 画刻度 标时间 ==//
             ctx.strokeStyle = '#ff0000';
             ctx.beginPath();
-            for (endPix = canvas.width + (dp >> 1), y2 = canvas.height * 0.35; p < endPix; p += dp, timeAt += dt) {
-                ctx.moveTo(p, y2);
-                ctx.lineTo(p, canvas.height);
-                ctx.fillText(tb.msToClockString(timeAt), p - 28, 18);
+            for (let endPix = canvas.width + (dp >> 1); p < endPix; p += dp, timeAt += dt) {
+                ctx.moveTo(p, 0);
+                ctx.lineTo(p, h);
+                ctx.fillText(tb.msToClockString(timeAt), p - 28, 16);
             } ctx.stroke();
-            // 画重复区间
+            //== 画重复区间 ==//
             let begin = this._width * tb.repeatStart / this.dt - this.scrollX;  // 单位：像素
             let end = this._width * tb.repeatEnd / this.dt - this.scrollX;
             const spectrum = this.spectrum.ctx;
@@ -800,7 +797,7 @@ function App() {
                 ctx.fillRect(begin, 0, end - begin, canvas.height);
                 spectrum.fillRect(begin, 0, end - begin, spectrumHeight);
             }
-            // 画当前时间
+            //== 画当前时间指针 ==//
             spectrum.strokeStyle = 'white';
             begin = this.time / this.dt * this._width - this.scrollX;
             if (begin >= 0 && begin < canvas.width) {
@@ -819,12 +816,12 @@ function App() {
             {
                 name: "设置重复区间开始位置",
                 callback: (e_father, e_self) => {
-                    this.TimeBar.repeatStart = (e_father.offsetX + this.scrollX) * this.dt / this._width;
+                    this.TimeBar.repeatStart = (e_father.offsetX + this.scrollX) * this.TperP;
                 }
             }, {
                 name: "设置重复区间结束位置",
                 callback: (e_father, e_self) => {
-                    this.TimeBar.repeatEnd = (e_father.offsetX + this.scrollX) * this.dt / this._width;
+                    this.TimeBar.repeatEnd = (e_father.offsetX + this.scrollX) * this.TperP;
                 }
             }, {
                 name: "取消重复区间",
@@ -837,10 +834,136 @@ function App() {
                 name: "从此处播放",
                 callback: (e_father, e_self) => {
                     this.AudioPlayer.stop();
-                    this.AudioPlayer.start((e_father.offsetX + this.scrollX) * this.dt / this._width);
+                    this.AudioPlayer.start((e_father.offsetX + this.scrollX) * this.TperP);
                 }
             }
         ])
+    };
+    this.BeatBar = {
+        beats: new Beats(),
+        update: () => {
+            const canvas = this.timeBar;
+            const ctx = this.timeBar.ctx;
+
+            ctx.fillStyle = '#2e3039';
+            const h = canvas.height >> 1;
+            ctx.fillRect(0, h, canvas.width, canvas.width);
+            ctx.fillStyle = '#8e95a6';
+            const spectrum = this.spectrum.ctx;
+            const spectrumHeight = this.spectrum.height;
+            ctx.strokeStyle = '#f0f0f0f0';
+
+            const iterator = this.BeatBar.beats.iterator(this.scrollX * this.TperP, true);
+            ctx.beginPath(); spectrum.beginPath();
+            while (1) {
+                let measure = iterator.next();
+                if (measure.done) break;
+                measure = measure.value;
+                let x = measure.start * this.PperT - this.scrollX;
+                if (x > canvas.width) break;
+                ctx.moveTo(x, h);
+                ctx.lineTo(x, canvas.height);
+                spectrum.strokeStyle = '#a0a0a0';
+                spectrum.moveTo(x, 0);
+                spectrum.lineTo(x, spectrumHeight);
+                // 写字
+                let Interval = measure.interval * this.PperT;
+                ctx.fillText(Interval < 38 ? measure.id : `${measure.id}. ${measure.beatNum}/${measure.beatUnit}`, x + 2, h + 14);
+                // 画更细的节拍线
+                let dp = Interval / measure.beatNum;
+                if (dp < 20) continue;
+                spectrum.strokeStyle = '#909090';
+                for (let i = measure.beatNum; i > 0; i--, x += dp) {
+                    spectrum.moveTo(x, 0);
+                    spectrum.lineTo(x, spectrumHeight);
+                }
+            } ctx.stroke(); spectrum.stroke();
+        },
+        contextMenu: new ContextMenu([
+            {
+                name: "设置小节",
+                callback: (e_father, e_self) => {
+                    const bs = this.BeatBar.beats;
+                    const m = bs.setMeasure((e_father.offsetX + this.scrollX) * this.TperP, undefined, true);
+                    let tempDiv = document.createElement('div');
+                    tempDiv.innerHTML = `
+    <div class="request-cover">
+        <div class="card hvCenter"><label class="title">小节${m.id}设置</label>
+            <div class="layout"><span>拍数</span><input type="text" name="ui-ask" step="1" max="16" min="1"></div>
+            <div class="layout"><span>音符</span><select name="ui-ask">
+                <option value="2">2分</option>
+                <option value="4">4分</option>
+                <option value="8">8分</option>
+                <option value="16">16分</option>
+            </select></div>
+            <div class="layout"><span>BPM:</span><input type="number" name="ui-ask" min="1"></div>
+            <div class="layout"><span>(忽略以上)和上一小节一样</span><input type="checkbox" name="ui-ask"></div>
+            <div class="layout"><span>应用到后面相邻同类型小节</span><input type="checkbox" name="ui-ask" checked></div>
+            <div class="layout"><button class="ui-cancel">取消</button><button class="ui-confirm">确定</button></div>
+        </div>
+    </div>`;
+                    const Pannel = tempDiv.firstElementChild;
+                    document.body.insertBefore(Pannel, document.body.firstChild);
+                    function close() { Pannel.remove(); }
+                    const inputs = Pannel.querySelectorAll('[name="ui-ask"]');
+                    const btns = Pannel.getElementsByTagName('button');
+                    inputs[0].value = m.beatNum;    // 拍数
+                    inputs[1].value = m.beatUnit;   // 音符类型
+                    inputs[2].value = m.bpm;        // bpm
+                    btns[0].onclick = close;
+                    btns[1].onclick = () => {
+                        if(!inputs[4].checked) {     // 后面不变
+                            bs.setMeasure(m.id + 1, false); // 让下一个生成实体
+                        }
+                        if(inputs[3].checked) {     // 和上一小节一样
+                            let last = bs.getMeasure(m.id - 1, false);
+                            m.copy(last);
+                        } else {
+                            m.beatNum = parseInt(inputs[0].value);
+                            m.beatUnit = parseInt(inputs[1].value);
+                            m.bpm = parseInt(inputs[2].value);
+                        } bs.check(); close();
+                    };
+                }
+            }, {
+                name: "后方插入一小节",
+                callback: (e_father) => {
+                    this.BeatBar.beats.add((e_father.offsetX + this.scrollX) * this.TperP, true);
+                }
+            }, {
+                name: "重置后面所有小节",
+                callback: (e_father) => {
+                    let base = this.BeatBar.beats.getBaseIndex((e_father.offsetX + this.scrollX) * this.TperP, true);
+                    this.BeatBar.beats.splice(base + 1);
+                }
+            }, {
+                name: '<span style="color: red;">删除该小节</span>',
+                callback: (e_father, e_self) => {
+                    this.BeatBar.beats.delete((e_father.offsetX + this.scrollX) * this.TperP, true);
+                }
+            }
+        ]),
+        belongID: -1,   // 小节线前一个小节的id
+        moveCatch: (e) => {     // 画布上光标移动到小节线上可以进入调整模式
+            if(e.offsetY < this.timeBar.height >> 1) {
+                this.timeBar.classList.remove('selecting');
+                this.BeatBar.belongID = -1;
+                return;
+            }
+            let timeNow = (e.offsetX + this.scrollX) * this.TperP;
+            let m = this.BeatBar.beats.getMeasure(timeNow, true);
+            let threshold = 6 * this.TperP;
+            if(timeNow - m.start < threshold) {
+                this.BeatBar.belongID = m.id - 1;
+                this.timeBar.classList.add('selecting');
+            } else if (m.start + m.interval - timeNow < threshold) {
+                this.BeatBar.belongID = m.id;
+                this.timeBar.classList.add('selecting');
+            } else {
+                this.BeatBar.belongID = -1;
+                this.timeBar.classList.remove('selecting');
+            }
+        }
     };
     this.HscrollBar = {     // 配合scroll的滑动条
         track: document.getElementById('scrollbar-track'),
@@ -1048,6 +1171,7 @@ function App() {
         this.AudioPlayer.update();
         this.MidiPlayer.update();
         this.Spectrogram.update();
+        this.BeatBar.update();
         this.Keyboard.update();
         this.MidiAction.update();
         this.TimeBar.update();  // 必须在Spectrogram后更新，因为涉及时间指示的绘制
@@ -1085,6 +1209,7 @@ function App() {
          */
         analyse: async (audioBuffer, tNum = 20, A4 = 440, channel = -1, fftPoints = 8192) => {
             this.dt = 1000 / tNum;
+            this.TperP = this.dt / this._width; this.PperT = this._width / this.dt;
             let dN = Math.round(audioBuffer.sampleRate / tNum);
             // 创建分析工具
             var fft = new realFFT(fftPoints); // 8192点在44100采样率下，最低能分辨F#2，但是足矣
@@ -1441,33 +1566,52 @@ function App() {
     });
     this.timeBar.addEventListener('contextmenu', (e) => {
         e.preventDefault(); // 右键菜单
-        this.TimeBar.contextMenu.show(e);
+        if (e.offsetY < this.timeBar.height >> 1) this.TimeBar.contextMenu.show(e);
+        else this.BeatBar.contextMenu.show(e);
         e.stopPropagation();
     });
+    this.timeBar.addEventListener('mousemove', this.BeatBar.moveCatch);
     this.timeBar.addEventListener('mousedown', (e) => {
         switch (e.button) {
             case 0:
-                const x = (e.offsetX + this.scrollX) / this._width * this.dt;    // 毫秒数
-                let setRepeat = (e) => {
-                    let newX = (e.offsetX + this.scrollX) / this._width * this.dt;
-                    if (newX > x) {
-                        this.TimeBar.repeatStart = x;
-                        this.TimeBar.repeatEnd = newX;
-                    } else {
-                        this.TimeBar.repeatEnd = x;
-                        this.TimeBar.repeatStart = newX;
-                    }
-                };
-                let removeEvents = () => {
-                    this.timeBar.removeEventListener('mousemove', setRepeat);
-                    document.removeEventListener('mouseup', removeEvents);
-                };
-                this.timeBar.addEventListener('mousemove', setRepeat);
-                document.addEventListener('mouseup', removeEvents);
+                if(this.BeatBar.belongID > -1) {
+                    this.timeBar.removeEventListener('mousemove', this.BeatBar.moveCatch);
+                    let m = this.BeatBar.beats.setMeasure(this.BeatBar.belongID, false);
+                    let startAt = m.start * this.PperT;
+                    let setMeasure = (e2) => {
+                        m.interval = Math.max(100, (e2.offsetX + this.scrollX - startAt) * this.TperP);
+                        this.BeatBar.beats.check();
+                    };
+                    let removeEvents = () => {
+                        this.timeBar.removeEventListener('mousemove', setMeasure);
+                        this.timeBar.addEventListener('mousemove', this.BeatBar.moveCatch);
+                    };
+                    this.timeBar.addEventListener('mousemove', setMeasure);
+                    document.addEventListener('mouseup', removeEvents);
+                } else {
+                    const x = (e.offsetX + this.scrollX) / this._width * this.dt;    // 毫秒数
+                    let setRepeat = (e) => {
+                        let newX = (e.offsetX + this.scrollX) / this._width * this.dt;
+                        if (newX > x) {
+                            this.TimeBar.repeatStart = x;
+                            this.TimeBar.repeatEnd = newX;
+                        } else {
+                            this.TimeBar.repeatEnd = x;
+                            this.TimeBar.repeatStart = newX;
+                        }
+                    };
+                    let removeEvents = () => {
+                        this.timeBar.removeEventListener('mousemove', setRepeat);
+                        document.removeEventListener('mouseup', removeEvents);
+                    };
+                    this.timeBar.addEventListener('mousemove', setRepeat);
+                    document.addEventListener('mouseup', removeEvents);
+                }
                 break;
             case 1:     // 中键跳转位置但不改变播放状态
                 this.time = (e.offsetX + this.scrollX) / this._width * this.dt;
                 this.AudioPlayer.audio.currentTime = this.time / 1000;
+                this.AudioPlayer.play_btn.firstChild.textContent = this.TimeBar.msToClockString(this.time);
                 break;
         }
     });
