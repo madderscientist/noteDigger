@@ -16,6 +16,7 @@
     <script src="./channelDiv.js"></script>
     <script src="./beatBar.js"></script>
     <script src="./saver.js"></script>
+    <script src="./dataProcess/midiExport.js"></script>
     <script src="./app.js"></script>
     <link rel="stylesheet" href="./style/style.css">
     <link rel="stylesheet" href="./style/askUI.css">
@@ -304,19 +305,7 @@
                 alert("请先导入音频！");
                 return;
             }
-            const newMidi = new midi(60, [4, 4], Math.round(1000 / app.dt), [], app.AudioPlayer.name);
-            const mts = [];
-            for (const ch of app.synthesizer.channel) {
-                let mt = newMidi.addTrack();
-                mt.addEvent(midiEvent.instrument(0, ch.instrument));
-                mt._volume = ch.volume;
-                mts.push(mt);
-            }
-            for (const nt of app.MidiAction.midi) {
-                const midint = nt.y + 24;
-                mts[nt.ch].addEvent(midiEvent.note(nt.x1, nt.x2 - nt.x1, midint, mts[nt.ch]._volume));
-            }
-            bSaver.saveArrayBuffer(newMidi.export(1), app.AudioPlayer.name + '.mid');
+            _midiExport.UI();   // 依赖文件midiExport.js
         };
         numberedScore.querySelector('button').onclick = () => { // 转数字谱
             const note = ["1", "#1", "2", "#2", "3", "4", "#4", "5", "#5", "6", "#6", "7"];

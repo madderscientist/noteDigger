@@ -43,16 +43,22 @@ class aMeasure {
 class eMeasure extends aMeasure {
     /**
      * 构造一个有位置信息的小节
-     * @param {Number} id 小节号
+     * @param {Number | eMeasure} id 小节号 或 eMeasure对象（复制构造）
      * @param {Number} start 小节开始时间 单位ms
      * @param {Number | aMeasure} beatNum 
      * @param {Number} beatUnit 
      * @param {Number} interval 
      */
     constructor(id = 0, start = 0, beatNum, beatUnit, interval) {
-        super(beatNum, beatUnit, interval);
-        this.id = id;       // 第几小节
-        this.start = start; // 开始的时间 单位ms
+        if(typeof id === 'number') {
+            super(beatNum, beatUnit, interval);
+            this.id = id;       // 第几小节
+            this.start = start; // 开始的时间 单位ms
+        } else {
+            super(id);
+            this.id = id.id;
+            this.start = id.start;
+        }
     }
     /**
      * 基于某个小节构造一个新的小节
@@ -123,7 +129,8 @@ class Beats extends Array {
         let attr = timeMode ? 'start' : 'id';
         for (let i = this.length - 1; i >= 0; i--) {
             if (this[i][attr] <= at) {
-                return this[Symbol.iterator](at, i);
+                let id = timeMode ? this[i].id + ((at - this[i].start) / this[i].interval) | 0 : at;
+                return this[Symbol.iterator](id, i);
             }
         } return {
             next: () => ({ done: true })
@@ -213,5 +220,16 @@ class Beats extends Array {
             if (this[i][attr] <= at) break;
             this[i].id++; // 后面的都后移一格
         } this.check();
+    }
+    /**
+     * 拷贝数据 用户撤销恢复
+     * @param {Beats} beatArray 
+     * @returns {Beats} this
+     */
+    copy(beatArray) {
+        this.length = beatArray.length;
+        for (let i = beatArray.length - 1; i >= 0; i--) {
+            this[i] = new eMeasure(beatArray[i]);
+        } return this;
     }
 }

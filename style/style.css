@@ -181,6 +181,9 @@ button {
     background-color: rgb(60, 87, 221);
 }
 /* 下方标签 */
+.labeled {
+    position: relative;
+}
 .labeled::after {
     content: attr(data-tooltip);
     font-size: 12px;

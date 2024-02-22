@@ -486,17 +486,6 @@ function App() {
             }
         },
     };
-    // 撤销相关
-    this.snapshot = new Snapshot(16, {
-        midi: JSON.stringify(this.MidiAction.midi),     // 音符移动、长度改变、channel改变后
-        channel: JSON.stringify(this.MidiAction.channelDiv.channel) // 音轨改变序号、增删、修改参数后
-    });
-    this.snapshot.save = () => {
-        this.snapshot.add({
-            channel: JSON.stringify(this.MidiAction.channelDiv.channel),
-            midi: JSON.stringify(this.MidiAction.midi)
-        });
-    };
     this.MidiPlayer = {
         priorT: 1000 / 59,      // 实际稳定在60帧，波动极小
         realT: 1000 / 59,
@@ -904,6 +893,8 @@ function App() {
     </div>`;
                     const Pannel = tempDiv.firstElementChild;
                     document.body.insertBefore(Pannel, document.body.firstChild);
+                    Pannel.tabIndex = 0;
+                    Pannel.focus();
                     function close() { Pannel.remove(); }
                     const inputs = Pannel.querySelectorAll('[name="ui-ask"]');
                     const btns = Pannel.getElementsByTagName('button');
@@ -912,10 +903,10 @@ function App() {
                     inputs[2].value = m.bpm;        // bpm
                     btns[0].onclick = close;
                     btns[1].onclick = () => {
-                        if(!inputs[4].checked) {     // 后面不变
+                        if (!inputs[4].checked) {     // 后面不变
                             bs.setMeasure(m.id + 1, false); // 让下一个生成实体
                         }
-                        if(inputs[3].checked) {     // 和上一小节一样
+                        if (inputs[3].checked) {     // 和上一小节一样
                             let last = bs.getMeasure(m.id - 1, false);
                             m.copy(last);
                         } else {
@@ -945,7 +936,7 @@ function App() {
         ]),
         belongID: -1,   // 小节线前一个小节的id
         moveCatch: (e) => {     // 画布上光标移动到小节线上可以进入调整模式
-            if(e.offsetY < this.timeBar.height >> 1) {
+            if (e.offsetY < this.timeBar.height >> 1) {
                 this.timeBar.classList.remove('selecting');
                 this.BeatBar.belongID = -1;
                 return;
@@ -953,7 +944,7 @@ function App() {
             let timeNow = (e.offsetX + this.scrollX) * this.TperP;
             let m = this.BeatBar.beats.getMeasure(timeNow, true);
             let threshold = 6 * this.TperP;
-            if(timeNow - m.start < threshold) {
+            if (timeNow - m.start < threshold) {
                 this.BeatBar.belongID = m.id - 1;
                 this.timeBar.classList.add('selecting');
             } else if (m.start + m.interval - timeNow < threshold) {
@@ -964,6 +955,19 @@ function App() {
                 this.timeBar.classList.remove('selecting');
             }
         }
+    };
+    // 撤销相关
+    this.snapshot = new Snapshot(16, {
+        midi: JSON.stringify(this.MidiAction.midi),     // 音符移动、长度改变、channel改变后
+        channel: JSON.stringify(this.MidiAction.channelDiv.channel), // 音轨改变序号、增删、修改参数后
+        beat: JSON.stringify(this.BeatBar.beats)
+    });
+    this.snapshot.save = () => {
+        this.snapshot.add({
+            channel: JSON.stringify(this.MidiAction.channelDiv.channel),
+            midi: JSON.stringify(this.MidiAction.midi),
+            beat: JSON.stringify(this.BeatBar.beats)
+        });
     };
     this.HscrollBar = {     // 配合scroll的滑动条
         track: document.getElementById('scrollbar-track'),
@@ -1013,25 +1017,19 @@ function App() {
         'Ctrl+Z': () => {   // 撤销
             let lastState = this.snapshot.undo();
             if (!lastState) return;
-            if (lastState.midi) {
-                this.MidiAction.midi = JSON.parse(lastState.midi);
-                this.MidiAction.selected = this.MidiAction.midi.filter((obj) => obj.selected);
-            }
-            if (lastState.channel) {
-                this.MidiAction.channelDiv.fromArray(JSON.parse(lastState.channel));
-            }
+            this.MidiAction.midi = JSON.parse(lastState.midi);
+            this.MidiAction.selected = this.MidiAction.midi.filter((obj) => obj.selected);
+            this.MidiAction.channelDiv.fromArray(JSON.parse(lastState.channel));
+            this.BeatBar.beats.copy(JSON.parse(lastState.beat));
             this.MidiAction.updateView();
         },
         'Ctrl+Y': () => {
             let nextState = this.snapshot.redo();
             if (!nextState) return;
-            if (nextState.midi) {
-                this.MidiAction.midi = JSON.parse(nextState.midi);
-                this.MidiAction.selected = this.MidiAction.midi.filter((obj) => obj.selected);
-            }
-            if (nextState.channel) {
-                this.MidiAction.channelDiv.fromArray(JSON.parse(nextState.channel));
-            }
+            this.MidiAction.midi = JSON.parse(nextState.midi);
+            this.MidiAction.selected = this.MidiAction.midi.filter((obj) => obj.selected);
+            this.MidiAction.channelDiv.fromArray(JSON.parse(nextState.channel));
+            this.BeatBar.beats.copy(JSON.parse(nextState.beat));
             this.MidiAction.updateView();
         },
         'Ctrl+A': () => {           // 选中该通道的所有音符
@@ -1402,6 +1400,7 @@ function App() {
             const data = {
                 midi: this.MidiAction.midi,
                 channel: this.MidiAction.channelDiv.channel,
+                beat: this.BeatBar.beats,
                 dt: this.dt,
                 A4: this.Keyboard.freqTable.A4,
                 name: this.AudioPlayer.name
@@ -1412,6 +1411,7 @@ function App() {
             this.MidiAction.midi = obj.midi;
             this.MidiAction.selected = this.MidiAction.midi.filter((obj) => obj.selected);
             this.MidiAction.channelDiv.fromArray(obj.channel);
+            this.BeatBar.beats.copy(obj.beat);
             this.dt = obj.dt;
             this.Keyboard.freqTable.A4 = obj.A4;
             this.Spectrogram.spectrogram = data[1];
@@ -1574,17 +1574,21 @@ function App() {
     this.timeBar.addEventListener('mousedown', (e) => {
         switch (e.button) {
             case 0:
-                if(this.BeatBar.belongID > -1) {
+                if (this.BeatBar.belongID > -1) {
+                    let _anyAction = false;     // 是否存档
                     this.timeBar.removeEventListener('mousemove', this.BeatBar.moveCatch);
                     let m = this.BeatBar.beats.setMeasure(this.BeatBar.belongID, false);
                     let startAt = m.start * this.PperT;
                     let setMeasure = (e2) => {
+                        _anyAction = true;
                         m.interval = Math.max(100, (e2.offsetX + this.scrollX - startAt) * this.TperP);
                         this.BeatBar.beats.check();
                     };
                     let removeEvents = () => {
                         this.timeBar.removeEventListener('mousemove', setMeasure);
                         this.timeBar.addEventListener('mousemove', this.BeatBar.moveCatch);
+                        document.removeEventListener('mouseup', removeEvents);
+                        if(_anyAction) this.snapshot.save();
                     };
                     this.timeBar.addEventListener('mousemove', setMeasure);
                     document.addEventListener('mouseup', removeEvents);

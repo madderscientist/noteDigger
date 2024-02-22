@@ -153,8 +153,10 @@ class mtrk {
      */
     sort() {
         this.events.sort((a, b) => {
-            if (a.ticks == b.ticks && a.code == b.code && a.code == 9) return a.value[1] - b.value[1];
-            return a.ticks - b.ticks;
+            if(a.ticks == b.ticks) {
+                if(a.code == b.code && a.code == 9) return a.value[1] - b.value[1];
+                return b.code - a.code;
+            } return a.ticks - b.ticks;
         });
     }
     /**
