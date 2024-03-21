@@ -31,6 +31,7 @@ function App() {
                 -2 * h, -3 * h, -2 * h, -2 * h, -2 * h
             ]);
             this.keyboard.ctx.font = `${h + 2}px Arial`;
+            this.spectrum.ctx.font = `${h}px Arial`;
         }
     });
     this.ynum = 84;     // 一共84个按键
@@ -956,6 +957,28 @@ function App() {
             }
         }
     };
+    // 小插件对象
+    this.pitchNameDisplay = {   // 音名显示 配合设置中的checkbox使用
+        _showPitchName: null,
+        showPitchName: (ifshow) => {
+            if (ifshow) {
+                this.spectrum.addEventListener('mousemove', this._trackMouseX);
+                this.pitchNameDisplay._showPitchName = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
+            } else {
+                this.spectrum.removeEventListener('mousemove', this._trackMouseX);
+                this.pitchNameDisplay._showPitchName = null;
+            }
+        },
+        update: () => {
+            if (this.pitchNameDisplay._showPitchName) {
+                this.spectrum.ctx.fillStyle = 'black';
+                this.spectrum.ctx.fillText(
+                    this.pitchNameDisplay._showPitchName[this.Keyboard.highlight % 12],
+                    this._mouseX - this._height,
+                    this.spectrum.height - (this.Keyboard.highlight - 24) * this._height + this.scrollY - (this._height >> 3));
+            }
+        }
+    };
     // 撤销相关
     this.snapshot = new Snapshot(16, {
         midi: JSON.stringify(this.MidiAction.midi),     // 音符移动、长度改变、channel改变后
@@ -1123,7 +1146,7 @@ function App() {
         this.timeBar.width = this.spectrum.width;
         document.getElementById('play-btn').style.width = this.keyboard.width + 'px';
         // 改变画布长宽之后，设置的值会重置，需要重新设置
-        this.spectrum.ctx.lineWidth = 1;
+        this.spectrum.ctx.lineWidth = 1; this.spectrum.ctx.font = `${this._height}px Arial`;
         this.keyboard.ctx.lineWidth = 1; this.keyboard.ctx.font = `${this._height + 2}px Arial`;
         this.timeBar.ctx.font = '14px Arial';
         // 更新滑动条大小
@@ -1173,12 +1196,16 @@ function App() {
         this.Keyboard.update();
         this.MidiAction.update();
         this.TimeBar.update();  // 必须在Spectrogram后更新，因为涉及时间指示的绘制
+        this.pitchNameDisplay.update();
     };
     this.trackMouseY = (e) => { // onmousemove
         this.mouseY = e.offsetY;
     };
-    this.trackMouseX = (e) => {
+    this.trackMouseX = (e) => {     // 用于框选，会更新frameX值
         this.mouseX = e.offsetX;
+    };
+    this._trackMouseX = (e) => {    // 给this.Spectrogram.showPitchName专用的，只会更新_mouseX
+        this._mouseX = e.offsetX;
     };
     /**
      * 动画循环绘制
@@ -1588,7 +1615,7 @@ function App() {
                         this.timeBar.removeEventListener('mousemove', setMeasure);
                         this.timeBar.addEventListener('mousemove', this.BeatBar.moveCatch);
                         document.removeEventListener('mouseup', removeEvents);
-                        if(_anyAction) this.snapshot.save();
+                        if (_anyAction) this.snapshot.save();
                     };
                     this.timeBar.addEventListener('mousemove', setMeasure);
                     document.addEventListener('mouseup', removeEvents);
