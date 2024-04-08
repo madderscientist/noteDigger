@@ -18,7 +18,7 @@ var _midiExport = {
             close();
         };
         btns[1].onclick = () => {
-            const midi = _midiExport.keepTime();console.log(midi);
+            const midi = _midiExport.keepTime();
             bSaver.saveArrayBuffer(midi.export(1), midi.name + '.mid');
             close();
         };
