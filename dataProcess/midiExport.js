@@ -18,7 +18,7 @@ var _midiExport = {
             close();
         };
         btns[1].onclick = () => {
-            const midi = _midiExport.keepTime();
+            const midi = _midiExport.keepTime();console.log(midi);
             bSaver.saveArrayBuffer(midi.export(1), midi.name + '.mid');
             close();
         };
@@ -41,7 +41,7 @@ var _midiExport = {
         }
         for (const nt of app.MidiAction.midi) {
             const midint = nt.y + 24;
-            mts[nt.ch].events.push(midiEvent.note(nt.x1, nt.x2 - nt.x1, midint, mts[nt.ch]._volume));
+            mts[nt.ch].addEvent(midiEvent.note(nt.x1, nt.x2 - nt.x1, midint, mts[nt.ch]._volume));
         } return newMidi;
     },
     beatAlign() {
