@@ -569,6 +569,8 @@ function App() {
                     a.onloadeddata = null;  // 一次性 防止多次构造
                 };
                 a.onerror = (e) => {    // 如果正常分析，是用不到这个回调的，因为WebAudioAPI读取就会报错。但上传已有结果不会再分析
+                    // 发现一些如mov格式的视频，不在video/的支持列表中，用.readAsDataURL转为base64后无法播放，会触发这个错误
+                    // 改正方法是用URL.createObjectURL(file)生成一个blob地址而不是解析为base64
                     reject(e);
                     this.event.dispatchEvent(new Event('fileerror'));
                 };
@@ -581,6 +583,11 @@ function App() {
                         A.EQ.source.disconnect();
                         for (const filter of A.EQ.filter) filter.disconnect();
                     }
+                }
+                // 配合传参为URL.createObjectURL(file)使用，防止内存泄露
+                if(this.AudioPlayer.audio) {
+                    URL.revokeObjectURL(this.AudioPlayer.audio.src);
+                    console.log('revokeObjectURL')
                 }
                 this.AudioPlayer.audio = a;
             });
@@ -1294,7 +1301,7 @@ function App() {
             }
         },
         onfile: (file) => {     // 依赖askUI.css
-            if (!file.type.startsWith('audio/')) {
+            if (!(file.type.startsWith('audio/') || file.type.startsWith('video/'))) {
                 this.event.dispatchEvent(new Event('fileerror'));
                 return;
             }
@@ -1406,12 +1413,16 @@ function App() {
                             decodedData, tNum, A4, channel, 8192    // 可以考虑加一个“精度”选项
                         ).then((v) => {
                             this.Spectrogram.spectrogram = v;
-                            fileReader.onload = (e) => {
-                                // 设置音频源 缓存到浏览器
-                                this.AudioPlayer.createAudio(e.target.result);
-                            }; fileReader.readAsDataURL(file);
+                            // 设置音频源 缓存到浏览器
+                            // fileReader.onload = (e) => {
+                            //     this.AudioPlayer.createAudio(e.target.result);
+                            // }; fileReader.readAsDataURL(file);
+
+                            // 上面的方法将mov文件decode之后变成base64，audio无法播放。而用URL.createObjectURL(file)就可以
+                            this.AudioPlayer.createAudio(URL.createObjectURL(file));
                         });
                     }).catch((e) => {
+                        alert(e);
                         this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));  // 关闭进度条
                         this.event.dispatchEvent(new Event('fileerror'));
                     });

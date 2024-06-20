@@ -237,7 +237,8 @@
     // ==== 文件界面 ==== //
     function _uploadFile() {
         const input = document.createElement('input');
-        input.type = 'file'; input.accept = 'audio/*';
+        input.type = 'file';    // 音频和视频都可以，但是quicktime系列需要单独处理
+        input.accept = 'audio/*,video/*,.mov';
         input.onchange = function () {
             app.Analyser.onfile(this.files[0]);
         }; input.click();
