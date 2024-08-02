@@ -8,6 +8,7 @@ function App() {
     this.keyboard.ctx = this.keyboard.getContext('2d', { alpha: false, desynchronized: true });
     this.timeBar = document.getElementById('timeBar');
     this.timeBar.ctx = this.timeBar.getContext('2d', { alpha: false, desynchronized: true });
+    this.midiMode = false;
     this._width = 5;    // 每格的宽度
     Object.defineProperty(this, 'width', {
         get: function () { return this._width; },
@@ -35,7 +36,16 @@ function App() {
         }
     });
     this.ynum = 84;     // 一共84个按键
-    this.xnum = 0;      // 时间轴的最大长度 更新时要更新this.HscrollBar.refreshSize();
+    this._xnum = 0;     // 时间轴的最大长度
+    Object.defineProperty(this, 'xnum', {   // midi模式下需要经常改变此值，故特设setter
+        get: function () { return this._xnum; },
+        set: function (n) {
+            if (n <= 0) return;
+            this._xnum = n;
+            this.HscrollBar.refreshSize();  // 刷新横向滑动条
+            this.idXend = Math.min(this._xnum, Math.ceil((this.scrollX + this.spectrum.width) / this._width));
+        }
+    });
     this.scrollX = 0;   // 视野左边和世界左边的距离
     this.scrollY = 0;   // 视野下边和世界下边的距离
     this.idXstart = 0;  // 开始的X序号
@@ -131,10 +141,9 @@ function App() {
                 this.parent.xnum = 0;
             } else {
                 this._spectrogram = s;
-                this.parent.xnum = s.length;
+                this.parent.xnum = s.length;    // 触发HscrollBar.refreshSize
                 this.parent.scroll2(0, (this.parent._height * this.parent.ynum - this.parent.spectrum.height) >> 1);  // 垂直方向上，视野移到中间
             }
-            this.parent.HscrollBar.refreshSize();
         },
         get Alpha() {
             return parseInt(this.mask.substring(7), 16);
@@ -213,6 +222,15 @@ function App() {
                 if (nt.x2 < this.idXstart) continue;
                 if (nt.y < this.idYstart || nt.y >= this.idYend) continue;
                 channel[nt.ch].push(nt);
+            }
+            // midi模式下，视野要比音符宽一页，或超出视野半页
+            if(this.midiMode) {
+                const currentLen = this.Spectrogram.spectrogram.length;
+                let apage = this.spectrum.width / this._width;
+                let minLen = (m.length ? m[m.length - 1].x2 : 0) + apage * 1.5 | 0;
+                let viewLen = this.idXstart + apage | 0;    // 如果视野在很外面，需要保持视野
+                if(viewLen > minLen) minLen = viewLen;
+                if(minLen != currentLen) this.Spectrogram.spectrogram.length = minLen;   // length触发audio.duration和this.xnum
             }
         },
         update: () => {     // 按照insight绘制音符
@@ -400,7 +418,7 @@ function App() {
             // 为了支持在鼠标操作的时候能滑动，记录绝对位置
             m._tempdx = m._tempdy = 0;
             const x = m.clickXid = ((e.offsetX + this.scrollX) / this._width) | 0;
-            if (x >= this.xnum) {   // 越界
+            if (x >= this._xnum) {   // 越界
                 m.clearSelected(); return;
             }
             const y = m.clickYid = this.Keyboard.highlight - 24;
@@ -408,7 +426,7 @@ function App() {
             let n = null;
             for (const ch of m.insight) {
                 // 每层挑选左侧最靠近的（如果有多个）
-                let distance = this._width * this.xnum;
+                let distance = this._width * this._xnum;
                 for (const nt of ch) {  // 由于来自midi，因此每个音轨内部是有序的
                     let dis = x - nt.x1;
                     if (dis < 0) break;
@@ -544,13 +562,14 @@ function App() {
         repeat: true,       // 是否区间循环
         _crossFlag: false,  // 上一时刻是否在重复区间终点左侧
         EQfreq: [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000],
+        // midiMode下url为duration
         createAudio: (url) => {
             return new Promise((resolve, reject) => {
-                const a = new Audio(url);
+                const a = this.midiMode ? new FakeAudio(url) : new Audio(url);
                 a.loop = false;
                 a.volume = parseFloat(document.getElementById('audiovolumeControl').value);
                 a.ondurationchange = () => {
-                    let ms = a.duration * 1000
+                    let ms = a.duration * 1000;
                     this.AudioPlayer.durationString = this.TimeBar.msToClockString(ms);
                     this.BeatBar.beats.maxTime = ms;
                 };
@@ -559,14 +578,21 @@ function App() {
                     this.AudioPlayer.stop();
                 };
                 a.onloadeddata = () => {
-                    this.AudioPlayer.setEQ();
-                    if (this.audioContext.state == 'suspended') this.audioContext.resume().then(() => a.pause());
+                    const ap = this.AudioPlayer;
+                    if (!this.midiMode) {
+                        ap.setEQ();
+                        if (this.audioContext.state == 'suspended') this.audioContext.resume().then(() => a.pause());
+                        document.title = ap.name + "~扒谱";
+                    } else {
+                        document.title = ap.name;
+                    }
                     a.playbackRate = document.getElementById('speedControl').value; // load之后会重置速度
-                    document.title = this.AudioPlayer.name + "~扒谱";
                     this.time = 0;
-                    resolve();
+                    resolve(a);
                     this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));  // 通知完成
                     a.onloadeddata = null;  // 一次性 防止多次构造
+                    ap.play_btn.firstChild.textContent = this.TimeBar.msToClockString(this.time);
+                    ap.play_btn.lastChild.textContent = ap.durationString;
                 };
                 a.onerror = (e) => {    // 如果正常分析，是用不到这个回调的，因为WebAudioAPI读取就会报错。但上传已有结果不会再分析
                     // 发现一些如mov格式的视频，不在video/的支持列表中，用.readAsDataURL转为base64后无法播放，会触发这个错误
@@ -574,22 +600,7 @@ function App() {
                     reject(e);
                     this.event.dispatchEvent(new Event('fileerror'));
                 };
-                const A = this.AudioPlayer.audio;
-                if (A) {
-                    A.pause();
-                    A.onerror = null;   // 防止触发fileerror
-                    A.src = '';
-                    if (A.EQ) {
-                        A.EQ.source.disconnect();
-                        for (const filter of A.EQ.filter) filter.disconnect();
-                    }
-                }
-                // 配合传参为URL.createObjectURL(file)使用，防止内存泄露
-                if(this.AudioPlayer.audio) {
-                    URL.revokeObjectURL(this.AudioPlayer.audio.src);
-                    console.log('revokeObjectURL')
-                }
-                this.AudioPlayer.audio = a;
+                this.AudioPlayer.setAudio(a);
             });
         },
         update: () => {
@@ -655,6 +666,21 @@ function App() {
                 })
             };
             last.connect(this.audioContext.destination);
+        },
+        setAudio: (newAudio) => {
+            const A = this.AudioPlayer.audio;
+            if (A) {
+                A.pause();
+                A.onerror = null;   // 防止触发fileerror
+                A.src = '';
+                if (A.EQ) {
+                    A.EQ.source.disconnect();
+                    for (const filter of A.EQ.filter) filter.disconnect();
+                }
+                // 配合传参为URL.createObjectURL(file)使用，防止内存泄露
+                URL.revokeObjectURL(this.AudioPlayer.audio.src);
+            }
+            this.AudioPlayer.audio = newAudio;
         }
     };
     this.Keyboard = {
@@ -1011,7 +1037,7 @@ function App() {
             const moveThumb = (event) => {
                 let currentX = event.clientX - startX + thumbLeft;
                 let maxThumbLeft = track.offsetWidth - thumb.offsetWidth;
-                let maxScrollX = this._width * this.xnum - this.spectrum.width;
+                let maxScrollX = this._width * this._xnum - this.spectrum.width;
                 this.scroll2(currentX / maxThumbLeft * maxScrollX, this.scrollY);
             }
             const stopMoveThumb = () => {
@@ -1025,19 +1051,19 @@ function App() {
             e.stopPropagation();
             const thumb = this.HscrollBar.thumb;
             const track = this.HscrollBar.track;
-            let maxScrollX = this._width * this.xnum - this.spectrum.width;
+            let maxScrollX = this._width * this._xnum - this.spectrum.width;
             let maxThumbLeft = track.offsetWidth - thumb.offsetWidth;
             let p = (e.offsetX - (thumb.offsetWidth >> 1)) / maxThumbLeft;  // nnd 减法优先级比位运算高
             this.scroll2(p * maxScrollX, this.scrollY);
         },
         refreshPosition: () => {
-            let all = this._width * this.xnum - this.spectrum.width;
+            let all = this._width * this._xnum - this.spectrum.width;
             let pos = (this.HscrollBar.track.offsetWidth - this.HscrollBar.thumb.offsetWidth) * this.scrollX / all;
             this.HscrollBar.thumb.style.left = pos + 'px';
         },
-        refreshSize: () => {    // 需要在this.xnum this.width改变之后调用
+        refreshSize: () => {    // 需要在this.xnum this.width改变之后调用 在二者的setter中调用
             this.HscrollBar.track.style.display = 'block';
-            let p = Math.min(1, this.spectrum.width / (this._width * this.xnum));   // 由于有min存在所以xnum即使为零也能工作
+            let p = Math.min(1, this.spectrum.width / (this._width * this._xnum));   // 由于有min存在所以xnum即使为零也能工作
             let nw = p * this.HscrollBar.track.offsetWidth;
             this.HscrollBar.thumb.style.width = Math.max(nw, 10) + 'px';    // 限制最小宽度
         }
@@ -1167,11 +1193,11 @@ function App() {
      * @param {Number} y 新视野下边和世界下边的距离
      */
     this.scroll2 = (x = this.scrollX, y = this.scrollY) => {
-        this.scrollX = Math.max(0, Math.min(x, this._width * this.xnum - this.spectrum.width));
+        this.scrollX = Math.max(0, Math.min(x, this._width * this._xnum - this.spectrum.width));
         this.scrollY = Math.max(0, Math.min(y, this._height * this.ynum - this.spectrum.height));
         this.idXstart = (this.scrollX / this._width) | 0;
         this.idYstart = (this.scrollY / this._height) | 0;
-        this.idXend = Math.min(this.xnum, Math.ceil((this.scrollX + this.spectrum.width) / this._width));
+        this.idXend = Math.min(this._xnum, Math.ceil((this.scrollX + this.spectrum.width) / this._width));
         this.idYend = Math.min(this.ynum, Math.ceil((this.scrollY + this.spectrum.height) / this._height));
         this.rectXstart = this.idXstart * this._width - this.scrollX;
         this.rectYstart = this.spectrum.height - this.idYstart * this._height + this.scrollY;   // 画图的y从左上角开始
@@ -1301,7 +1327,10 @@ function App() {
             }
         },
         onfile: (file) => {     // 依赖askUI.css
-            if (!(file.type.startsWith('audio/') || file.type.startsWith('video/'))) {
+            let midimode = file == void 0;  // 在确认后才能this.midiMode=midimode
+            if (midimode) {      // 不传则说明是midi编辑器模式
+                file = { name: "MIDI编辑器模式" };
+            } else if (!(file.type.startsWith('audio/') || file.type.startsWith('video/'))) {
                 this.event.dispatchEvent(new Event('fileerror'));
                 return;
             }
@@ -1310,20 +1339,21 @@ function App() {
             }
             this.event.dispatchEvent(new Event('fileui'));
             let tempDiv = document.createElement('div');
+            // 为了不影响下面的事件绑定，midi模式下用display隐藏
             tempDiv.innerHTML = `
             <div class="request-cover">
-                <div class="card hvCenter"><label class="title">${file.name}</label>&nbsp;&nbsp;<button class="ui-cancel">使用已有结果</button>
+                <div class="card hvCenter"><label class="title">${file.name}</label>&nbsp;&nbsp;<button class="ui-cancel"${midimode ? ' style="display:none;"' : ''}>使用已有结果</button>
                     <div class="layout"><span>每秒的次数：</span><input type="number" name="ui-ask" value="20" min="1" max="100"></div>
                     <div class="layout"><span>标准频率A4=</span><input type="number" name="ui-ask" value="440" step="0.1" min="55"></div>
-                    <div class="layout">分析声道：</div>
-                    <div class="layout">
+                    <div class="layout"${midimode ? ' style="display:none;"' : ''}>分析声道：</div>
+                    <div class="layout"${midimode ? ' style="display:none;"' : ''}>
                         <input type="radio" name="ui-ask" value="4" checked>Stereo
                         <input type="radio" name="ui-ask" value="2">L+R
                         <input type="radio" name="ui-ask" value="3">L-R
                         <input type="radio" name="ui-ask" value="0">L
                         <input type="radio" name="ui-ask" value="1">R
                     </div>
-                    <div class="layout"><button class="ui-cancel">取消</button><button class="ui-confirm">解析</button></div>
+                    <div class="layout"><button class="ui-cancel">取消</button><button class="ui-confirm">${midimode ? '确认' : '解析'}</button></div>
                 </div>
             </div>`;
             this.AudioPlayer.name = file.name;
@@ -1353,7 +1383,7 @@ function App() {
                 }; input.click();
             };
             btns[1].onclick = () => {
-                close(); this.AudioPlayer.audio.src = '';
+                close();
                 this.event.dispatchEvent(new Event('filecancel'));  // 为了恢复drag功能
             };
             btns[2].onclick = () => {
@@ -1369,6 +1399,41 @@ function App() {
                     }
                 }
                 close();
+                this.midiMode = midimode;
+                //==== midi模式 ====//
+                if (midimode) {
+                    // 在Anaylse中的设置全局的
+                    this.dt = 1000 / tNum;
+                    this.TperP = this.dt / this._width; this.PperT = this._width / this.dt;
+                    if (this.Keyboard.freqTable.A4 != A4) this.Keyboard.freqTable.A4 = A4;
+                    let l = Math.ceil((this.spectrum.width << 1) / this.width);   // 视野外还有一面
+                    // 一个怎么取值都返回0的东西，充当频谱
+                    this.Spectrogram.spectrogram = new Proxy({
+                        parent: this,
+                        spectrogram: new Uint8Array(this.ynum).fill(0),
+                        _length: l,
+                        get length() { return this._length; },
+                        set length(l) { // 只要改变频谱的长度就可以改变时长 长度改变在MidiAction.updateView中
+                            if (l < 0) return;
+                            const p = this.parent;
+                            this._length = p.xnum = l;
+                            p.AudioPlayer.audio.duration = l / tNum;
+                            p.AudioPlayer.play_btn.lastChild.textContent = p.AudioPlayer.durationString;
+                        }
+                    }, {
+                        get(obj, prop) {    // 方括号传递的总是string
+                            if (isNaN(Number(prop))) return obj[prop];
+                            return obj.spectrogram;
+                        },
+                        set(obj, prop, value) {
+                            if (isNaN(Number(prop))) obj[prop] = value;
+                        }
+                    });
+                    // 假音频 需要设置this.midiMode=true;
+                    this.AudioPlayer.createAudio(l / tNum);
+                    return;
+                }
+                //==== 音频文件分析 ====//
                 this.event.dispatchEvent(new Event('fileaccept'));
                 // 打开另一个ui analyse加入回调以显示进度
                 let tempDiv = document.createElement('div');
@@ -1409,18 +1474,18 @@ function App() {
                 fileReader.onload = (e) => {
                     // 解码音频文件为音频缓冲区
                     this.audioContext.decodeAudioData(e.target.result).then((decodedData) => {
-                        this.Analyser.analyse(
+                        return this.Analyser.analyse(
                             decodedData, tNum, A4, channel, 8192    // 可以考虑加一个“精度”选项
-                        ).then((v) => {
-                            this.Spectrogram.spectrogram = v;
-                            // 设置音频源 缓存到浏览器
-                            // fileReader.onload = (e) => {
-                            //     this.AudioPlayer.createAudio(e.target.result);
-                            // }; fileReader.readAsDataURL(file);
+                        );
+                    }).then((v) => {
+                        this.Spectrogram.spectrogram = v;
+                        // 设置音频源 缓存到浏览器
+                        // fileReader.onload = (e) => {
+                        //     this.AudioPlayer.createAudio(e.target.result);
+                        // }; fileReader.readAsDataURL(file);
 
-                            // 上面的方法将mov文件decode之后变成base64，audio无法播放。而用URL.createObjectURL(file)就可以
-                            this.AudioPlayer.createAudio(URL.createObjectURL(file));
-                        });
+                        // 上面的方法将mov文件decode之后变成base64，audio无法播放。而用URL.createObjectURL(file)就可以
+                        return this.AudioPlayer.createAudio(URL.createObjectURL(file));
                     }).catch((e) => {
                         alert(e);
                         this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));  // 关闭进度条
@@ -1599,7 +1664,7 @@ function App() {
     this.timeBar.addEventListener('dblclick', (e) => {
         if (this.AudioPlayer.audio.readyState != 4) return;
         this.AudioPlayer.stop();
-        let position = (e.offsetX + this.scrollX) * this.AudioPlayer.audio.duration / (this.xnum * this._width)
+        let position = (e.offsetX + this.scrollX) * this.AudioPlayer.audio.duration / (this._xnum * this._width)
         this.AudioPlayer.start(position * 1000);
     });
     this.timeBar.addEventListener('contextmenu', (e) => {

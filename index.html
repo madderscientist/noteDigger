@@ -17,6 +17,7 @@
     <script src="./beatBar.js"></script>
     <script src="./saver.js"></script>
     <script src="./dataProcess/midiExport.js"></script>
+    <script src="./fakeAudio.js"></script>
     <script src="./app.js"></script>
     <link rel="stylesheet" href="./style/style.css">
     <link rel="stylesheet" href="./style/askUI.css">
@@ -98,6 +99,7 @@
     <ul class="paddingbox niceScroll btn-ul" id="filePannel">
         <li>导入音频</li>
         <li>导入midi</li>
+        <li>MIDI编辑器模式</li>
         <li>导出当前进度</li>
         <li>导出为midi</li>
         <li id="numberedScore">
@@ -214,6 +216,10 @@
     // EQ的UI设置
     function iniEQUI({ detail }) {
         if (detail >= 0) return;
+        if (app.midiMode) {
+            EQcontrol.innerHTML = '<h5>MIDI模式下没有EQ哦</h5>';
+            return;
+        }
         EQcontrol.innerHTML = '';
         const filters = app.AudioPlayer.audio.EQ.filter;
         function controlfilter() {
@@ -231,7 +237,7 @@
             r.addEventListener('input', controlfilter);
             EQcontrol.appendChild(r);
             LableRange.new(r).reset();
-        } app.event.removeEventListener('progress', iniEQUI);
+        }
     } app.event.addEventListener('progress', iniEQUI);
 
     // ==== 文件界面 ==== //
@@ -297,12 +303,15 @@
             }; input.click();
         };
         lis[2].onclick = () => {
+            app.Analyser.onfile();
+        }
+        lis[3].onclick = () => {
             if (!app.Spectrogram._spectrogram) {
                 alert("请先导入音频！");
                 return;
             } app.Saver.write();
         }
-        lis[3].onclick = () => {    // midi导出
+        lis[4].onclick = () => {    // midi导出
             if (!app.Spectrogram._spectrogram) {
                 alert("请先导入音频！");
                 return;

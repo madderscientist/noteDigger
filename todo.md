@@ -132,3 +132,19 @@ filter.connect(audioContext.destination);
 仍然可以通过audioElement控制整体的播放。需要注意audioContext的状态：
 如果是suspend，则需要resume(); audioContext刚创建就是这个状态，此时调用audioElement.play()无效。
 但只要有osc被调用了start()，audioContext就会变成running。
+
+## 不依赖音频的空白画布，即midi编辑器模式
+由于使用了扒谱架构，同样需要确定时间精度（和一般midi编辑器不一样），因此需要复用onfile逻辑。
+思想是替代Audio类，整理一下需要实现的功能：
+- AudioPlayer.update: 用到了audio.readyState，audio.paused，audio.cuttentTime（更新app.time、重复区间）
+- audio.readyState判断是否可以播放
+- 设置audio.currentTime可以指定位置播放
+- 设置audio.playbackRate可以指定播放速度
+- 还有一些handler在createAudio中。
+
+因此有了fakeAudio.js。
+
+其次是Spectrogram._spectrogram，需要全部置为零（供绘制用）此外，查询Spectrogram._spectrogram以获取是否已经分析（onfile中据此判断是工作区否有文件，鼠标事件据此判断是否绘制音符）
+于是设计了一个proxy，有length属性，用[][]访问总是零。
+
+FakeAudio和这个Proxy的连接点在于时长，midi编辑器模式下总时长是会变的。于是借助setter完成了两者的数据关联。同时xnum也要能改变，于是也改为了setter。
