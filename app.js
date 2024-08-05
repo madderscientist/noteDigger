@@ -1296,7 +1296,7 @@ function App() {
             var lastFrame = performance.now();
             switch (channel) {
                 case 0: return await a(audioBuffer.getChannelData(0));
-                case 1: return await a(audioBuffer.getChannelData(1));
+                case 1: return await a(audioBuffer.getChannelData(audioBuffer.numberOfChannels - 1));
                 case 2: {   // L+R
                     let length = audioBuffer.length;
                     const timeDomain = new Float32Array(audioBuffer.getChannelData(0));
@@ -1314,15 +1314,20 @@ function App() {
                     } return await a(timeDomain);
                 }
                 default: {  // fft(L) + fft(R)
-                    progressTrans = (x) => x / 2;
-                    const l = await a(audioBuffer.getChannelData(0));
-                    progressTrans = (x) => 0.5 + x / 2;
-                    const r = await a(audioBuffer.getChannelData(1));
-                    for (let i = 0; i < l.length; i++) {
-                        const li = l[i];
-                        for (let j = 0; j < li.length; j++)
-                            li[j] = (li[j] + r[i][j]) * 0.5;
-                    } return l;
+                    if (audioBuffer.numberOfChannels > 1) {
+                        progressTrans = (x) => x / 2;
+                        const l = await a(audioBuffer.getChannelData(0));
+                        progressTrans = (x) => 0.5 + x / 2;
+                        const r = await a(audioBuffer.getChannelData(1));
+                        for (let i = 0; i < l.length; i++) {
+                            const li = l[i];
+                            for (let j = 0; j < li.length; j++)
+                                li[j] = (li[j] + r[i][j]) * 0.5;
+                        } return l;
+                    } else {
+                        progressTrans = (x) => x;
+                        return await a(audioBuffer.getChannelData(0));
+                    }
                 }
             }
         },
@@ -1394,7 +1399,7 @@ function App() {
                 let channel = 4;
                 for (let i = 2; i < 7; i++) {
                     if (params[i].checked) {
-                        channel = params[i].value;
+                        channel = parseInt(params[i].value);
                         break;
                     }
                 }
