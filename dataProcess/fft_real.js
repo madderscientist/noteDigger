@@ -5,25 +5,23 @@ class realFFT {
     /**
      * 位反转数组 最大支持2^16点
      * @param {Number} N 2的正整数幂
-     * @returns {[Uint16Array, Uint8Array]} 根据N的大小决定的位反转结果
+     * @returns {Uint16Array} 位反转序列
      */
     static reverseBits(N) {
         const reverseBits = new Uint16Array(N); // 实际N最大2^15
-        let id = 0;
-        function _fft(offset, step, N) {
-            if (N == 2) {
-                // 由于是实数FFT，偶次为实部，奇次为虚部，故布局为2
-                reverseBits[id++] = offset << 1;
-                reverseBits[id++] = (offset + step) << 1;
-                return;
-            }
-            let step2 = step << 1;
-            N >>= 1;
-            _fft(offset, step2, N);
-            _fft(offset + step, step2, N);
-        }
-        _fft(0, 1, N);
-        return reverseBits;
+        reverseBits[0] = 0;
+        // 计算位数
+        let bits = 15;
+        while ((1 << bits) > N) bits--;
+        // 由于是实数FFT，偶次为实部，奇次为虚部，故最终结果要乘2，所以不是16-bits
+        bits = 15 - bits;
+        for (let i = 1; i < N; i++) {
+            // 基于二分法的位翻转
+            let r = ((i & 0xaaaa) >> 1) | ((i & 0x5555) << 1);
+            r = ((r & 0xcccc) >> 2) | ((r & 0x3333) << 2);
+            r = ((r & 0xf0f0) >> 4) | ((r & 0x0f0f) << 4);
+            reverseBits[i] = ((r >> 8) | (r << 8)) >> bits;
+        } return reverseBits;
     }
     /**
      * 复数乘法

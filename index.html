@@ -29,7 +29,9 @@
 </head>
 
 <!-- 导出需要，和其他文件直接没有依赖关系 -->
-<script src="./midi.js"></script>
+<script src="./midi.js" async></script>
+<!-- 可选的CQT分析 -->
+<script src="./dataProcess/CQT/cqt.js" async></script>
 
 <body class="fc">
     <!-- 上半部分 工具区 -->
@@ -406,6 +408,7 @@
             for (const nt of notes) nt.ch = id;
             app.MidiAction.midi.push(...notes);
             app.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
+            app.MidiAction.updateView();
         }
         btns[0].onclick = () => {   // 重复区间内
             if (!app.Spectrogram._spectrogram) {

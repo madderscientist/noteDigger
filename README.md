@@ -96,10 +96,21 @@
 │  todo.md: 一些设计思路和权衡
 │
 ├─dataProcess
-│      analyser.js: 频域数据分析与简化
-│      fft_real.js: 执行实数FFT获取频域数据
-│      midiExport.js: 对绘制的音符进行近似以导出为足以制谱的midi
-│
+|   │  analyser.js: 频域数据分析与简化
+|   │  fft_real.js: 执行实数FFT获取频域数据
+|   │  midiExport.js: 对绘制的音符进行近似以导出为足以制谱的midi
+|   │
+|   └─CQT
+|       │  cqt.js: 开启worker进行后台CQT
+|       │  cqt.wasm.js: emcc编译的胶水代码
+|       │  cqt.wasm.wasm: emcc编译的wasm
+|       │  cqt_wasm.cpp: wasm源文件
+|       │  cqt_worker.js: 新线程
+|       │
+|       └─.vscode
+|               c_cpp_properties.json: 环境配置
+|               tasks.json: emcc编译命令
+|
 ├─img
 │      github-mark-white.png
 │      logo-small.png
@@ -122,6 +133,12 @@
 ```
 
 ## 重要更新记录
+### 2024 8 29
+引入了理论上更精确的CQT分析。非file协议时（不是双击html文件打开时），当STFT（默认的计算方法）计算完成会在后台自动开启CQT计算，CQT结果将与当前频谱融合（会发现突然频谱变了）。CQT计算非常慢，因此在后台计算以防阻塞，且用C++实现、编译为WASM以提速。<br>
+中途遇到很多坑，记录分布在/dataProcess/CQT的各个文件中，但效果其实并不值得这样的计算量。5分30秒的音频进行双声道CQT分析，需要45秒（从开启worker开始算），和直接进行js版的CQT用时差不多，加速了个寂寞。<br>
+关于CQT的研究，记录在[《CQT：从理论到代码实现》](https://zhuanlan.zhihu.com/p/716574483)。<br>
+此外尝试了“一边分析一边绘制频谱”，试图通过删除进度条达到感官上加速的效果。但是放在主线程造成严重卡顿，放弃。
+
 ### 2024 8 2
 完成了issue2：不导入音频的midi编辑器。点击文件菜单下的“MIDI编辑器模式”就可以进入。<br>
 视野的宽度取决于最后一个音符，模仿的是https://signal.vercel.app/edit。也尝试过自动增加视野，可以一直往右拉，但是这样在播放的时候，开启“自动翻页”会永远停不下来（翻一页就自动拓展宽度）。<br>

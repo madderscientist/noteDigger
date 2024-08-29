@@ -148,3 +148,14 @@ filter.connect(audioContext.destination);
 于是设计了一个proxy，有length属性，用[][]访问总是零。
 
 FakeAudio和这个Proxy的连接点在于时长，midi编辑器模式下总时长是会变的。于是借助setter完成了两者的数据关联。同时xnum也要能改变，于是也改为了setter。
+
+## 去掉等待的动画
+指一边分析一边把频谱绘制出来。改的地方：Array不能初始化好长度，每次应该用push添加元素造成Array.length在增加。每次更新进度条的地方改成频谱赋值。
+这样确实能看到频谱生长出来，但是分析会导致此时的UI操作很卡顿。解决这个问题需要开worker后台计算，每次移交一个时刻的频谱。用了worker就不能双击打开了，不做。
+此外这样意味着音频要先加载，如果出错了，会出现一堆未定义事件。
+所以还是放弃。
+
+## CQT
+CQT太慢了。可以引入worker，后台计算，去掉进度条。或者先计算STFT，然后后台计算CQT。直接用CQT太唐氏了。
+worker不能再双击打开的file协议下用，所以既然用了worker，不如CQT用wasm实现。
+https://github.com/madderscientist/codeRoad/tree/main/TimeFrequency

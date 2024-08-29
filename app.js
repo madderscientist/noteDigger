@@ -142,7 +142,7 @@ function App() {
             } else {
                 this._spectrogram = s;
                 this.parent.xnum = s.length;    // 触发HscrollBar.refreshSize
-                this.parent.scroll2(0, (this.parent._height * this.parent.ynum - this.parent.spectrum.height) >> 1);  // 垂直方向上，视野移到中间
+                this.parent.scroll2();          // 保持位置不变 本来是为了“一边分析一边绘制频谱”而设计的，虽然减少了等待但容易崩而且卡
             }
         },
         get Alpha() {
@@ -589,7 +589,6 @@ function App() {
                     a.playbackRate = document.getElementById('speedControl').value; // load之后会重置速度
                     this.time = 0;
                     resolve(a);
-                    this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));  // 通知完成
                     a.onloadeddata = null;  // 一次性 防止多次构造
                     ap.play_btn.firstChild.textContent = this.TimeBar.msToClockString(this.time);
                     ap.play_btn.lastChild.textContent = ap.durationString;
@@ -977,6 +976,11 @@ function App() {
             }
             let timeNow = (e.offsetX + this.scrollX) * this.TperP;
             let m = this.BeatBar.beats.getMeasure(timeNow, true);
+            if (m == null) {
+                this.BeatBar.belongID = -1;
+                this.timeBar.classList.remove('selecting');
+                return;
+            }
             let threshold = 6 * this.TperP;
             if (timeNow - m.start < threshold) {
                 this.BeatBar.belongID = m.id - 1;
@@ -1258,7 +1262,7 @@ function App() {
     //=========数据解析相关=========//
     this.Analyser = {
         /**
-         * 对audioBuffer执行小波变换 耗时估计会长，实际使用时再看要不要加ui进度指示
+         * 对audioBuffer执行STFT
          * @param {AudioBuffer} audioBuffer 音频缓冲区
          * @param {Number} tNum 一秒几次分析 决定步距
          * @param {Number} channel 选择哪个channel分析 0:left 1:right 2:l+r 3:l-r else:fft(l)+fft(r)
@@ -1269,19 +1273,21 @@ function App() {
             this.dt = 1000 / tNum;
             this.TperP = this.dt / this._width; this.PperT = this._width / this.dt;
             let dN = Math.round(audioBuffer.sampleRate / tNum);
+            if (this.Keyboard.freqTable.A4 != A4) this.Keyboard.freqTable.A4 = A4;   // 更新频率表
+            let progressTrans = (x) => x;   // 如果分阶段执行则需要自定义进度的变换
+
             // 创建分析工具
             var fft = new realFFT(fftPoints); // 8192点在44100采样率下，最低能分辨F#2，但是足矣
-            if (this.Keyboard.freqTable.A4 != A4) this.Keyboard.freqTable.A4 = A4;   // 更新频率表
             var analyser = new NoteAnalyser(audioBuffer.sampleRate / fftPoints, this.Keyboard.freqTable);
-            let progressTrans = (x) => x;   // 如果分阶段执行则需要自定义进度的变换
-            const a = async (t) => { // 对t执行小波变化，并整理为时频谱
+
+            const a = async (t) => { // 对t执行STFT，并整理为时频谱
                 let nFinal = t.length - fftPoints;
                 const result = new Array(((nFinal / dN) | 0) + 1);
                 for (let n = 0, k = 0; n <= nFinal; n += dN) {
                     result[k++] = analyser.analyse(...fft.fft(t, n));
                     // 一帧一次也太慢了。这里固定更新帧率
                     let tnow = performance.now();
-                    if (tnow - lastFrame > 250) {
+                    if (tnow - lastFrame > 200) {
                         lastFrame = tnow;
                         // 打断分析 更新UI 等待下一周期
                         this.event.dispatchEvent(new CustomEvent("progress", {
@@ -1291,7 +1297,8 @@ function App() {
                     }
                 }   // 通知UI关闭的事件分发移到了audio.onloadeddata中
                 return result;
-            }
+            };
+
             await new Promise(resolve => setTimeout(resolve, 0));   // 等待UI
             var lastFrame = performance.now();
             switch (channel) {
@@ -1475,26 +1482,42 @@ function App() {
                 };
                 this.event.addEventListener('progress', onprogress);
                 // 读取文件
+                let audioData;
                 const fileReader = new FileReader();
                 fileReader.onload = (e) => {
                     // 解码音频文件为音频缓冲区
                     this.audioContext.decodeAudioData(e.target.result).then((decodedData) => {
-                        return this.Analyser.analyse(
-                            decodedData, tNum, A4, channel, 8192    // 可以考虑加一个“精度”选项
-                        );
-                    }).then((v) => {
+                        audioData = decodedData;
+                        return Promise.all([
+                            this.Analyser.analyse(decodedData, tNum, A4, channel, 8192),
+                            this.AudioPlayer.createAudio(URL.createObjectURL(file)) // fileReader.readAsDataURL(file) 将mov文件decode之后变成base64，audio无法播放 故不用
+                        ]);
+                    }).then(([v, audio]) => {
                         this.Spectrogram.spectrogram = v;
-                        // 设置音频源 缓存到浏览器
-                        // fileReader.onload = (e) => {
-                        //     this.AudioPlayer.createAudio(e.target.result);
-                        // }; fileReader.readAsDataURL(file);
-
-                        // 上面的方法将mov文件decode之后变成base64，audio无法播放。而用URL.createObjectURL(file)就可以
-                        return this.AudioPlayer.createAudio(URL.createObjectURL(file));
                     }).catch((e) => {
-                        alert(e);
-                        this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));  // 关闭进度条
+                        alert(e); console.error(e);
                         this.event.dispatchEvent(new Event('fileerror'));
+                    }).finally(() => {
+                        // 最终都要关闭进度条
+                        this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));
+                        // 后台执行CQT
+                        if (window.location.protocol == 'file:' || window.cqt) return;    // 开worker和fetch要求http
+                        console.time("CQT计算");
+                        cqt(audioData, tNum, channel, this.Keyboard.freqTable[0]).then((cqtData) => {
+                            // CQT结果准确但琐碎，STFT结果粗糙但平滑，所以混合一下
+                            const s = this.Spectrogram.spectrogram;
+                            let tLen = Math.min(cqtData.length, s.length);
+                            for (let i = 0; i < tLen; i++) {
+                                const cqtBins = cqtData[i];
+                                const stftBins = s[i];
+                                for (let j = 0; j < cqtBins.length; j++) {
+                                    // 用非线性混合，当两者极大的时候取最大值，否则相互压制
+                                    if(stftBins[j] < cqtBins[j]) stftBins[j] = cqtBins[j];
+                                    else stftBins[j] = Math.sqrt(stftBins[j] * cqtBins[j]);
+                                }
+                            }
+                            console.timeEnd("CQT计算");
+                        }).catch(console.error);
                     });
                 }; fileReader.readAsArrayBuffer(file);
             };
