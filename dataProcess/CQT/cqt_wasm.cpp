@@ -140,7 +140,7 @@ public:
                 const float* kernel_i = this->kernel_i[note];
                 const uint32_t kernel_len = this->kernel_len[note];
                 float sum_r = 0; float sum_i = 0;
-                const uint32_t left = offset - (kernel_len >> 1);
+                const int32_t left = offset - (kernel_len >> 1);
                 uint32_t right = length - left;
                 if (right > kernel_len) right = kernel_len;
                 for (uint32_t i = left >= 0 ? 0 : -left; i < right; i++) {

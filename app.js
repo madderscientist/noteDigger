@@ -1511,7 +1511,6 @@ function App() {
                                 const cqtBins = cqtData[i];
                                 const stftBins = s[i];
                                 for (let j = 0; j < cqtBins.length; j++) {
-                                    if(cqtBins[j] == 0) continue;   // 0的时候不用管，是低频的边缘效应
                                     // 用非线性混合，当两者极大的时候取最大值，否则相互压制
                                     if(stftBins[j] < cqtBins[j]) stftBins[j] = cqtBins[j];
                                     else stftBins[j] = Math.sqrt(stftBins[j] * cqtBins[j]);
