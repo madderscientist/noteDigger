@@ -1501,7 +1501,7 @@ function App() {
                         // 最终都要关闭进度条
                         this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));
                         // 后台执行CQT
-                        if (window.location.protocol == 'file:' || window.cqt) return;    // 开worker和fetch要求http
+                        if (window.location.protocol == 'file:' || window.cqt == undefined) return;    // 开worker和fetch要求http
                         console.time("CQT计算");
                         cqt(audioData, tNum, channel, this.Keyboard.freqTable[0]).then((cqtData) => {
                             // CQT结果准确但琐碎，STFT结果粗糙但平滑，所以混合一下
