@@ -159,3 +159,10 @@ FakeAudio和这个Proxy的连接点在于时长，midi编辑器模式下总时�
 CQT太慢了。可以引入worker，后台计算，去掉进度条。或者先计算STFT，然后后台计算CQT。直接用CQT太唐氏了。
 worker不能再双击打开的file协议下用，所以既然用了worker，不如CQT用wasm实现。
 https://github.com/madderscientist/codeRoad/tree/main/TimeFrequency
+
+## 关于Web Auido API的自动采样
+当AudioContext的采样率和输入音频的采样率不一样的时候会发是什么？
+https://dvcs.w3.org/hg/audio/raw-file/tip/webaudio/specification.html搜索“resample”可以看到会重新采样。问题是：是否会抗混叠滤波？
+测试：首先创建了一个只含有一个G7音符（3136Hz）的midi，然后利用musescore转为WAV，采样率选择44100Hz。导入分析后，频谱符合预期。
+改变AudioContext的采样率为4186Hz，如果抗混叠滤波，则这个G7肯定要被滤除。如果不抗混叠，则混叠到3136-(4186/2)=1043，位于C6（1046Hz）。
+结果是在C6处出现了能量。所以不会抗混叠。

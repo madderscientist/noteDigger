@@ -87,15 +87,15 @@ var _midiExport = {
 
             //== 判断bpm是否变化 假设小节之间bpm相关性很强 ==//
             const bpmnow = measure.bpm;
-            if(Math.abs(bpmnow - lastbpm) > 5) {
-                mts[0].events.push(midiEvent.tempo(tickNow, bpmnow));
+            if(Math.abs(bpmnow - lastbpm) > lastbpm * 0.065) {
+                mts[0].events.push(midiEvent.tempo(tickNow, bpmnow * 4 / measure.beatUnit));
             } lastbpm = bpmnow;
 
             //== 对齐音符 ==//
             const begin = measure.start / app.dt;   // 转换为以“格”为单位
             const end = (measure.interval + measure.start) / app.dt;
             // 一个八音符的格数
-            const aot = measure.interval * 2 / (measure.beatNum * measure.beatUnit * app.dt);
+            const aot = measure.interval * measure.beatUnit / (measure.beatNum * 8 * app.dt);
             while(m_i < mlen) {
                 const n = moment[m_i];
                 if(n.ticks > end) break;    // 给下一小节

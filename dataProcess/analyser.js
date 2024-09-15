@@ -62,7 +62,7 @@ class NoteAnalyser {    // 负责解析频谱数据
      */
     analyse(real, imag) {
         const noteAm = new Float32Array(84);
-        let at = this.rangeTable[0];
+        let at = this.rangeTable[0] | 0;
         for (let i = 0; i < this.rangeTable.length; i++) {
             let end = this.rangeTable[i];
             if (at == end) {   // 如果相等则就算一次 乘法比幂运算快
