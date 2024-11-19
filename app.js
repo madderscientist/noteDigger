@@ -1626,7 +1626,7 @@ function App() {
         // e.deltaY 往前滚是负数
         if (e.ctrlKey) {    // 缩放
             e.preventDefault();
-            this.scaleX(e.offsetX, e.deltaY > 0 ? 1.25 : 0.8);
+            this.scaleX(e.offsetX, e.deltaY > 0 ? 0.8 : 1.25);
         } else if (e.shiftKey) { // 垂直滚动
             // 只有鼠标滚轮时是有deltaY。所以这里让X方向能移动，做法是交换X和Y
             this.scroll2(this.scrollX + e.deltaY, this.scrollY + e.deltaX);
