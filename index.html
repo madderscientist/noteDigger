@@ -274,6 +274,7 @@
                     }
                     let tickTimeTable = m.header.tempos;    // bpm会随着时间改变
                     const chArray = new Array(m.tracks.length);
+                    let chArrayIndex = 0;
                     for (const mt of m.tracks) {
                         var tickTimeAt = -1;
                         var nexttickTimeChange = 0;
@@ -289,10 +290,10 @@
                         const ch = chdiv.addChannel();
                         const chid = ch.index;
                         ch.name = `导入音轨${chid}`;
-                        ch.ch.instrument = mt.instruments[0].number;
+                        ch.ch.instrument = mt.instruments[0]?.number || 0;
                         ch.instrument = TinySynth.instrument[ch.ch.instrument];
 
-                        chArray[chid] = mt.notes.map((nt) => {
+                        chArray[chArrayIndex++] = mt.notes.map((nt) => {
                             const t = checkChange(nt.ticks);
                             return {
                                 x1: nt.ticks * t,
@@ -303,7 +304,8 @@
                             };
                         });
                     }
-                    app.MidiAction.midi = chArray.flat().sort((a, b) => a.x1 - b.x1);
+                    for (const ch of chArray) app.MidiAction.midi.push(...ch);
+                    app.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
                 });
             }; input.click();
         };
