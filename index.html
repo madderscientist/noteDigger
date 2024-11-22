@@ -295,7 +295,7 @@
 
                         chArray[chArrayIndex++] = mt.notes.map((nt) => {
                             const t = checkChange(nt.ticks);
-                            return {
+                            return {    // 理应给x1和x2取整，但是为了尽量不损失信息就不取整了 不取整会导致导出midi时要取整
                                 x1: nt.ticks * t,
                                 x2: (nt.ticks + nt.durationTicks) * t,
                                 y: nt.midi - 24,

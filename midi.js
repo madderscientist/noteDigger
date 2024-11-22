@@ -48,12 +48,12 @@ class midiEvent {
 class mtrk {
     /**
      * 将tick数转换为midi的时间格式
-     * @param {number} ticknum int
+     * @param {number} ticknum float，但会转换为int
      * @returns midi tick array
      * @example mtrk.tick_hex(555555) // [0x08, 0x7A, 0x23]
      */
     static tick_hex(ticknum) {
-        ticknum = ticknum.toString(2);
+        ticknum = Math.round(ticknum).toString(2);
         let i = ticknum.length, j = Math.ceil(i / 7) * 7;
         for (; i < j; i++) ticknum = '0' + ticknum;
         let t = Array();
@@ -77,12 +77,13 @@ class mtrk {
     }
     /**
      * 将一个正整数按16进制拆分成各个位放在数组中, 最地位在数组最高位
-     * @param {number} num int
+     * @param {number} num float，但会转换为int
      * @param {number} x array's length (default:self-adaption)
      * @returns array
      * @example mtrk.number_hex(257,5) // [0,0,0,1,1]
      */
     static number_hex(num, x = -1) {
+        num = Math.round(num);
         if (x > 0) {
             let Buffer = Array(x).fill(0);
             for (--x; x >= 0 && num != 0; x--) {
