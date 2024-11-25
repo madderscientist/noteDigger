@@ -53,7 +53,8 @@ class LableRange extends myRange {
         this.insertAdjacentElement('afterend', this.label);
         // 设置label的宽度固定为range的最大值的宽度
         if (!this.max) this.max = 100;
-        let len = Math.max(this.max.toString().length, (this.max-this.step).toString().length);
+        let maxStepStr = (this.max - this.step).toFixed(10).replace(/\.?0+$/, ''); // 限制小数位数并去除末尾的零
+        let len = Math.max(this.max.toString().length, maxStepStr.length);
         this.label.style.width = `${len}ch`;
         this.addEventListener('input', () => {
             this.updateLabel(); // 【不直接传函数，可以篡改this.updateLabel】
@@ -106,6 +107,6 @@ class hideLableRange extends myRange {
     labelPosition() {
         let rangeRect = this.getBoundingClientRect();
         let rangeWidth = rangeRect.width - hideLableRange._expand;
-        this.label.style.left = `${(this.value / this.max) * rangeWidth + (hideLableRange._expand >> 1)}px`;
+        this.label.style.left = `${((this.value - this.min) / (this.max - this.min)) * rangeWidth + (hideLableRange._expand >> 1)}px`;
     }
 }
