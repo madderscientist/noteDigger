@@ -2,7 +2,7 @@
 class aMeasure {
     /**
      * 构造一个小节
-     * @param {Number | aMeasure} beatNum 分子 几拍为一小节
+     * @param {Number | aMeasure} beatNum 分子 几拍为一小节; 如果是aMeasure对象则复制构造
      * @param {Number} beatUnit 分母 几分音符是一拍
      * @param {Number} interval 一个小节的时间，单位ms
      */

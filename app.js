@@ -1,4 +1,4 @@
-// 用这种方式(原始构造函数)的原因：解耦太难了，不解了。this全部指同一个
+// 用这种方式(原始构造函数)的原因：解耦太难了，不解了。this全部指同一个。其次为了保证效率
 // 防止在html初始化之前getElement，所以封装成了构造函数，而不是直接写obj
 function App() {
     this.event = new EventTarget();
@@ -55,8 +55,23 @@ function App() {
     this.rectXstart = 0;// 目前只有Spectrogram.update在使用
     this.rectYstart = 0;// 画布开始的具体y坐标(因为最下面一个不完整) 迭代应该减height 被画频谱、画键盘共享
     this.loop = 0;      // 接收requestAnimationFrame的返回
-    this.time = -1;     // 当前时间 单位：毫秒 在this.AudioPlayer.update中更新
     this.dt = 50;       // 每次分析的时间间隔 单位毫秒 在this.Analyser.analyse中更新
+    this.time = -1;     // 当前时间 单位：毫秒 在this.AudioPlayer.update中更新
+    /**
+     * 设置播放时间 如果立即播放(keep==false)则有优化
+     * @param {Number} t 时间点 单位：毫秒
+     * @param {Boolean} keep 是否保存之前的状态 如果为false则立即开始
+     */
+    this.setTime = (t, keep = true) => {
+        this.synthesizer.stopAll();
+        if (keep) {
+            this.time = t;
+            this.AudioPlayer.audio.currentTime = t / 1000;
+            this.AudioPlayer.play_btn.firstChild.textContent = this.TimeBar.msToClockString(t);
+        } else {    // 用于双击时间轴立即播放
+            this.AudioPlayer.start(t);  // 所有操作都在start中
+        }
+    };
     this._mouseY = 0;   // 鼠标当前y坐标
     Object.defineProperty(this, 'mouseY', {
         get: function () { return this._mouseY; },
@@ -846,7 +861,7 @@ function App() {
                     this.TimeBar.repeatEnd = (e_father.offsetX + this.scrollX) * this.TperP;
                 }
             }, {
-                name: "取消重复区间",
+                name: '<span style="color: red;">取消重复区间</span>',
                 onshow: () => this.TimeBar.repeatStart >= 0 || this.TimeBar.repeatEnd >= 0,
                 callback: () => {
                     this.TimeBar.repeatStart = -1;
@@ -1605,6 +1620,9 @@ function App() {
                 case 'ArrowRight': this.scroll2(this.scrollX + this._width, this.scrollY); break;
                 case 'Delete': this.MidiAction.deleteNote(); break;
                 case ' ': this.AudioPlayer.play_btn.click(); break;
+                case 'PageUp': this.scroll2(this.scrollX - this.spectrum.width, this.scrollY); break;
+                case 'PageDown': this.scroll2(this.scrollX + this.spectrum.width, this.scrollY); break;
+                case 'Home': this.scroll2(0); this.setTime(0); break;
             }
         }
     });
@@ -1691,9 +1709,7 @@ function App() {
     this.spectrum.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
     this.timeBar.addEventListener('dblclick', (e) => {
         if (this.AudioPlayer.audio.readyState != 4) return;
-        this.AudioPlayer.stop();
-        let position = (e.offsetX + this.scrollX) * this.AudioPlayer.audio.duration / (this._xnum * this._width)
-        this.AudioPlayer.start(position * 1000);
+        this.setTime((e.offsetX + this.scrollX) * this.AudioPlayer.audio.duration * 1000 / (this._xnum * this._width), false);
     });
     this.timeBar.addEventListener('contextmenu', (e) => {
         e.preventDefault(); // 右键菜单
@@ -1725,7 +1741,12 @@ function App() {
                     document.addEventListener('mouseup', removeEvents);
                 } else {
                     const x = (e.offsetX + this.scrollX) / this._width * this.dt;    // 毫秒数
-                    let setRepeat = (e) => {
+                    const originStart = this.TimeBar.repeatStart;
+                    const originEnd = this.TimeBar.repeatEnd;
+                    const mouseDownX = e.offsetX;
+                    let mouseUpX = mouseDownX;
+                    const setRepeat = (e) => {
+                        mouseUpX = e.offsetX;
                         let newX = (e.offsetX + this.scrollX) / this._width * this.dt;
                         if (newX > x) {
                             this.TimeBar.repeatStart = x;
@@ -1738,16 +1759,20 @@ function App() {
                     let removeEvents = () => {
                         this.timeBar.removeEventListener('mousemove', setRepeat);
                         document.removeEventListener('mouseup', removeEvents);
+                        // 有时候双击的小小移动会误触重复区间 所以如果区间太小则忽视
+                        if (Math.abs(mouseUpX - mouseDownX) < 6) {
+                            this.TimeBar.repeatStart = originStart;
+                            this.TimeBar.repeatEnd = originEnd;
+                        }
                     };
                     this.timeBar.addEventListener('mousemove', setRepeat);
                     document.addEventListener('mouseup', removeEvents);
                 }
                 break;
             case 1:     // 中键跳转位置但不改变播放状态
-                this.time = (e.offsetX + this.scrollX) / this._width * this.dt;
-                this.AudioPlayer.audio.currentTime = this.time / 1000;
-                this.AudioPlayer.play_btn.firstChild.textContent = this.TimeBar.msToClockString(this.time);
+                this.setTime((e.offsetX + this.scrollX) / this._width * this.dt);
                 break;
+                
         }
     });
     this.keyboard.addEventListener('wheel', (e) => {
