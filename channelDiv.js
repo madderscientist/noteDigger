@@ -204,7 +204,11 @@ class ChannelList extends EventTarget {
         "#FF4500", /*橙红色*/ "#FFD700", /*金色*/ "#32CD32", /*酸橙绿*/ "#00BFFF", /*深天蓝色*/
         "#FF6347", /*番茄色*/ "#FF1493", /*深粉红色*/ "#7FFF00", /*查特酸橙绿*/ "#1E90FF", /*道奇蓝*/
         "#FFA500", /*橙色*/ "#EE82EE", /*紫罗兰*/ "#ADFF2F", /*绿黄色*/ "#87CEFA", /*亮天蓝色*/
-        "#FF69B4", /*热情粉红色*/ "#00FA9A", /*中春绿色*/ "#FFB6C1", /*浅粉红色*/ "#20B2AA"  /*浅海洋绿*/
+        "#FF69B4", /*热情粉红色*/ "#00FA9A", /*中春绿色*/ "#FFB6C1", /*浅粉红色*/ "#20B2AA", /*浅海洋绿*/
+
+        "#FF8C00", /*深橙色*/ "#BA55D3", /*中紫罗兰色*/ "#9ACD32", /*黄绿色*/ "#4682B4", /*钢蓝色*/
+        "#8A2BE2", /*蓝紫色*/ "#5F9EA0", /*军蓝色*/ "#D2691E", /*巧克力色*/ "#6495ED", /*矢车菊蓝*/ 
+        "#DC143C", /*猩红色*/ "#00FFFF", /*青色*/ "#00008B", /*深蓝色*/ "#FF7F50" /*珊瑚色*/
     ];
     /**
      * 判断是否点击在channelItem上
@@ -227,7 +231,10 @@ class ChannelList extends EventTarget {
     constructor(div, synthesizer) {
         super();
         this.synthesizer = synthesizer;
-        this.colorMask = 0xFFFF;    // 用于表示哪些颜色已经被占用
+        this.colorMask = 0; // 用于表示哪些颜色已经被占用
+        for (let i = 0; i < ChannelList.colorList.length; i++) {
+            this.colorMask |= (1 << i);
+        }
         const list = dragList();
         list.addEventListener('dragend', this.updateRange.bind(this));
         this.selected = null;
@@ -250,6 +257,16 @@ class ChannelList extends EventTarget {
             }, {
                 name: '全部显示', callback: () => {
                     this.channel.forEach(ch => ch.visible = true);
+                }, onshow: e => !ChannelList.whichItem(e.target),
+            },
+            {
+                name: '全部静音', callback: () => {
+                    this.channel.forEach(ch => ch.mute = true);
+                }, onshow: e => !ChannelList.whichItem(e.target),
+            },
+            {
+                name: '全部发声', callback: () => {
+                    this.channel.forEach(ch => ch.mute = false);
                 }, onshow: e => !ChannelList.whichItem(e.target),
             },
             // 在列表项上点击

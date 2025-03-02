@@ -188,7 +188,7 @@ class mtrk {
             return Buffer;
         }
     }
-    constructor(name = "untitled", event_list = Array()) {
+    constructor(name = "", event_list = Array()) {
         this.name = name;
         this.events = event_list;
         this.last_tick = 0; // 最后一个事件的时间
@@ -252,8 +252,11 @@ class mtrk {
     export(track_id) {
         this.sort();
         // 音轨名
-        let data = mtrk.string_hex(this.name);
-        data = [0, 255, 3, data.length, ...data];
+        let data = [];
+        if (this.name.length) {
+            data = mtrk.string_hex(this.name);
+            data = [0, 255, 3, data.length, ...data];
+        }
         // 多于16轨的支持
         let channel = track_id % 16;
         let port = track_id >> 4;
@@ -380,8 +383,10 @@ class midi {
     addTrack(newtrack = null, channel_id = -1) {
         if (newtrack == null)
             newtrack = new mtrk(String(this.Mtrk.length));
-        if (channel_id >= 0) this.Mtrk.splice(channel_id, 0, newtrack);
-        else this.Mtrk.push(newtrack);
+        if (channel_id >= 0) {
+            if (channel_id < this.Mtrk.length) this.Mtrk.splice(channel_id, 0, newtrack);
+            else this.Mtrk[channel_id] = newtrack;
+        } else this.Mtrk.push(newtrack);
         return newtrack;
     }
     get tracks() {  // 起个别名
@@ -397,14 +402,16 @@ class midi {
     }
     /**
      * 解析midi文件，返回新的midi对象
+     * 由于设计时认为同一音轨只操控一个通道，因此对于一个音轨操作多个通道的midi文件会有改动
      * @param {Uint8Array} midi_file midi数据
+     * @param {boolean} which_main 1则以音轨为主，把同一音轨的通道置为相同；2则通道为主，一个通道一个音轨；0则根据midi类型判断，midi1则音轨为主，midi0则通道为主。最终都是保证一个音轨对应一个通道
      * @returns new midi object
      */
-    static import(midi_file) {
+    static import(midi_file, which_main = 0) {
         // 判断是否为midi文件
         if (midi_file.length < 14) return null;
         if (midi_file[0] != 77 || midi_file[1] != 84 || midi_file[2] != 104 || midi_file[3] != 100) return null;
-        let newmidi = new midi(120, [4, 4], 480, Array.from({ length: 16 }, (_, i) => new mtrk(String(i))), '');
+        let newmidi = new midi(120, [4, 4], 480, [new mtrk('0')], '');  // 第一轨放全局控制事件
         // 读取文件头
         newmidi.tick = midi_file[13] + (midi_file[12] << 8);
         let mtrkNum = midi_file[11] + (midi_file[10] << 8);
@@ -417,6 +424,7 @@ class midi {
             let lastType = 0xC0;	// 上一个midi事件类型
             let lastChaneel = n - 1;  // 上一个midi事件通道
             let mtrklen = (midi_file[i++] << 24) + (midi_file[i++] << 16) + (midi_file[i++] << 8) + midi_file[i++] + i;
+            let midiPort = 0;       // 默认的端口号
             // 读取事件
             for (; i < mtrklen; i++) {
                 // 时间间隔(tick)
@@ -427,10 +435,22 @@ class midi {
                 // 事件类型
                 let type = midi_file[i] & 0xf0;
                 let channel = midi_file[i++] - type;
-                let ichannel = midtype ? n : channel;
+                let ichannel = n;
+                switch (which_main) {
+                    case 1:
+                        ichannel = n;
+                        break;
+                    case 2:
+                        ichannel = (midiPort << 4) + channel;
+                        break;
+                    default:
+                        ichannel = (midtype == 0) ? ((midiPort << 4) + channel) : n;
+                        break;
+                }
+                if (!newmidi.Mtrk[ichannel]) newmidi.addTrack(new mtrk(), ichannel);
                 do {
                     flag = false;
-                    switch (type) { //结束后指向事件的最后一个字节
+                    switch (type) { // 结束后指向事件的最后一个字节
                         case 0x90:	// 按下音符
                             newmidi.Mtrk[ichannel].addEvent({
                                 ticks: timeline,
@@ -456,6 +476,10 @@ class midi {
                                         for (let q = 1; q <= midi_file[i]; q++)
                                             newmidi.Mtrk[n].name += String.fromCharCode(midi_file[i + q]);
                                         break;
+                                    case 0x21:
+                                        midiPort = midi_file[i + 1];
+                                        break;
+                                //== 不break，进入default添加事件。所以这后面的都要加`if(timeline == 0)`保证能到default ==//
                                     case 0x58:
                                         if (timeline == 0) {
                                             newmidi.time_signature = [midi_file[i + 1], 1 << midi_file[i + 2]];
@@ -466,11 +490,10 @@ class midi {
                                             newmidi.bpm = Math.round(60000000 / ((midi_file[i + 1] << 16) + (midi_file[i + 2] << 8) + midi_file[i + 3]));
                                             break;
                                         }
-                                    default:
+                                    default:    // 没有通道的统一加到第一轨
                                         newmidi.Mtrk[0].addEvent({
                                             ticks: timeline,
-                                            code: 0xff,
-                                            type: midi_file[i - 1],
+                                            code: (0xff << 8) + midi_file[i - 1],
                                             value: Array.from(midi_file.slice(i + 1, i + 1 + midi_file[i]))
                                         });
                                         break;
@@ -532,36 +555,20 @@ class midi {
             }
         }
         newmidi.name = newmidi.Mtrk[0].name;
-        // 找到第一个有音符的音轨
-        mtrkNum = 0;
+        // 移除除了第一轨以外的空音轨（没有音符的音轨）
         for (let i = 1; i < newmidi.Mtrk.length; i++) {
-            let temp = newmidi.Mtrk[i].events;
+            let temp = newmidi.Mtrk[i];
+            if (!temp) continue;
+            temp = temp.events;
+            let hasNote = false;
             for (let j = 0; j < temp.length; j++) {
                 if (temp[j].code == 0x9) {
-                    mtrkNum = i;
-                    temp = null;
+                    hasNote = true;
                     break;
                 }
             }
-            if (!temp) break;
+            if (!hasNote) newmidi.Mtrk[i] = void 0;
         }
-        // 把没有音符的音轨事件移到第一个有音符的音轨
-        for (let i = 0; i < newmidi.Mtrk.length; i++) {
-            let temp = newmidi.Mtrk[i].events;
-            for (let j = 0; j < temp.length; j++) {
-                if (temp[j].code == 0x9) {
-                    temp = null;
-                    break;
-                }
-            }
-            if (temp) {
-                newmidi.Mtrk[mtrkNum].events = newmidi.Mtrk[mtrkNum].events.concat(temp);
-                newmidi.Mtrk[i] = null;
-            }
-        }
-        // 删去空的音轨
-        for (let i = 0; i < newmidi.Mtrk.length; i++)
-            if (!newmidi.Mtrk[i] || newmidi.Mtrk[i].events.length == 0) newmidi.Mtrk.splice(i--, 1);
         return newmidi;
     }
     /**
@@ -662,6 +669,7 @@ class midi {
             tracks: []
         }
         for (let i = 0; i < this.Mtrk.length; i++) {
+            if (!this.Mtrk[i]) continue;
             let t = this.Mtrk[i].JSON(i);
             j.header.tempos = j.header.tempos.concat(t.tempos);
             j.header.timeSignatures = j.header.timeSignatures.concat(t.timeSignatures);

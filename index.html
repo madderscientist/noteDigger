@@ -275,15 +275,13 @@
                         return;
                     }
                     const chdiv = app.MidiAction.channelDiv;
-                    if (m.tracks.length + chdiv.channel.length > 16) {
-                        if (!confirm("导入后音轨数量超过16，是否覆盖后几轨以导入midi？")) return;
-                        for (let i = chdiv.channel.length - 1; m.tracks.length + chdiv.channel.length > 16; i--) chdiv.removeChannel(i);
-                    }
                     chdiv.switchUpdateMode(false);  // 下面会一次性创建大量音符，所以先关闭更新
                     let tickTimeTable = m.header.tempos;    // bpm会随着时间改变
-                    const chArray = new Array(m.tracks.length);
+                    const chArray = [];
                     let chArrayIndex = 0;
                     for (const mt of m.tracks) {
+                        if (mt.notes.length == 0) continue;
+
                         var tickTimeAt = -1;
                         var nexttickTimeChange = 0;
                         var tickTime = 0;   // 一个tick的毫秒数/app.dt
@@ -296,6 +294,7 @@
                         } checkChange(1);
 
                         const ch = chdiv.addChannel();
+                        if (!ch) break; // 音轨已满，addChannel会返回undefined同时alert，所以只要break
                         const chid = ch.index;
                         ch.name = `导入音轨${chid}`;
                         ch.ch.instrument = mt.instruments[0]?.number || 0;
