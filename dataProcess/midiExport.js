@@ -64,20 +64,20 @@ var _midiExport = {
             const nt = Midis[j];
             let duration = nt.x2 - nt.x1;
             let midint = nt.y + 24;
-            moment[i++] = {
+            moment[i++] = new midiEvent({
                 _d: duration,
                 ticks: nt.x1,
                 code: 0x9,
                 value: [midint, mts[nt.ch]._volume],
                 _ch: nt.ch
-            };
-            moment[i++] = {
+            }, true);
+            moment[i++] = new midiEvent({
                 _d: duration,
                 ticks: nt.x2,
                 code: 0x9,
                 value: [midint, 0],
                 _ch: nt.ch
-            };
+            }, true);
         } moment.sort((a,b) => a.ticks - b.ticks);
         // 对每个小节进行对齐
         let m_i = 0;    // moment的指针

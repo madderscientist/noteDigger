@@ -1,47 +1,129 @@
-// 封装二进制事件
+/**
+ * 对midi事件进行封装
+ * 相比于原生midi事件：
+ * - 使用绝对时间（在导出为二进制时被mtrk转换为相对时间）
+ * - 不记录通道信息（在导出为二进制时由mtrk加上通道信息）
+ */
 class midiEvent {
-    // 若tisks == -1, 在addEvent时会自动使用last_tick; 若<-1, 则last_tick - this.ticks
+    ticks; code; value;
+    /**
+     * 用参数创建一个事件
+     * @param {number} ticks 绝对时间，单位tick。若tisks == -1, 在mtrk.addEvent时会自动使用last_tick; 若<-1, 则last_tick - this.ticks（此时代表相对时间）
+     * @param {number} code 如果有channel，则去掉channel，如0x91 -> 0x9；如果是0xf0则保留此编码；如果是0xff则需要加上后面的type，如0xff51
+     * @param {Array<Number>} value 数组，代表其余所有参数
+     */
+    #constructor_args(ticks, code, value) {
+        this.ticks = ticks;
+        this.code = code;
+        if (value instanceof Number) this.value = [value];
+        else this.value = value;
+        return this;
+    }
+    /**
+     * 根据已经创建的对象创建事件
+     * @param {Object} eventObj 一个对象，包含ticks, code, value
+     * @param {boolean} reference 是否引用 默认true
+     */
+    #constructor_obj(eventObj, reference = true) {
+        if (reference) {
+            if (eventObj instanceof midiEvent) return eventObj;
+            Object.setPrototypeOf(eventObj, midiEvent.prototype);
+            return eventObj;
+        } else {
+            this.ticks = eventObj.ticks;
+            this.code = eventObj.code;
+            this.value = eventObj.value;
+            return this;
+        }
+    }
+    /**
+     * 根据参数数目选择不同的构造函数创建事件
+     * @returns midiEvent
+     */
+    constructor() {
+        if (arguments.length == 3) {
+            return this.#constructor_args(...arguments);
+        } else {
+            return this.#constructor_obj(...arguments);
+        }
+    }
+    /**
+     * 针对0xff事件的type
+     * code存的是0xff<<8+type，所以type是code的低8位
+     */
+    get type() {
+        if (this.code >= 0xff) return this.code & 0xff;
+        return void 0;
+    }
+    /**
+     * 导出为二进制数据，要求this.ticks是绝对时间（非负数）
+     * 应由mtrk调用，可以保证this.ticks是绝对时间（调用mtrk.addEvent时会转换相对为绝对）
+     * @param {number} current_tick 本事件发生前的时间
+     * @param {number} channel midi通道，对0xff??和0xf0事件无效
+     * @returns {Array<number>} midi二进制数据数组的数组
+     */
+    export(current_tick = 0, channel = 0) {
+        let d = mtrk.tick_hex(this.ticks - current_tick);
+        if (this.code >= 0xf0) {
+            if (this.code == 0xf0) d.push(0xf0, this.value.length);
+            else d.push(0xff, this.type, this.value.length);
+        } else d.push((this.code << 4) + channel);
+        d.push(...this.value);
+        return d;
+    }
+
     static note(at, duration, note, intensity) {
-        return [{
+        return [new midiEvent({
             ticks: at,
             code: 0x9,
             value: [note, intensity]
-        }, {
+        }), new midiEvent({
             ticks: at >= 0 ? at + duration : -duration,
             code: 0x9,
             value: [note, 0]
-        }];
+        })];
     }
     static instrument(at, instrument) {
-        return {
+        return new midiEvent({
             ticks: at,
             code: 0xc,
             value: [instrument]
-        };
+        });
     }
     static control(at, id, Value) {
-        return {
+        return new midiEvent({
             ticks: at,
             code: 0xb,
             value: [id, Value]
-        };
+        });
     }
     static tempo(at, bpm) {
         bpm = Math.round(60000000 / bpm);
-        return {
+        return new midiEvent({
             ticks: at,
-            code: 0xff,
-            type: 0x51,
+            code: 0xff51,
             value: mtrk.number_hex(bpm, 3)
-        };
+        });
     }
     static time_signature(at, numerator, denominator) {
-        return {
+        return new midiEvent({
             ticks: at,
-            code: 0xff,
-            type: 0x58,
+            code: 0xff58,
             value: [numerator, Math.floor(Math.log2(denominator)), 0x18, 0x8]
-        };
+        });
+    }
+    /**
+     * 切换端口，以实现超过16个音轨
+     * 一般不需要手动调用，在mtrk.export时会自动判断与调用
+     * @param {number} port 
+     * @returns {midiEvent}
+     */
+    static port(port = 0) {
+        return new midiEvent({
+            ticks: 0,   // 这种事件一定得发生在第一个
+            code: 0xff21,
+            value: [port]
+        });
     }
 }
 // 一个音轨
@@ -76,7 +158,7 @@ class mtrk {
         return Buffer;
     }
     /**
-     * 将一个正整数按16进制拆分成各个位放在数组中, 最地位在数组最高位
+     * 将一个正整数按16进制拆分成各个位放在数组中, 最低位在数组最高位
      * @param {number} num float，但会转换为int
      * @param {number} x array's length (default:self-adaption)
      * @returns array
@@ -112,12 +194,13 @@ class mtrk {
         this.last_tick = 0; // 最后一个事件的时间
     }
     /**
-     * 向mtrk添加事件
-     * @param {object} event {ticks,code,*[type],value}
+     * 向mtrk添加事件 可以传入数组或一个个传递
+     * @param {midiEvent || Object} event {ticks,code,value} 可以是midiEvent对象，也可以是一般对象（会转为midiEvent）
      * @returns event (or event list, or event list nesting)
      * @example m.addEvent({ticks:0,code:0x9,value:[40,100]}); m.addEvent(midiEvent.tempo(0,120));
      */
     addEvent(event) {
+        if (arguments.length > 1) event = Array.from(arguments);
         const addevent = (e) => {
             if (e.ticks < 0) {
                 if (e.ticks == -1)
@@ -125,7 +208,7 @@ class mtrk {
                 else
                     e.ticks = this.last_tick - e.ticks;
             }
-            this.events.push(e);
+            this.events.push(new midiEvent(e));
             if (e.ticks > this.last_tick)
                 this.last_tick = e.ticks;
         }
@@ -151,6 +234,7 @@ class mtrk {
     }
     /**
      * 事件按时间排序，同时间的音符事件则按力度排序
+     * 其余同时事件将code大的排在前面
      */
     sort() {
         this.events.sort((a, b) => {
@@ -170,22 +254,24 @@ class mtrk {
         // 音轨名
         let data = mtrk.string_hex(this.name);
         data = [0, 255, 3, data.length, ...data];
+        // 多于16轨的支持
+        let channel = track_id % 16;
+        let port = track_id >> 4;
+        if (port > 0) {
+            data.push(...midiEvent.port(port).export(0, 0));
+        }
         // 事件解析
         let current = 0;
         for (let i = 0; i < this.events.length; i++) {
             let temp = this.events[i];
-            let d = null;
-            if (temp.code >= 0xf0) {
-                if (temp.code == 0xf0) d = [0xf0, temp.value.length];
-                else d = [0xff, temp.type, temp.value.length];
-            } else d = (temp.code << 4) + track_id;
-            data = data.concat(mtrk.tick_hex(temp.ticks - current), d, temp.value);
+            data.push(...temp.export(current, channel));
             current = temp.ticks;
         }
-        return [77, 84, 114, 107,
-            ...mtrk.number_hex(data.length + 4, 4),
-            ...data,
-            0, 255, 47, 0];
+        return [77, 84, 114, 107].concat(
+            mtrk.number_hex(data.length + 4, 4),
+            data,
+            0, 255, 47, 0
+        );
     }
 
     /**
@@ -236,7 +322,7 @@ class mtrk {
                         number: temp.value[0]
                     });
                     break;
-                case 0xff:
+                default:    // 0xffxx
                     switch (temp.type) {
                         case 0x51:  // 速度
                             Tempos.push({
@@ -268,8 +354,16 @@ class mtrk {
         return this.JSON(track_id);
     }
 }
-// midi文件，组织多音轨
+
 class midi {
+    /**
+     * midi文件，组织多音轨
+     * @param {number} bpm beats per minute
+     * @param {Array<number>} time_signature [numerator, denominator] 4/4 -> [4,4]
+     * @param {number} tick default 480
+     * @param {Array<mtrk>} Mtrk initial with exist mtrk list
+     * @param {string} Name midi file name
+     */
     constructor(bpm = 120, time_signature = [4, 4], tick = 480, Mtrk = [], Name = 'untitled') {
         this.bpm = bpm;
         this.Mtrk = Mtrk;   // Array<mtrk>
@@ -283,11 +377,15 @@ class midi {
      * @returns mtrk
      * @example track = m.addTrack(); m2.addTrack(new mtrk("test"))
      */
-    addTrack(newtrack = null) {
+    addTrack(newtrack = null, channel_id = -1) {
         if (newtrack == null)
             newtrack = new mtrk(String(this.Mtrk.length));
-        this.Mtrk.push(newtrack);
+        if (channel_id >= 0) this.Mtrk.splice(channel_id, 0, newtrack);
+        else this.Mtrk.push(newtrack);
         return newtrack;
+    }
+    get tracks() {  // 起个别名
+        return this.Mtrk;
     }
     /**
      * 对齐所有音轨 修改自身
@@ -519,17 +617,27 @@ class midi {
             ]);
         } else {    // 除了初始速度、初始节拍，其余ff事件全放0音轨。头音轨不在Mtrk中，export时生成
             // MThd创建
-            let data = [77, 84, 104, 100, 0, 0, 0, 6, 0, 1, ...mtrk.number_hex(1 + this.Mtrk.length, 2), ...mtrk.number_hex(this.tick, 2)];
+            const data = [
+                [77, 84, 104, 100, 0, 0, 0, 6, 0, 1],
+                undefined,  // 通道数 之后再填，因为数组可能空洞
+                mtrk.number_hex(this.tick, 2)
+            ];
             // 加入全局音轨
             let headMtrk = new mtrk("head", [
                 midiEvent.tempo(0, this.bpm),
                 midiEvent.time_signature(0, this.time_signature[0], this.time_signature[1])
-            ])
-            data = data.concat(headMtrk.export(0));
+            ]);
+            data.push(headMtrk.export(0));
             // 加入其余音轨
-            for (let i = 0; i < this.Mtrk.length; i++)
-                data = data.concat(this.Mtrk[i].export(i));
-            return new Uint8Array(data);
+            let realChannelNum = 1;
+            for (let i = 0; i < this.Mtrk.length; i++) {
+                if (this.Mtrk[i]) {
+                    data.push(this.Mtrk[i].export(i));
+                    realChannelNum++;
+                }
+            }
+            data[1] = mtrk.number_hex(realChannelNum, 2);
+            return new Uint8Array([].concat(...data));
         }
     }
 
