@@ -266,12 +266,20 @@
             input.type = 'file'; input.accept = '.mid';
             input.onchange = function () {
                 bSaver.readBinary(this.files[0], (data) => {
-                    const m = midi.import(new Uint8Array(data)).JSON();
+                    let m;
+                    try {
+                        m = midi.import(new Uint8Array(data)).JSON();
+                    } catch (error) {
+                        console.error("Error importing MIDI:", error);
+                        alert("导入MIDI文件时出错");
+                        return;
+                    }
                     const chdiv = app.MidiAction.channelDiv;
                     if (m.tracks.length + chdiv.channel.length > 16) {
                         if (!confirm("导入后音轨数量超过16，是否覆盖后几轨以导入midi？")) return;
                         for (let i = chdiv.channel.length - 1; m.tracks.length + chdiv.channel.length > 16; i--) chdiv.removeChannel(i);
                     }
+                    chdiv.switchUpdateMode(false);  // 下面会一次性创建大量音符，所以先关闭更新
                     let tickTimeTable = m.header.tempos;    // bpm会随着时间改变
                     const chArray = new Array(m.tracks.length);
                     let chArrayIndex = 0;
@@ -306,6 +314,7 @@
                     }
                     for (const ch of chArray) app.MidiAction.midi.push(...ch);
                     app.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
+                    chdiv.switchUpdateMode(true);   // 打开更新并一次性处理积压请求
                 });
             }; input.click();
         };
@@ -394,6 +403,7 @@
         function autoFill(from, to) {
             let ch;
             const chdiv = app.MidiAction.channelDiv;
+            chdiv.switchUpdateMode(false);
             if (checkbox.checked) {  // 新建音轨
                 if (chdiv.channel.length > 15) {
                     alert("音轨已满！请删除音轨或选择在当前音轨");
@@ -413,7 +423,7 @@
             for (const nt of notes) nt.ch = id;
             app.MidiAction.midi.push(...notes);
             app.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
-            app.MidiAction.updateView();
+            chdiv.switchUpdateMode(true, true);     // 强制更新，因为不一定调用了addChannel
         }
         btns[0].onclick = () => {   // 重复区间内
             if (!app.Spectrogram._spectrogram) {

@@ -335,7 +335,9 @@ class ChannelList extends EventTarget {
     }
     /* 颜色管理 end */
     /**
-     * 增加一个channel，触发add事件
+     * 增加一个channel，触发add事件，发生于插入之后
+     * 然后可能会触发reorder事件，取决于是否插入最后一个
+     * 最后触发added事件
      * @param {Number} at 插入音轨的序号
      * @returns {ChannelItem}
      */
@@ -353,10 +355,15 @@ class ChannelList extends EventTarget {
             detail: ch
         }));
         this.updateRange();
+        this.dispatchEvent(new Event("added"));
         return ch;
     }
     /**
-     * 删除一个channel，触发remove事件。事件发生于删除之前、归还颜色之后
+     * 删除一个channel，触发remove事件，发生于删除之前、归还颜色之后
+     * 然后可能会触发reorder事件，取决于是否删除最后一个
+     * 最后触发removed事件
+     * remove事件必须在reorder之前，因为reorder会触发重新映射，之后就不能根据原有的索引删除音符了
+     * 此外由于reorder的不稳定触发（会触发存档操作），使用时需要提前清除reorder的回调
      * @param {ChannelItem || Number} node 节点的序号或者节点或其子元素
      */
     removeChannel(node) {
@@ -368,8 +375,11 @@ class ChannelList extends EventTarget {
         }));
         this.synthesizer.channel.splice(channel.index, 1);
         if (this.selected === channel) this.selected = null;
+        // 之所以要parentNode是因为dragList中添加项会用<li>包裹
+        // 而this.channel[node]是channelItem（在上一次的updateRange中根据container.children赋值，赋值时使用了firstElementChild）
         channel.parentNode.remove();
-        this.updateRange()
+        this.updateRange()  // 可能会触发reorder事件
+        this.dispatchEvent(new Event("removed"));
     }
     /**
      * 设置选中的channel的样式

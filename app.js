@@ -191,40 +191,62 @@ function App() {
         // 多音轨
         channelDiv: (() => {
             const cd = new ChannelList(document.getElementById('funcSider'), this.synthesizer);
-            const saveOnReorder = () => this.snapshot.save();
-            const waitReorder = () => {
-                setTimeout(() => {
-                    this.snapshot.save();
-                    this.MidiAction.updateView();
-                    cd.addEventListener('reorder', saveOnReorder);
-                }, 0); // 等待reorder的发生
+            // 导入midi时创建音轨不应该update，而是应该在音符全创建完成后存档
+            cd.updateCount = -1;    // -1表示需要update 否则表示禁用更新但记录了请求次数
+            cd.switchUpdateMode = (state, forceUpdate = false) => { // 控制音轨的更新
+                if (state) {    // 切换回使能update
+                    if (cd.updateCount > 0 || forceUpdate) {    // 如果期间有更新请求
+                        this.MidiAction.updateView();
+                        this.snapshot.save();
+                    } cd.updateCount = -1;
+                } else if (cd.updateCount < 0) {    // 如果是从true切换为false
+                    cd.updateCount = 0;
+                }
             }
+            const updateOnReorder = () => {
+                if (cd.updateCount < 0) {
+                    this.MidiAction.updateView();
+                    this.snapshot.save();
+                } else cd.updateCount++;
+            };
+            /**
+             * 触发add和remove后也可能会触发reorder，取决于增删的是否是最后一项（见channelDiv.js）
+             * 故不是总能触发reorder的更新存档功能updateOnReorder
+             * 而更新与存档必须在reorder之后，因为reorder会重新映射channel
+             * 为了避免重复存档，需要暂时屏蔽reorder的存档功能
+             * 等到reorder之后一定会发生的added和removed事件触发后再恢复
+             */
+            const resumeReroderCallback = () => {
+                updateOnReorder();  // 稳定触发
+                cd.addEventListener('reorder', updateOnReorder);
+            };
+
             cd.addEventListener('reorder', ({ detail }) => {
-                for (const nt of this.MidiAction.midi) {
-                    nt.ch = detail[nt.ch];
-                } this.MidiAction.updateView();
-            });
-            cd.addEventListener('reorder', saveOnReorder);
+                for (const nt of this.MidiAction.midi) nt.ch = detail[nt.ch];
+            }); // 重新映射音符 更新视图在updateOnReorder中
+            cd.addEventListener('reorder', updateOnReorder);
+
             cd.addEventListener('remove', ({ detail }) => {
-                cd.removeEventListener('reorder', saveOnReorder);
                 this.MidiAction.midi = this.MidiAction.midi.filter((nt) => nt.ch != detail.index);
                 this.MidiAction.selected = this.MidiAction.selected.filter((nt) => nt.ch != detail.index);
-                waitReorder();
+                cd.removeEventListener('reorder', updateOnReorder);
             });
+            cd.addEventListener('removed', resumeReroderCallback);
+
             cd.addEventListener('add', () => {
-                cd.removeEventListener('reorder', saveOnReorder);
-                waitReorder();
+                cd.removeEventListener('reorder', updateOnReorder);
             });
+            cd.addEventListener('added', resumeReroderCallback);
             return cd;
         })(),
         insight: [],    // 二维数组，每个元素为一个音轨视野内的音符 音符拾取依赖此数组
         /**
          * 更新this.MidiAction.insight
          * 步骤繁琐，不必每次更新。触发时机:
-         * 1. channelDiv的reorder
-         * 2. midi的增删移动改变长度。由于都会调用且最后调用changeNoteY，所以只需要在changeNoteY中调用
+         * 1. channelDiv的reorder、added、removed
+         * 2. midi的增加、移动、改变长度（用户操作）。由于都会调用且最后调用changeNoteY，所以只需要在changeNoteY中调用
          * 3. scroll2
-         * 4. deleteNote
+         * 4. midi的删除（用户操作）：deleteNote
          * 5. ctrlZ、ctrlY、ctrlV
          */
         updateView: () => {
@@ -254,7 +276,7 @@ function App() {
             const s = this.spectrum.ctx;
             const c = M.channelDiv.channel;
             for (let ch = m.length - 1; ch >= 0; ch--) {
-                if (m[ch].length === 0 || (c[ch] && !c[ch].visible)) continue;
+                if (m[ch].length === 0 || !c[ch].visible) continue;
                 let ntcolor = c[ch].color;
                 for (const note of m[ch]) {
                     const params = [note.x1 * this._width - this.scrollX, this.spectrum.height - note.y * this._height + this.scrollY, (note.x2 - note.x1) * this._width, -this._height];
@@ -294,6 +316,10 @@ function App() {
                 y2 = (ymax - ymin) * this._height;
             } s.fillRect(x1, y1, x2, y2);
         },
+        /**
+         * 删除选中的音符 触发updateView
+         * @param {boolean} save 是否存档
+         */
         deleteNote: (save = true) => {
             this.MidiAction.selected.forEach((v) => {
                 let i = this.MidiAction.midi.indexOf(v);
