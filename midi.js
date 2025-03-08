@@ -5,7 +5,10 @@
  * - 不记录通道信息（在导出为二进制时由mtrk加上通道信息）
  */
 class midiEvent {
-    ticks; code; value;
+    ticks;  // 无需是整数 因为export时会被mtrk.tick_hex转为整数
+    code;   // 必须是整数 由构造函数保证，但不限制范围
+    value;  // 每一项必须是整数 由构造函数保证，但不限制范围
+    // 范围的限制由static方法保证
     /**
      * 用参数创建一个事件
      * @param {number} ticks 绝对时间，单位tick。若tisks == -1, 在mtrk.addEvent时会自动使用last_tick; 若<-1, 则last_tick - this.ticks（此时代表相对时间）
@@ -37,15 +40,16 @@ class midiEvent {
         }
     }
     /**
-     * 根据参数数目选择不同的构造函数创建事件
+     * 根据参数数目选择不同的构造函数创建事件。会把非整数转为整数
+     * @param 参考构造函数#constructor_args和#constructor_obj
      * @returns midiEvent
      */
     constructor() {
-        if (arguments.length == 3) {
-            return this.#constructor_args(...arguments);
-        } else {
-            return this.#constructor_obj(...arguments);
-        }
+        let e = (arguments.length == 3) ? this.#constructor_args(...arguments) : this.#constructor_obj(...arguments);
+        // 数据整数化
+        for (let i = 0; i < e.value.length; i++) e.value[i] = Math.round(e.value[i]);
+        e.code = e.code | 0;
+        return e;
     }
     /**
      * 针对0xff事件的type
@@ -73,6 +77,14 @@ class midiEvent {
     }
 
     static note(at, duration, note, intensity) {
+        if (note < 0 || note > 127) {
+            if (midi.autoFix) note = mtrk.constrain(note, 0, 127);
+            else throw new Error('note should be in [0, 127]');
+        }
+        if (intensity < 0 || intensity > 127) {
+            if (midi.autoFix) intensity = mtrk.constrain(intensity, 0, 127);
+            else throw new Error('note intensity should be in [0, 127]');
+        }
         return [new midiEvent({
             ticks: at,
             code: 0x9,
@@ -84,6 +96,10 @@ class midiEvent {
         })];
     }
     static instrument(at, instrument) {
+        if (instrument < 0 || instrument > 127) {
+            if (midi.autoFix) instrument = mtrk.constrain(instrument, 0, 127);
+            else throw new Error('instrument should be in [0, 127]');
+        }
         return new midiEvent({
             ticks: at,
             code: 0xc,
@@ -128,6 +144,8 @@ class midiEvent {
 }
 // 一个音轨
 class mtrk {
+    // 限制数据范围
+    static constrain(value, min = 0, max = 127) { return Math.min(max, Math.max(min, value)); }
     /**
      * 将tick数转换为midi的时间格式
      * @param {number} ticknum float，但会转换为int
@@ -359,6 +377,7 @@ class mtrk {
 }
 
 class midi {
+    static autoFix = false; // 是否自动修正异常数据；为false会抛出异常
     /**
      * midi文件，组织多音轨
      * @param {number} bpm beats per minute

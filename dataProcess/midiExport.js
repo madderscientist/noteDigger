@@ -41,7 +41,9 @@ var _midiExport = {
         }
         for (const nt of app.MidiAction.midi) {
             const midint = nt.y + 24;
-            mts[nt.ch].addEvent(midiEvent.note(nt.x1, nt.x2 - nt.x1, midint, mts[nt.ch]._volume));
+            let v = mts[nt.ch]._volume;
+            if (nt.v) v = Math.min(127, v * nt.v / 127);
+            mts[nt.ch].addEvent(midiEvent.note(nt.x1, nt.x2 - nt.x1, midint, v));
         } return newMidi;
     },
     beatAlign() {
@@ -64,11 +66,13 @@ var _midiExport = {
             const nt = Midis[j];
             let duration = nt.x2 - nt.x1;
             let midint = nt.y + 24;
+            let v = mts[nt.ch]._volume;
+            if (nt.v) v = Math.min(127, v * nt.v / 127);
             moment[i++] = new midiEvent({
                 _d: duration,
                 ticks: nt.x1,
                 code: 0x9,
-                value: [midint, mts[nt.ch]._volume],
+                value: [midint, v],
                 _ch: nt.ch
             }, true);
             moment[i++] = new midiEvent({

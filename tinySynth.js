@@ -295,6 +295,7 @@ class TinySynth {
      * @param {Object} options 音符播放参数
      * @param {Number} [options.id] - channel的id，如果不传或违规则用自身 决定了音色
      * @param {Number} [options.f=440] - 发生频率
+     * @param {Number} [options.v=127] - 力度，最大127 会按平方律变为音量
      * @param {Number} [options.t=0] - 发声时间(秒) 如果小于零则在this.actx.currentTime基础上加其绝对值
      * @param {Number} [options.last=9999] - 持续时间(秒)
      * @returns {Object} note = {ch, end, gain, release}

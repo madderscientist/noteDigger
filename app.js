@@ -185,6 +185,7 @@ function App() {
             x2: 离散 终点
             ch: 音轨序号
             selected: 是否选中
+            v: 音量，0~127，用户创建的音符无此选项，但导入的midi有
         } */
         selected: [],   // 选中的音符 无序即可
         midi: [],       // 所有音符 需要维护有序性
@@ -586,6 +587,7 @@ function App() {
                     this.synthesizer.play({
                         id: nt.ch,
                         f: this.Keyboard.freqTable[nt.y],
+                        v: nt.v,    // 用户创建的音符不可单独调整音量，为undefined，会使用默认值
                         t: this.AudioPlayer.audio.currentTime - (nt.x1 * this.dt) / 1000,
                         last: (nt.x2 - nt.x1) * this.dt / 1000
                     });
