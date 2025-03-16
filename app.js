@@ -176,6 +176,8 @@ function App() {
         frameMode: 0,   // 0: 框选 1: 列选 2: 行选
         frameXid: -1,   // 框选的终点的X序号(Y序号=this.Keyboard.highlight-24) 此变量便于绘制 如果是负数则不绘制
 
+        alphaIntensity: true,   // 绘制音符时是否根据音量使用透明度
+
         _tempdx: 0, // 鼠标移动记录上次
         _tempdy: 0,
         _anyAction: false,  // 用于在选中多个后判断松开鼠标时应该如何处理选中
@@ -287,7 +289,9 @@ function App() {
                         s.strokeStyle = ntcolor;
                         s.strokeRect(...params);
                     } else {
-                        s.fillStyle = ntcolor;
+                        if (M.alphaIntensity && note.v) {
+                            s.fillStyle = ntcolor + Math.round(note.v**2 * 0.01581).toString(16);   // 平方律显示强度
+                        } else s.fillStyle = ntcolor;
                         s.fillRect(...params);
                         s.strokeStyle = '#ffffff';
                         s.strokeRect(...params);

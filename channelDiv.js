@@ -74,7 +74,6 @@ function dragList(takeplace = true) {
 }
 
 // 为了可读性、隔离性、模块化，使用此类包裹HTMLDivElement
-// 此类设计为
 class ChannelItem extends HTMLDivElement {
     /**
      * 实际并不使用构造函数 此函数只是表明有哪些属性可用
@@ -85,6 +84,8 @@ class ChannelItem extends HTMLDivElement {
         this.instrumentDiv = null;
         this.visibleButton = null;
         this.muteButton = null;
+        // 用ChannelList.addChannel添加时会注入ch属性，存储了对应的合成器音轨 因为合成器是ChannelList的成员
+        this.ch = null;
     }
     /**
      * 通过更改原型链实现构造

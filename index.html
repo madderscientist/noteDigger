@@ -146,6 +146,7 @@
             <button>取消区间</button><button>应用</button>
         </li>
         <li>显示音名<input type="checkbox" onchange="app.pitchNameDisplay.showPitchName(this.checked)"></li>
+        <li>透明度表示强度<input type="checkbox" checked onchange="app.MidiAction.alphaIntensity=this.checked"></li>
     </ul>
 </div>
 <script>
@@ -300,6 +301,10 @@
                         ch.ch.instrument = mt.instruments[0]?.number || 0;
                         ch.instrument = TinySynth.instrument[ch.ch.instrument];
 
+                        // 音符强度归一化到0-127 演奏和导出时用的是“通道音量*音符音量/127”
+                        let maxIntensity = mt.notes.reduce((a, b) => a.intensity > b.intensity ? a : b).intensity;
+                        ch.ch.volume = maxIntensity;
+
                         chArray[chArrayIndex++] = mt.notes.map((nt) => {
                             const t = checkChange(nt.ticks);
                             return {    // 理应给x1和x2取整，但是为了尽量不损失信息就不取整了 不取整会导致导出midi时要取整
@@ -308,7 +313,7 @@
                                 y: nt.midi - 24,
                                 ch: chid,
                                 selected: false,
-                                v: nt.intensity
+                                v: nt.intensity / maxIntensity * 127
                             };
                         });
                     }
