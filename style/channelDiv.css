@@ -82,7 +82,9 @@ ul.drag_list li.moving::before {
 }
 /* 音轨名 */
 .channel-Name {
-    overflow: hidden; /* 隐藏超出容器的内容 */
+    overflow: hidden;       /* 隐藏超出容器的内容 */
+    white-space: nowrap;    /* 不换行 */
+    text-overflow: ellipsis;/* 超出部分用省略号表示 */
     flex: 1;
     font-size: 1em;
     font-weight: bold;
@@ -90,6 +92,10 @@ ul.drag_list li.moving::before {
     cursor: pointer;
 }
 /* 快捷按钮 */
+.channel-Tab {
+    display: flex;  /* 消除子block之间的间隙 */
+    flex: 0 1 auto;
+}
 .upper .tab {
     border-radius: 50%;
     width: 1.8em;

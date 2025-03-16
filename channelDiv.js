@@ -82,6 +82,7 @@ class ChannelItem extends HTMLDivElement {
         super();
         this.nameDiv = null;
         this.instrumentDiv = null;
+        this.lockButton = null;
         this.visibleButton = null;
         this.muteButton = null;
         // 用ChannelList.addChannel添加时会注入ch属性，存储了对应的合成器音轨 因为合成器是ChannelList的成员
@@ -93,13 +94,14 @@ class ChannelItem extends HTMLDivElement {
      * @param {String} color 
      * @returns {ChannelItem}
      */
-    static new(name = "channel", color = "red", instrument = "Piano", visible = true, mute = false) {
+    static new(name = "channel", color = "red", instrument = "Piano", visible = true, mute = false, lock = false) {
         let tempDiv = document.createElement('div');
         tempDiv.innerHTML = `
         <div class="channel-Container" style="--tab-color: ${color};" data-tab-index="1">
             <div class="upper">
                 <div class="channel-Name">${name}</div>
-                <div>
+                <div class="channel-Tab">
+                    <button class="tab iconfont icon-unlock" data-state="unlock"></button>
                     <button class="tab iconfont icon-eye-fill" data-state="visible"></button>
                     <button class="tab iconfont icon-volume" data-state="nomute"></button>
                 </div>
@@ -109,18 +111,25 @@ class ChannelItem extends HTMLDivElement {
         container.nameDiv = tempDiv.querySelector('.channel-Name');
         container.instrumentDiv = tempDiv.querySelector('.channel-Instrument');
         const buttons = tempDiv.querySelectorAll('.tab');
-        container.visibleButton = buttons[0];
-        container.muteButton = buttons[1];
-        buttons[0].addEventListener('click', (e) => {
+        container.lockButton = buttons[0];
+        container.visibleButton = buttons[1];
+        container.muteButton = buttons[2];
+        container.lockButton.addEventListener('click', (e) => {
+            e.stopPropagation();
+            container.lock = !container.lock;
+        });
+        container.visibleButton.addEventListener('click', (e) => {
             e.stopPropagation();
             container.visible = !container.visible;
+            container.lock = !container.visible;    // 先执行本函数的目的再联动lock
         });
-        buttons[1].addEventListener('click', (e) => {
+        container.muteButton.addEventListener('click', (e) => {
             e.stopPropagation();
             container.mute = !container.mute;
         });
         // 设置原型链为ChannelItem
         Object.setPrototypeOf(container, ChannelItem.prototype);
+        container.lock = lock;
         container.visible = visible;
         container.mute = mute;
         return container;
@@ -142,6 +151,22 @@ class ChannelItem extends HTMLDivElement {
     }
     set color(color) {
         this.style.setProperty('--tab-color', color);
+    }
+    get lock() {
+        return this.lockButton.dataset.state === 'lock';
+    }
+    set lock(lock) {
+        if (typeof lock !== 'boolean') lock = lock === "lock";
+        if (lock) {
+            this.lockButton.dataset.state = 'lock';
+            this.lockButton.classList.remove('icon-unlock');
+            this.lockButton.classList.add('icon-lock');
+        } else {
+            this.lockButton.dataset.state = 'unlock';
+            this.lockButton.classList.remove('icon-lock');
+            this.lockButton.classList.add('icon-unlock');
+        }
+        this.dispatchEvent(new Event('lock', { bubbles: true }));
     }
     get visible() { // true为可见
         return this.visibleButton.dataset.state === 'visible';

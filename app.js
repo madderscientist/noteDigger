@@ -240,6 +240,13 @@ function App() {
                 cd.removeEventListener('reorder', updateOnReorder);
             });
             cd.addEventListener('added', resumeReroderCallback);
+
+            cd.container.addEventListener('lock', ({target}) => {
+                this.MidiAction.selected = this.MidiAction.selected.filter((nt) => {
+                    if (nt.ch == target.index) return nt.selected = false;
+                    return true;
+                });
+            });
             return cd;
         })(),
         insight: [],    // 二维数组，每个元素为一个音轨视野内的音符 音符拾取依赖此数组
@@ -281,6 +288,7 @@ function App() {
             for (let ch = m.length - 1; ch >= 0; ch--) {
                 if (m[ch].length === 0 || !c[ch].visible) continue;
                 let ntcolor = c[ch].color;
+                if (c[ch].lock) s.setLineDash([5, 5]);
                 for (const note of m[ch]) {
                     const params = [note.x1 * this._width - this.scrollX, this.spectrum.height - note.y * this._height + this.scrollY, (note.x2 - note.x1) * this._width, -this._height];
                     if (note.selected) {
@@ -297,6 +305,7 @@ function App() {
                         s.strokeRect(...params);
                     }
                 }
+                s.setLineDash([]);
             } if (!M.mode || M.frameXid < 0) return;
             // 绘制框选动作
             s.fillStyle = '#f0f0f088';
@@ -384,7 +393,7 @@ function App() {
                     this.spectrum.removeEventListener('mousemove', this.trackMouseX);
                     document.removeEventListener('mouseup', up);
                     let ch = m.channelDiv.selected;
-                    if (ch) {
+                    if (ch && !ch.lock) {
                         ch = ch.index;
                         let [xmin, xmax] = m.clickXid <= m.frameXid ? [m.clickXid, m.frameXid + 1] : [m.frameXid, m.clickXid + 1];
                         for (const nt of m.midi) nt.selected = (nt.x1 >= xmin && nt.x1 < xmax && nt.ch == ch);
@@ -395,7 +404,7 @@ function App() {
                 const up = () => {
                     document.removeEventListener('mouseup', up);
                     let ch = m.channelDiv.selected;
-                    if (ch) {
+                    if (ch && !ch.lock) {
                         ch = ch.index;
                         const Y = this.Keyboard.highlight - 24;
                         let [ymin, ymax] = Y <= m.clickYid ? [Y, m.clickYid + 1] : [m.clickYid, Y + 1];
@@ -409,7 +418,7 @@ function App() {
                     this.spectrum.removeEventListener('mousemove', this.trackMouseX);
                     document.removeEventListener('mouseup', up);
                     let ch = m.channelDiv.selected;
-                    if (ch) {
+                    if (ch && !ch.lock) {
                         ch = ch.index;
                         const Y = this.Keyboard.highlight - 24;
                         let [xmin, xmax] = m.clickXid <= m.frameXid ? [m.clickXid, m.frameXid + 1] : [m.frameXid, m.clickXid + 1];
@@ -426,6 +435,7 @@ function App() {
         addNoteAction: () => {
             const m = this.MidiAction;
             if (!m.channelDiv.selected && !m.channelDiv.selectChannel(0)) return;   // 如果没有选中则默认第一个
+            if (m.channelDiv.selected.lock) return;    // 锁定的音轨不能添加音符
             // 取消已选
             m.clearSelected();
             // 添加新音符，设置已选
@@ -459,7 +469,6 @@ function App() {
         onclick_L: (e) => {
             //== step 1: 判断是否点在了音符上 ==//
             const m = this.MidiAction;
-            const midi = m.midi;
             m._anyAction = false;
             // 为了支持在鼠标操作的时候能滑动，记录绝对位置
             m._tempdx = m._tempdy = 0;
@@ -470,7 +479,10 @@ function App() {
             const y = m.clickYid = this.Keyboard.highlight - 24;
             // 找到点击的最近的音符 由于点击不经常，所以用遍历足矣 只需要遍历insight的音符
             let n = null;
-            for (const ch of m.insight) {
+            for (let ch_id = 0; ch_id < m.insight.length; ch_id++) {
+                const chitem = m.channelDiv.channel[ch_id]      // insight和channelDiv的顺序是一致的
+                if (!chitem.visible || chitem.lock) continue;   // 隐藏、锁定的音轨选不中
+                const ch = m.insight[ch_id];
                 // 每层挑选左侧最靠近的（如果有多个）
                 let distance = this._width * this._xnum;
                 for (const nt of ch) {  // 由于来自midi，因此每个音轨内部是有序的
@@ -484,7 +496,7 @@ function App() {
                     }
                 } if (n) break; // 只找最上层的
             }
-            if (!n) {   // 添加或框选音符
+            if (!n) {   // 添加或框选音符 关于lock的处理在函数中
                 if (m.mode) m.selectAction(m.frameMode);
                 else m.addNoteAction();
                 return;
