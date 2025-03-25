@@ -1560,28 +1560,87 @@ function App() {
                         // 最终都要关闭进度条
                         this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));
                         // 后台执行CQT
-                        if (window.location.protocol == 'file:' || window.cqt == undefined) return;    // 开worker和fetch要求http
-                        console.time("CQT计算");
-                        cqt(audioData, tNum, channel, this.Keyboard.freqTable[0]).then((cqtData) => {
-                            // CQT结果准确但琐碎，STFT结果粗糙但平滑，所以混合一下
-                            const s = this.Spectrogram.spectrogram;
-                            let tLen = Math.min(cqtData.length, s.length);
-                            for (let i = 0; i < tLen; i++) {
-                                const cqtBins = cqtData[i];
-                                const stftBins = s[i];
-                                for (let j = 0; j < cqtBins.length; j++) {
-                                    // 用非线性混合，当两者极大的时候取最大值，否则相互压制
-                                    if(stftBins[j] < cqtBins[j]) stftBins[j] = cqtBins[j];
-                                    else stftBins[j] = Math.sqrt(stftBins[j] * cqtBins[j]);
-                                }
-                            }
-                            console.timeEnd("CQT计算");
-                        }).catch(console.error);
+                        this.Analyser.cqt(audioData, tNum, channel);
                     });
                 }; fileReader.readAsArrayBuffer(file);
             };
             document.body.insertBefore(ui, document.body.firstChild);   // 插入body的最前面
-        }
+        },
+        /**
+         * 后台（worker）计算CQT
+         * @param {AudioBuffer} audioBuffer 音频缓冲区
+         * @param {Number} tNum 一秒几次分析 决定步距
+         * @param {Number} channel 选择哪个channel分析 0:left 1:right 2:l+r 3:l-r else:fft(l)+fft(r)
+         * @returns 不返回，直接作用于Spectrogram.spectrogram
+         */
+        cqt: (audioData, tNum, channel) => {
+            if (window.location.protocol == 'file:' || window.cqt == undefined) return;    // 开worker和fetch要求http
+            console.time("CQT计算");
+            cqt(audioData, tNum, channel, this.Keyboard.freqTable[0]).then((cqtData) => {
+                // CQT结果准确但琐碎，STFT结果粗糙但平滑，所以混合一下
+                const s = this.Spectrogram.spectrogram;
+                let tLen = Math.min(cqtData.length, s.length);
+                for (let i = 0; i < tLen; i++) {
+                    const cqtBins = cqtData[i];
+                    const stftBins = s[i];
+                    for (let j = 0; j < cqtBins.length; j++) {
+                        // 用非线性混合，当两者极大的时候取最大值，否则相互压制
+                        if(stftBins[j] < cqtBins[j]) stftBins[j] = cqtBins[j];
+                        else stftBins[j] = Math.sqrt(stftBins[j] * cqtBins[j]);
+                    }
+                }
+                console.timeEnd("CQT计算");
+            }).catch(console.error);
+        },
+        /**
+         * 后台（worker）AI扒谱
+         * @param {AudioBuffer} audioBuffer 音频缓冲区
+         * @param {Boolean} judgeOnly 是否只判断是否可以扒谱
+         * @returns promise，用于指示扒谱完成。如果judgeOnly为true则返回值代表是否可以AI扒谱
+         */
+        basicamt: (audioData, judgeOnly = false) => {
+            if (window.location.protocol == 'file:' || window.basicamt == undefined) {  // 开worker和fetch要求https
+                alert("file协议下无法使用AI扒谱！");
+                return false;
+            }
+            if (!this.Spectrogram._spectrogram) {
+                alert('请导入音频或进入midi编辑模式！');
+                return false;
+            }
+            if (!this.MidiAction.channelDiv.colorMask) {
+                alert("音轨不足！请至少删除一个音轨！");
+                return false;
+            }
+            if (judgeOnly) return true;
+            console.time("AI扒谱");
+            return basicamt(audioData).then((events) => {
+                console.timeEnd("AI扒谱");
+                const timescale = (256 * 1000) / (22050 * this.dt); // basicAMT在22050Hz下以hop=256分析
+                // 逻辑同index.html中导入midi
+                const chdiv = this.MidiAction.channelDiv;
+                chdiv.switchUpdateMode(false);
+                const ch = chdiv.addChannel();
+                if (!ch) return;
+                const chid = ch.index;
+                ch.name = `AI扒谱${chid}`;
+                ch.instrument = TinySynth.instrument[(ch.ch.instrument = 4)];
+                const maxIntensity = events.reduce((a, b) => a.velocity > b.velocity ? a : b).velocity;
+                ch.ch.volume = maxIntensity * 127;
+                const notes = events.map(({ onset, offset, note, velocity }) => {
+                    return {
+                        x1: onset * timescale,
+                        x2: offset * timescale,
+                        y: note - 24,
+                        ch: chid,
+                        selected: false,
+                        v: velocity / maxIntensity * 127
+                    };
+                });
+                this.MidiAction.midi.push(...notes);
+                this.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
+                chdiv.switchUpdateMode(true);
+            }).catch(alert);
+        },
     };
     //========= 导入导出 =========//
     if (window.bSaver) this.Saver = {

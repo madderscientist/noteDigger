@@ -35,6 +35,8 @@
 <script src="./midi.js" async></script>
 <!-- 可选的CQT分析 -->
 <script src="./dataProcess/CQT/cqt.js" async></script>
+<!-- 可选的AI扒谱 -->
+<script src="./dataProcess/AI/basicamt.js" async></script>
 
 <body class="fc">
     <!-- 上半部分 工具区 -->
@@ -134,6 +136,7 @@
                 <button>所有时间</button>
             </div>
         </li>
+        <li>人工智障扒谱</li>
         (￣ε(#￣) 别的还没做
     </ul>
 
@@ -400,23 +403,22 @@
             </div>`;
             this.appendChild(div);
         };
+        // 自动填充音符
         const inputs = lis[1].querySelectorAll('input');
         const btns = lis[1].querySelectorAll('button');
         const checkbox = inputs[0];
         const threshold = inputs[1];
         threshold.addEventListener('input', function () {
             this.style.background = app.Spectrogram.getColor(this.value)
-        })
+        });
         hideLableRange.new(threshold).reset().parentElement.classList.add('fullRange');
         function autoFill(from, to) {
             let ch;
             const chdiv = app.MidiAction.channelDiv;
             chdiv.switchUpdateMode(false);
             if (checkbox.checked) {  // 新建音轨
-                if (chdiv.channel.length > 15) {
-                    alert("音轨已满！请删除音轨或选择在当前音轨");
-                    return;
-                } ch = chdiv.addChannel();
+                ch = chdiv.addChannel();
+                if (!ch) return;    // addChannel会alert
             } else ch = chdiv.selected;
             if (!ch) {
                 alert("未选中音轨！");
@@ -452,8 +454,28 @@
                 alert('请导入音频！');
                 return;
             } autoFill();
-        }
-
+        };
+        // 人工智障扒谱
+        lis[2].onclick = function() {
+            if (!app.Analyser.basicamt(null, true)) return; // 仅仅判断是否可以进行AI扒谱
+            const btn = this;
+            // 由于效果并不好，因此不会自动执行；而程序为了省内存不会保留音频数据，因此需要重新上传音频
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'audio/*,video/*,.mov';
+            input.onchange = function () {
+                btn.innerHTML = "AI扒谱中...";
+                const fileReader = new FileReader();
+                fileReader.onload = (e) => {
+                    // 解码音频文件为音频缓冲区
+                    app.audioContext.decodeAudioData(e.target.result).then((decodedData) =>
+                        app.Analyser.basicamt(decodedData, false)
+                    ).then(() => {
+                        btn.innerHTML = "AI扒谱";
+                    });
+                }; fileReader.readAsArrayBuffer(this.files[0]);
+            }; input.click();
+        };
     }
 
     // ==== 设置界面 ==== //
