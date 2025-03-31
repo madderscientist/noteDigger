@@ -10,7 +10,7 @@
 “Note Digger”——音符挖掘者，即扒谱。模仿的是软件wavetone，但是是双击即用、现代UI的前端应用。<br>
 目标是全部自己造轮子！即：不使用框架、不使用外部库；目的是减小项目大小，并掌握各个环节。目前频谱分析的软件非常多，功能也超级强大，自知比不过……所以唯一能一战的就是项目体积了！作为一个纯前端项目，就要把易用的优点完全发扬！<br>
 [在线使用](https://madderscientist.github.io/noteDigger/)<br>
-视频演示（视频发布与更细节奏对齐之前）
+视频演示（视频发布于更新节奏对齐之前）
 <a href="https://www.bilibili.com/video/BV1XA4m1G7k4/" target="_blank"><img src="https://i1.hdslb.com/bfs/archive/4700166054a855cfe779f8d93f5ec1fb84293a12.jpg" alt="点击封面跳转视频" /></a>
 
 ## 使用流程

@@ -200,7 +200,7 @@ function App() {
                 if (state) {    // 切换回使能update
                     if (cd.updateCount > 0 || forceUpdate) {    // 如果期间有更新请求
                         this.MidiAction.updateView();
-                        this.snapshot.save();
+                        this.snapshot.save(0b11);
                     } cd.updateCount = -1;
                 } else if (cd.updateCount < 0) {    // 如果是从true切换为false
                     cd.updateCount = 0;
@@ -209,7 +209,7 @@ function App() {
             const updateOnReorder = () => {
                 if (cd.updateCount < 0) {
                     this.MidiAction.updateView();
-                    this.snapshot.save();
+                    this.snapshot.save(0b11);
                 } else cd.updateCount++;
             };
             /**
@@ -241,12 +241,18 @@ function App() {
             });
             cd.addEventListener('added', resumeReroderCallback);
 
+            const saveOnStateChange = () => {
+                this.snapshot.save(0b1);
+            }
             cd.container.addEventListener('lock', ({target}) => {
                 this.MidiAction.selected = this.MidiAction.selected.filter((nt) => {
                     if (nt.ch == target.index) return nt.selected = false;
                     return true;
                 });
             });
+            cd.container.addEventListener('lock', saveOnStateChange);
+            // cd.container.addEventListener('visible', saveOnStateChange);    // visible会联动lock，因此无需存档
+            cd.container.addEventListener('mute', saveOnStateChange);
             return cd;
         })(),
         insight: [],    // 二维数组，每个元素为一个音轨视野内的音符 音符拾取依赖此数组
@@ -340,7 +346,7 @@ function App() {
                 if (i != -1) this.MidiAction.midi.splice(i, 1);
             });
             this.MidiAction.selected.length = 0;
-            if (save) this.snapshot.save();
+            if (save) this.snapshot.save(0b10);
             this.MidiAction.updateView();
         },
         clearSelected: () => {  // 取消已选
@@ -463,7 +469,7 @@ function App() {
                 this.spectrum.removeEventListener('mousemove', m.changeNoteY);
                 document.removeEventListener('mouseup', removeEvent);
                 // 鼠标松开则存档
-                if (m._anyAction) this.snapshot.save();
+                if (m._anyAction) this.snapshot.save(0b10);
             }; document.addEventListener('mouseup', removeEvent);
         },
         onclick_L: (e) => {
@@ -547,7 +553,7 @@ function App() {
                     this.spectrum.removeEventListener('mousemove', m.changeNoteY);
                     document.removeEventListener('mouseup', removeEvent);
                     // 鼠标松开则存档
-                    if (m._anyAction) this.snapshot.save();
+                    if (m._anyAction) this.snapshot.save(0b10);
                 }; document.addEventListener('mouseup', removeEvent);
             } else {    // 靠近左侧，调整位置
                 this.spectrum.addEventListener('mousemove', m.changeNoteX);
@@ -558,7 +564,7 @@ function App() {
                     document.removeEventListener('mouseup', removeEvent);
                     this.MidiAction.midi.sort((a, b) => a.x1 - b.x1);   // 排序非常重要 因为查找被点击的音符依赖顺序
                     // 鼠标松开则存档
-                    if (m._anyAction) this.snapshot.save();
+                    if (m._anyAction) this.snapshot.save(0b10);
                 }; document.addEventListener('mouseup', removeEvent);
             }
         },
@@ -1077,15 +1083,19 @@ function App() {
     };
     // 撤销相关
     this.snapshot = new Snapshot(16, {
-        midi: JSON.stringify(this.MidiAction.midi),     // 音符移动、长度改变、channel改变后
-        channel: JSON.stringify(this.MidiAction.channelDiv.channel), // 音轨改变序号、增删、修改参数后
-        beat: JSON.stringify(this.BeatBar.beats)
+        // 用对象包裹，实现字符串的引用
+        midi: {value: JSON.stringify(this.MidiAction.midi)},    // 音符移动、长度改变、channel改变后
+        channel: {value: JSON.stringify(this.MidiAction.channelDiv.channel)},   // 音轨改变序号、增删、修改参数后
+        beat: {value: JSON.stringify(this.BeatBar.beats)}
     });
-    this.snapshot.save = () => {
+    // changed = channel变化<<1 | midi变化<<2 | beat变化<<3
+    this.snapshot.save = (changed = 0b111) => {
+        const nowState = this.snapshot.nowState();
+        const lastStateNotExists = nowState == null;
         this.snapshot.add({
-            channel: JSON.stringify(this.MidiAction.channelDiv.channel),
-            midi: JSON.stringify(this.MidiAction.midi),
-            beat: JSON.stringify(this.BeatBar.beats)
+            channel: (lastStateNotExists || (changed & 0b1)) ? {value: JSON.stringify(this.MidiAction.channelDiv.channel)} : nowState.channel,
+            midi: (lastStateNotExists || (changed & 0b10)) ? {value: JSON.stringify(this.MidiAction.midi)} : nowState.midi,
+            beat: (lastStateNotExists || (changed & 0b100)) ? {value: JSON.stringify(this.BeatBar.beats)} : nowState.beat
         });
     };
     this.HscrollBar = {     // 配合scroll的滑动条
@@ -1136,19 +1146,19 @@ function App() {
         'Ctrl+Z': () => {   // 撤销
             let lastState = this.snapshot.undo();
             if (!lastState) return;
-            this.MidiAction.midi = JSON.parse(lastState.midi);
+            this.MidiAction.midi = JSON.parse(lastState.midi.value);
             this.MidiAction.selected = this.MidiAction.midi.filter((obj) => obj.selected);
-            this.MidiAction.channelDiv.fromArray(JSON.parse(lastState.channel));
-            this.BeatBar.beats.copy(JSON.parse(lastState.beat));
+            this.MidiAction.channelDiv.fromArray(JSON.parse(lastState.channel.value));
+            this.BeatBar.beats.copy(JSON.parse(lastState.beat.value));
             this.MidiAction.updateView();
         },
         'Ctrl+Y': () => {
             let nextState = this.snapshot.redo();
             if (!nextState) return;
-            this.MidiAction.midi = JSON.parse(nextState.midi);
+            this.MidiAction.midi = JSON.parse(nextState.midi.value);
             this.MidiAction.selected = this.MidiAction.midi.filter((obj) => obj.selected);
-            this.MidiAction.channelDiv.fromArray(JSON.parse(nextState.channel));
-            this.BeatBar.beats.copy(JSON.parse(nextState.beat));
+            this.MidiAction.channelDiv.fromArray(JSON.parse(nextState.channel.value));
+            this.BeatBar.beats.copy(JSON.parse(nextState.beat.value));
             this.MidiAction.updateView();
         },
         'Ctrl+A': () => {           // 选中该通道的所有音符
@@ -1203,7 +1213,7 @@ function App() {
             this.MidiAction.midi.push(...copy);
             this.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
             this.MidiAction.updateView();
-            this.snapshot.save();
+            this.snapshot.save(0b10);   // 只保存midi的快照
         },
         'Ctrl+B': () => {       // 收回面板
             const channelDiv = this.MidiAction.channelDiv.container.parentNode;
@@ -1838,7 +1848,7 @@ function App() {
                         this.timeBar.removeEventListener('mousemove', setMeasure);
                         this.timeBar.addEventListener('mousemove', this.BeatBar.moveCatch);
                         document.removeEventListener('mouseup', removeEvents);
-                        if (_anyAction) this.snapshot.save();
+                        if (_anyAction) this.snapshot.save(0b100);
                     };
                     this.timeBar.addEventListener('mousemove', setMeasure);
                     document.addEventListener('mouseup', removeEvents);

@@ -182,6 +182,7 @@ class ChannelItem extends HTMLDivElement {
             this.visibleButton.classList.remove('icon-eye-fill');
             this.visibleButton.classList.add('icon-eyeslash-fill');
         }
+        this.dispatchEvent(new Event('visible', { bubbles: true }));
     }
     get mute() { // true为静音
         return this.muteButton.dataset.state === 'mute';
@@ -197,6 +198,7 @@ class ChannelItem extends HTMLDivElement {
             this.muteButton.classList.remove('icon-close_volume');
             this.muteButton.classList.add('icon-volume');
         }
+        this.dispatchEvent(new Event('mute', { bubbles: true }));
     }
     /**
      * 从0开始，表示第几项；但显示时从1开始。需要外部维护
@@ -212,6 +214,7 @@ class ChannelItem extends HTMLDivElement {
             name: this.name,
             color: this.color,
             instrument: this.instrument,
+            lock: this.lock,
             visible: this.visible,
             mute: this.mute
         };
@@ -491,6 +494,7 @@ class ChannelList extends EventTarget {
         return {    // 篡改ChannelItem的原型方法，使保存的乐器是序号，并能保存音量
             name: this.name,
             color: this.color,
+            lock: this.lock,
             visible: this.visible,
             mute: this.mute,
             instrument: this.ch.instrument,
@@ -520,7 +524,7 @@ class ChannelList extends EventTarget {
                 color = '';
                 failed &= (1 << i);
             }
-            const ch = ChannelItem.new(item.name, color, TinySynth.instrument[item.instrument], item.visible, item.mute);
+            const ch = ChannelItem.new(item.name, color, TinySynth.instrument[item.instrument], item.visible, item.mute, item.lock);
             ch.ch = this.synthesizer.addChannel(i, item.instrument, item.volume * item.volume / 16129);
             this.channel[i] = ch;
             ch.dataset.tabIndex = i + 1;
