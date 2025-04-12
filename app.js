@@ -1456,6 +1456,8 @@ function App() {
                                     !confirm(`音频文件与分析结果(${data[0].name})不同，是否继续？`))
                                     return;
                                 this.Saver.import(data);
+                                // 触发html中的iniEQUI
+                                this.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));
                             });
                         }; fileReader.readAsDataURL(file);
                     }).catch((e) => {

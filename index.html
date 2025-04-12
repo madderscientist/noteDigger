@@ -380,6 +380,11 @@
     {
         const lis = document.getElementById('analysePannel').children;
         lis[0].onclick = function () {
+            // 如果已经有结果了就删除
+            if(this.childElementCount) {
+                this.removeChild(this.lastChild);
+                return;
+            }
             if (!app.Spectrogram._spectrogram) {
                 alert("请先导入音频！");
                 return;
