@@ -144,6 +144,7 @@
         <li data-value="5"><button>-</button>宽度<button>+</button></li>
         <li data-value="15"><button>-</button>高度<button>+</button></li>
         <li data-value="170"><button>-</button>遮罩厚度<button>+</button></li>
+        <li data-value="20"><button>-</button>最短节拍宽<button>+</button></li>
         <li>
             精准设置重复区间
             <div id="repeatRange">
@@ -487,32 +488,36 @@
     {
         const lis = document.getElementById('settingPannel').children;
         lis[0].firstChild.onclick = () => {
-            --app.width;
+            --app.width;    // 设置width会自动被setter限位
             lis[0].dataset.value = app.width;
             app.scroll2();
         };
         lis[0].lastChild.onclick = () => {
-            ++app.width;
-            lis[0].dataset.value = app.width;
+            lis[0].dataset.value = ++app.width;
             app.scroll2();
         };
         lis[1].firstChild.onclick = () => {
-            --app.height;
+            --app.height;    // 设置height会自动被setter限位
             lis[1].dataset.value = app.height;
             app.scroll2();
         };
         lis[1].lastChild.onclick = () => {
-            ++app.height;
-            lis[1].dataset.value = app.height;
+            lis[1].dataset.value = ++app.height;
             app.scroll2();
         };
         lis[2].firstChild.onclick = () => {
-            --app.Spectrogram.Alpha;
-            lis[2].dataset.value = app.Spectrogram.Alpha;
+            if (app.Spectrogram.Alpha <= 1) return;
+            lis[2].dataset.value = --app.Spectrogram.Alpha;
         };
         lis[2].lastChild.onclick = () => {
-            ++app.Spectrogram.Alpha;
-            lis[2].dataset.value = app.Spectrogram.Alpha;
+            lis[2].dataset.value = ++app.Spectrogram.Alpha;
+        };
+        lis[3].firstChild.onclick = () => {
+            if (app.BeatBar.minInterval <= 5) return;
+            lis[3].dataset.value = --app.BeatBar.minInterval;
+        };
+        lis[3].lastChild.onclick = () => {
+            lis[3].dataset.value = ++app.BeatBar.minInterval;
         };
         const repeatInput = lis[3].querySelectorAll('input');
         function checkTime(time) {

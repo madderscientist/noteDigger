@@ -928,6 +928,7 @@ function App() {
     };
     this.BeatBar = {
         beats: new Beats(),
+        minInterval: 20,    // 最小画线间隔
         update: () => {
             const canvas = this.timeBar;
             const ctx = this.timeBar.ctx;
@@ -938,7 +939,11 @@ function App() {
             ctx.fillStyle = '#8e95a6';
             const spectrum = this.spectrum.ctx;
             const spectrumHeight = this.spectrum.height;
-            ctx.strokeStyle = '#f0f0f0f0';
+            ctx.strokeStyle = '#f0f0f0';
+            spectrum.strokeStyle = '#c0c0c0';
+
+            const beatX = [];   // 小节内每一拍
+            const noteX = [];   // 一拍内x分音符对齐线
 
             const iterator = this.BeatBar.beats.iterator(this.scrollX * this.TperP, true);
             ctx.beginPath(); spectrum.beginPath();
@@ -950,7 +955,6 @@ function App() {
                 if (x > canvas.width) break;
                 ctx.moveTo(x, h);
                 ctx.lineTo(x, canvas.height);
-                spectrum.strokeStyle = '#a0a0a0';
                 spectrum.moveTo(x, 0);
                 spectrum.lineTo(x, spectrumHeight);
                 // 写字
@@ -958,13 +962,39 @@ function App() {
                 ctx.fillText(Interval < 38 ? measure.id : `${measure.id}. ${measure.beatNum}/${measure.beatUnit}`, x + 2, h + 14);
                 // 画更细的节拍线
                 let dp = Interval / measure.beatNum;
-                if (dp < 20) continue;
-                spectrum.strokeStyle = '#909090';
-                for (let i = measure.beatNum; i > 0; i--, x += dp) {
-                    spectrum.moveTo(x, 0);
-                    spectrum.lineTo(x, spectrumHeight);
+                if (dp < this.BeatBar.minInterval) continue;
+                x += dp;
+                for (let i = measure.beatNum - 1; i > 0; i--, x += dp) beatX.push(x);
+                // 画x分音符的线
+                let noteNum = 1 << Math.log2(dp / this.BeatBar.minInterval);
+                if (noteNum < 2) continue;
+                let noteInterval = dp / noteNum;
+                for (let i = 0, n = noteNum * measure.beatNum; i < n; i++, x -= noteInterval) {
+                    if (i % noteNum == 0) continue; // 跳过beat线
+                    noteX.push(x);
                 }
             } ctx.stroke(); spectrum.stroke();
+
+            if (beatX.length == 0) return;
+            spectrum.beginPath();
+            spectrum.strokeStyle = '#909090';
+            for (const x of beatX) {
+                spectrum.moveTo(x, 0);
+                spectrum.lineTo(x, spectrumHeight);
+            } spectrum.stroke();
+
+            if (noteX.length == 0) return;
+            spectrum.beginPath();
+            spectrum.setLineDash([4, 4]);
+            spectrum.strokeStyle = '#606060';
+            for (const x of noteX) {
+                spectrum.moveTo(x, 0);
+                spectrum.lineTo(x, spectrumHeight);
+            } spectrum.stroke();
+            spectrum.setLineDash([]); // 恢复默认
+        },
+        updateInterval: () => {    // 根据this.width改变 在width的setter中调用
+            
         },
         contextMenu: new ContextMenu([
             {
