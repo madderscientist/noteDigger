@@ -519,7 +519,7 @@
         lis[3].lastChild.onclick = () => {
             lis[3].dataset.value = ++app.BeatBar.minInterval;
         };
-        const repeatInput = lis[3].querySelectorAll('input');
+        const repeatInput = lis[4].querySelectorAll('input');
         function checkTime(time) {
             const timeRegex = /^\d{1,2}:\d{1,2}:\d{1,3}$/;
             return timeRegex.test(time);
@@ -531,7 +531,7 @@
         repeatInput[0].oninput = repeatInput[1].oninput = function () {
             this.style.color = checkTime(this.value) ? 'var(--theme-text)' : 'red';
         };
-        const repbtn = lis[3].querySelectorAll('button');
+        const repbtn = lis[4].querySelectorAll('button');
         repbtn[0].onclick = () => {
             app.TimeBar.repeatStart = -1;
             app.TimeBar.repeatEnd = -1;
