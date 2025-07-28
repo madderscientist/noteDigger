@@ -330,6 +330,7 @@ class TinySynth {
             } else {                // AM调制
                 out = gain[-p.g - 1].gain;
                 A_rate = 1;
+                freq[i] = freq[p.g - 1] * p.t + p.f;
             }
             // 振荡器 波形
             if (p.w[0] == 'n') {    // 噪声
