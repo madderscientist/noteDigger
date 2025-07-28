@@ -380,12 +380,18 @@ class TinySynth {
                 nt.gain[i].gain.cancelScheduledValues(t);
                 // 包络的R
                 nt.gain[i].gain.setTargetAtTime(0, t, nt.release[i]);
-                osc.stop(t + nt.release[i]);
-                nt.gain[i].gain.cancelScheduledValues(t + nt.release[i]);
+                // setTargetAtTime 只会逼近不会到0 多等一会
+                osc.stop(t + nt.release[i] * 2);
+                nt.gain[i].gain.cancelScheduledValues(t + nt.release[i] * 2);
             });
         });
         Promise.all(promises).then(() => {
             nt.end = -1;    // 标记为已经停止
+            // 断开连接以GC
+            for (let i = 0; i < nt.osc.length; i++) {
+                nt.osc[i].disconnect();
+                nt.gain[i].disconnect();
+            }
         });   // 在所有osc都结束后的操作
     }
     checkStop() {   // 自动回收 一直开启
