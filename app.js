@@ -244,7 +244,7 @@ function App() {
             const saveOnStateChange = () => {
                 this.snapshot.save(0b1);
             }
-            cd.container.addEventListener('lock', ({target}) => {
+            cd.container.addEventListener('lock', ({ target }) => {
                 this.MidiAction.selected = this.MidiAction.selected.filter((nt) => {
                     if (nt.ch == target.index) return nt.selected = false;
                     return true;
@@ -277,13 +277,13 @@ function App() {
                 channel[nt.ch].push(nt);
             }
             // midi模式下，视野要比音符宽一页，或超出视野半页
-            if(this.midiMode) {
+            if (this.midiMode) {
                 const currentLen = this.Spectrogram.spectrogram.length;
                 let apage = this.spectrum.width / this._width;
                 let minLen = (m.length ? m[m.length - 1].x2 : 0) + apage * 1.5 | 0;
                 let viewLen = this.idXstart + apage | 0;    // 如果视野在很外面，需要保持视野
-                if(viewLen > minLen) minLen = viewLen;
-                if(minLen != currentLen) this.Spectrogram.spectrogram.length = minLen;   // length触发audio.duration和this.xnum
+                if (viewLen > minLen) minLen = viewLen;
+                if (minLen != currentLen) this.Spectrogram.spectrogram.length = minLen;   // length触发audio.duration和this.xnum
             }
         },
         update: () => {     // 按照insight绘制音符
@@ -304,7 +304,7 @@ function App() {
                         s.strokeRect(...params);
                     } else {
                         if (M.alphaIntensity && note.v) {
-                            s.fillStyle = ntcolor + Math.round(note.v**2 * 0.01581).toString(16);   // 平方律显示强度
+                            s.fillStyle = ntcolor + Math.round(note.v ** 2 * 0.01581).toString(16);   // 平方律显示强度
                         } else s.fillStyle = ntcolor;
                         s.fillRect(...params);
                         s.strokeStyle = '#ffffff';
@@ -994,7 +994,7 @@ function App() {
             spectrum.setLineDash([]); // 恢复默认
         },
         updateInterval: () => {    // 根据this.width改变 在width的setter中调用
-            
+
         },
         contextMenu: new ContextMenu([
             {
@@ -1114,18 +1114,18 @@ function App() {
     // 撤销相关
     this.snapshot = new Snapshot(16, {
         // 用对象包裹，实现字符串的引用
-        midi: {value: JSON.stringify(this.MidiAction.midi)},    // 音符移动、长度改变、channel改变后
-        channel: {value: JSON.stringify(this.MidiAction.channelDiv.channel)},   // 音轨改变序号、增删、修改参数后
-        beat: {value: JSON.stringify(this.BeatBar.beats)}
+        midi: { value: JSON.stringify(this.MidiAction.midi) },  // 音符移动、长度改变、channel改变后
+        channel: { value: JSON.stringify(this.MidiAction.channelDiv.channel) }, // 音轨改变序号、增删、修改参数后
+        beat: { value: JSON.stringify(this.BeatBar.beats) }
     });
     // changed = channel变化<<1 | midi变化<<2 | beat变化<<3
     this.snapshot.save = (changed = 0b111) => {
         const nowState = this.snapshot.nowState();
         const lastStateNotExists = nowState == null;
         this.snapshot.add({
-            channel: (lastStateNotExists || (changed & 0b1)) ? {value: JSON.stringify(this.MidiAction.channelDiv.channel)} : nowState.channel,
-            midi: (lastStateNotExists || (changed & 0b10)) ? {value: JSON.stringify(this.MidiAction.midi)} : nowState.midi,
-            beat: (lastStateNotExists || (changed & 0b100)) ? {value: JSON.stringify(this.BeatBar.beats)} : nowState.beat
+            channel: (lastStateNotExists || (changed & 0b1)) ? { value: JSON.stringify(this.MidiAction.channelDiv.channel) } : nowState.channel,
+            midi: (lastStateNotExists || (changed & 0b10)) ? { value: JSON.stringify(this.MidiAction.midi) } : nowState.midi,
+            beat: (lastStateNotExists || (changed & 0b100)) ? { value: JSON.stringify(this.BeatBar.beats) } : nowState.beat
         });
     };
     this.HscrollBar = {     // 配合scroll的滑动条
@@ -1400,42 +1400,46 @@ function App() {
 
             await new Promise(resolve => setTimeout(resolve, 0));   // 等待UI
             var lastFrame = performance.now();
-            switch (channel) {
-                case 0: return await a(audioBuffer.getChannelData(0));
-                case 1: return await a(audioBuffer.getChannelData(audioBuffer.numberOfChannels - 1));
-                case 2: {   // L+R
-                    let length = audioBuffer.length;
-                    const timeDomain = new Float32Array(audioBuffer.getChannelData(0));
-                    if (audioBuffer.numberOfChannels > 1) {
-                        let channelData = audioBuffer.getChannelData(1);
-                        for (let i = 0; i < length; i++) timeDomain[i] = (timeDomain[i] + channelData[i]) * 0.5;
-                    } return await a(timeDomain);
-                }
-                case 3: {   // L-R
-                    let length = audioBuffer.length;
-                    const timeDomain = new Float32Array(audioBuffer.getChannelData(0));
-                    if (audioBuffer.numberOfChannels > 1) {
-                        let channelData = audioBuffer.getChannelData(1);
-                        for (let i = 0; i < length; i++) timeDomain[i] = (timeDomain[i] - channelData[i]) * 0.5;
-                    } return await a(timeDomain);
-                }
-                default: {  // fft(L) + fft(R)
-                    if (audioBuffer.numberOfChannels > 1) {
-                        progressTrans = (x) => x / 2;
-                        const l = await a(audioBuffer.getChannelData(0));
-                        progressTrans = (x) => 0.5 + x / 2;
-                        const r = await a(audioBuffer.getChannelData(1));
-                        for (let i = 0; i < l.length; i++) {
-                            const li = l[i];
-                            for (let j = 0; j < li.length; j++)
-                                li[j] = (li[j] + r[i][j]) * 0.5;
-                        } return l;
-                    } else {
-                        progressTrans = (x) => x;
-                        return await a(audioBuffer.getChannelData(0));
+            const getEnergyData = async () => {
+                switch (channel) {
+                    case 0: return await a(audioBuffer.getChannelData(0));
+                    case 1: return await a(audioBuffer.getChannelData(audioBuffer.numberOfChannels - 1));
+                    case 2: {   // L+R
+                        let length = audioBuffer.length;
+                        const timeDomain = new Float32Array(audioBuffer.getChannelData(0));
+                        if (audioBuffer.numberOfChannels > 1) {
+                            let channelData = audioBuffer.getChannelData(1);
+                            for (let i = 0; i < length; i++) timeDomain[i] = (timeDomain[i] + channelData[i]) * 0.5;
+                        } return await a(timeDomain);
+                    }
+                    case 3: {   // L-R
+                        let length = audioBuffer.length;
+                        const timeDomain = new Float32Array(audioBuffer.getChannelData(0));
+                        if (audioBuffer.numberOfChannels > 1) {
+                            let channelData = audioBuffer.getChannelData(1);
+                            for (let i = 0; i < length; i++) timeDomain[i] = (timeDomain[i] - channelData[i]) * 0.5;
+                        } return await a(timeDomain);
+                    }
+                    default: {  // fft(L) + fft(R)
+                        if (audioBuffer.numberOfChannels > 1) {
+                            progressTrans = (x) => x / 2;
+                            const l = await a(audioBuffer.getChannelData(0));
+                            progressTrans = (x) => 0.5 + x / 2;
+                            const r = await a(audioBuffer.getChannelData(1));
+                            for (let i = 0; i < l.length; i++) {
+                                const li = l[i];
+                                for (let j = 0; j < li.length; j++)
+                                    // 由于归一化，这里无需平均
+                                    li[j] += r[i][j];
+                            } return l;
+                        } else {
+                            progressTrans = (x) => x;
+                            return await a(audioBuffer.getChannelData(0));
+                        }
                     }
                 }
-            }
+            };
+            return NoteAnalyser.normalize(await getEnergyData());
         },
         onfile: (file) => {     // 依赖askUI.css
             let midimode = file == void 0;  // 在确认后才能this.midiMode=midimode
@@ -1627,7 +1631,7 @@ function App() {
                     const stftBins = s[i];
                     for (let j = 0; j < cqtBins.length; j++) {
                         // 用非线性混合，当两者极大的时候取最大值，否则相互压制
-                        if(stftBins[j] < cqtBins[j]) stftBins[j] = cqtBins[j];
+                        if (stftBins[j] < cqtBins[j]) stftBins[j] = cqtBins[j];
                         else stftBins[j] = Math.sqrt(stftBins[j] * cqtBins[j]);
                     }
                 }
@@ -1917,7 +1921,6 @@ function App() {
             case 1:     // 中键跳转位置但不改变播放状态
                 this.setTime((e.offsetX + this.scrollX) / this._width * this.dt);
                 break;
-                
         }
     });
     this.keyboard.addEventListener('wheel', (e) => {

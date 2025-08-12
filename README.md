@@ -112,17 +112,9 @@
 |   │  └─dist: onnxruntime打包
 |   │          bundle.min.js
 |   │          ort-wasm-simd.wasm
-|   |
-|   └─CQT
-|       │  cqt.js: 开启worker进行后台CQT
-|       │  cqt.wasm.js: emcc编译的胶水代码
-|       │  cqt.wasm.wasm: emcc编译的wasm
-|       │  cqt_wasm.cpp: wasm源文件
-|       │  cqt_worker.js: 新线程
-|       │
-|       └─.vscode
-|               c_cpp_properties.json: 环境配置
-|               tasks.json: emcc编译命令
+│   └─CQT
+│          cqt.js: 开启worker进行后台CQT
+│          cqt_worker.js: CQT类与新线程
 |
 ├─img
 │      github-mark-white.png
@@ -146,8 +138,12 @@
 ```
 
 ## 重要更新记录
+### 2025 8 12
+进行了频谱的归一化，便于后续的研究与分析。归一化基于能量谱，同[timbreAMT](https://github.com/madderscientist/timbreAMT/blob/main/model/CQT.py)的做法，简而言之：令每一帧的能量的方差为1。<br>
+重大的改动：WASM的CQT → JS的CQT。早期实验发现两者用时接近，为了纪念第一次使用WASM加速而保留。但升级CPU后发现JS版本用时不到WASM的一半，而且代码更少、文件更小。遂欣然废除。若要学习“C++编译为WASM”可以查看此前的历史提交。
+
 ### 2025 3 25
-引入了“自动音乐转录”，即“AI扒谱”，导入音频后（或进入MIDI编辑器模式）在“分析”页面点击“人工智障扒谱”选项，一首两分半的曲子大概需要半分钟分析。由于追求低内存开销，我没保存音频数据，因此AI扒谱前要重新选择文件。<br>
+引入了“自动音乐转录”，即“AI扒谱”，导入音频后（或进入MIDI编辑器模式）在“分析”页面点击“**人工智障扒谱**”选项，一首两分半的曲子大概需要半分钟分析。由于追求低内存开销，我没保存音频数据，因此AI扒谱前要重新选择文件。<br>
 使用的模型是我毕设的一部分，设计与训练过程请查看[timbreAMT](https://github.com/madderscientist/timbreAMT)的basicamt文件夹，我称之为“音色无关转录”，即不会根据乐器种类分轨输出，但对大部分音色有适用性。对标的是basicPitch，效果接近且更加轻量，但无论是我的还是他的，结果都仅仅能听，而我的相比basicPitch优点在于集成在了noteDigger中，可以便捷地进行人工后处理，如删去多余音符、对齐节奏等。<br>
 为了支持人工后处理，有了前几次更新，最重要的是：
 1. 音符力度用透明度体现，便于用户看清AI扒谱结果中重要的音符。在“设置”中可以关掉透明度。

@@ -78,8 +78,40 @@ class NoteAnalyser {    // 负责解析频谱数据
                 }
             }
             // FFT的结果需要除以N才是DTFT的结果 由于结果太小，统一放大10倍 经验得到再乘700可在0~255得到较好效果
-            noteAm[i] = Math.sqrt(noteAm[i]) * 16 / real.length;
+            // 由于后续有归一化，所以这里不除也不开方
+            // noteAm[i] = Math.sqrt(noteAm[i]) * 16 / real.length;
         } return noteAm;
+    }
+    /**
+     * 能量谱归一化
+     * @param {Array<Float32Array>} engSpectrum 能量谱 每个元素未开方
+     */
+    static normalize(engSpectrum) {
+        // 1. 求每一帧的能量
+        let energySum = 0;
+        let frameEnergy = new Float32Array(engSpectrum.length);
+        for (let t = 0; t < engSpectrum.length; t++) {
+            const frame = engSpectrum[t];
+            for (let i = 0; i < frame.length; i++) {
+                frameEnergy[t] += frame[i];
+            }
+            energySum += frameEnergy[t];
+        }
+        // 2. 计算能量方差
+        let sigma = 1e-8;
+        const meanEnergy = energySum / engSpectrum.length;
+        for (let t = 0; t < engSpectrum.length; t++) {
+            const delta = frameEnergy[t] - meanEnergy;
+            sigma += delta * delta;
+        }
+        sigma = Math.sqrt(sigma / (engSpectrum.length - 1));
+        // 3. 归一化
+        for (const frame of engSpectrum) {
+            for (let i = 0; i < frame.length; i++) {
+                frame[i] = Math.sqrt(frame[i] / sigma);
+            }
+        }
+        return engSpectrum;
     }
     /**
      * 调性分析，原理是音符能量求和
