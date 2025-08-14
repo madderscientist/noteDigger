@@ -83,11 +83,23 @@
 ## 文件结构
 ```
 │  app.js: 最重要的文件，主程序
+│  app_analyser.js: 时频分析相关
+│  app_audioplayer.js: 音频播放
+│  app_beatbar.js: 小节轴
+│  app_hscrollbar.js: 底部滑动条
+│  app_keyboard.js: 左侧键盘
+│  app_midiaction.js: 与音符的交互
+│  app_midiplayer.js: 音符播放
+│  app_spectrogram.js: 频谱绘制
+│  app_timebar.js: 时间轴
+|
 |  beatBar.js: 节奏信息的稀疏数组存储
 │  channelDiv.js: 多音轨的UI界面类, 可拖拽列表
 │  contextMenu.js: 右键菜单类
+|  fakeAudio.js: 模拟了不会响的Audio，用于midi编辑器模式
 │  favicon.ico: 小图标
 │  index.html: 程序入口, 其js主要是按钮的onclick
+│  jsconfig.json: 开发用 跨文件JS解析
 │  LICENSE
 │  midi.js: midi创建、解析类
 │  myRange.js: 横向滑动条的封装类
@@ -96,7 +108,6 @@
 │  siderMenu.js: 侧边栏菜单类
 │  snapshot.js: 快照类, 实现撤销和重做
 │  tinySynth.js: 合成器类, 负责播放音频
-|  fakeAudio.js: 模拟了不会响的Audio，用于midi编辑器模式
 │  todo.md: 一些设计思路和权衡
 │
 ├─dataProcess
@@ -112,11 +123,13 @@
 |   │  └─dist: onnxruntime打包
 |   │          bundle.min.js
 |   │          ort-wasm-simd.wasm
+|   |
 │   └─CQT
 │          cqt.js: 开启worker进行后台CQT
 │          cqt_worker.js: CQT类与新线程
 |
 ├─img
+│      bilibili-white.png
 │      github-mark-white.png
 │      logo-small.png
 │      logo.png
@@ -138,6 +151,10 @@
 ```
 
 ## 重要更新记录
+### 2025 8 14
+项目代码的整理，将功能拆分到单独文件（虽然模块间仍未解耦，但终于拆分了！），并增加了开发配置文件（感觉TS是对的啊！但放不下JS里面的奇技淫巧）。<br>
+修复了陈年bug：调整小节时不时“拉不动”、STFT偏早。
+
 ### 2025 8 12
 进行了频谱的归一化，便于后续的研究与分析。归一化基于能量谱，同[timbreAMT](https://github.com/madderscientist/timbreAMT/blob/main/model/CQT.py)的做法，简而言之：令每一帧的能量的方差为1。<br>
 重大的改动：WASM的CQT → JS的CQT。早期实验发现两者用时接近，为了纪念第一次使用WASM加速而保留。但升级CPU后发现JS版本用时不到WASM的一半，而且代码更少、文件更小。遂欣然废除。若要学习“C++编译为WASM”可以查看此前的历史提交。

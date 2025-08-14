@@ -176,18 +176,19 @@ class Beats extends Array {
 
     /**
      * 整理小节信息:
-     * 1. 合并前后参数一样的小节
+     * 1. 合并前后参数一样的小节 (由merge控制是否合并)
      * 2. 校准每个小节的开始时间
      * 应该在添加、删除、修改数组元素后调用 需要手动调用
+     * 在鼠标操作预览时不应合并小节 (会造成中途小节丢失)
      */
-    check() {
+    check(merge = true) {
         this[0].start = 0;
         this[0].id = 0;
         for (let i = 0, end = this.length - 1; i < end; i++) {
             if (this[i].start > this.maxTime) {
                 this.splice(i); return;
             }
-            if (this[i].isEqual(this[i + 1])) {
+            if (merge && this[i].isEqual(this[i + 1])) {
                 this.splice(i + 1, 1);
                 i--; end--;
             } else this[i + 1].start = (this[i + 1].id - this[i].id) * this[i].interval + this[i].start;

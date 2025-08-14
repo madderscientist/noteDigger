@@ -74,6 +74,7 @@ function dragList(takeplace = true) {
 }
 
 // 为了可读性、隔离性、模块化，使用此类包裹HTMLDivElement
+// 会抛出事件: lock visible mute 在三个值被set时触发
 class ChannelItem extends HTMLDivElement {
     /**
      * 实际并不使用构造函数 此函数只是表明有哪些属性可用
@@ -226,6 +227,8 @@ class ChannelItem extends HTMLDivElement {
  * 事件：（按发生的顺序排）
  * remove(detail)：发生于删除之前、归还颜色之后
  * reorder(detail)：发生于有序号变化时，最后一个ChannelItem的删除和新增不会触发
+ * 
+ * setted: 通过UI修改了channel属性后触发
  */
 class ChannelList extends EventTarget {
     // 颜色是对通道的特异性标识
@@ -447,6 +450,7 @@ class ChannelList extends EventTarget {
      */
     settingPannel(chid) {
         const ch = this.channel[chid];
+        const originConfig = JSON.stringify(ch);
         let tempDiv = document.createElement('div');
         tempDiv.innerHTML = `
         <div class="request-cover">
@@ -465,6 +469,9 @@ class ChannelList extends EventTarget {
         const close = () => {   // 渐变消失
             card.style.opacity = 0;
             setTimeout(()=>card.remove(), 200);
+            // 如果有修改则触发事件以存档
+            const newConfig = JSON.stringify(ch);
+            if (originConfig !== newConfig) this.dispatchEvent(new Event('setted'));
         }
         btns[0].addEventListener('click', close);
         btns[1].addEventListener('click', () => {

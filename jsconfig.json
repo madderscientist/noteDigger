@@ -1,0 +1,9 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "checkJs": false,   // 不启用类型检查 因为用了很多流氓写法
+    "allowJs": true,    // 允许分析JS文件
+    "noEmit": true      // 不生成输出文件
+  },
+  "exclude": ["node_modules"]
+}
