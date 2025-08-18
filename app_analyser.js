@@ -203,16 +203,14 @@ function _Analyser(parent) {
                 let l = Math.ceil((parent.spectrum.width << 1) / parent.width);   // 视野外还有一面
                 // 一个怎么取值都返回0的东西，充当频谱
                 parent.Spectrogram.spectrogram = new Proxy({
-                    parent: parent,
                     spectrogram: new Uint8Array(parent.ynum).fill(0),
                     _length: l,
-                    get length() { return parent._length; },
+                    get length() { return this._length; },
                     set length(l) { // 只要改变频谱的长度就可以改变时长 长度改变在MidiAction.updateView中
                         if (l < 0) return;
-                        const p = parent.parent;
-                        parent._length = p.xnum = l;
-                        p.AudioPlayer.audio.duration = l / tNum;
-                        p.AudioPlayer.play_btn.lastChild.textContent = p.AudioPlayer.durationString;
+                        this._length = parent.xnum = l;
+                        parent.AudioPlayer.audio.duration = l / tNum;
+                        parent.AudioPlayer.play_btn.lastChild.textContent = parent.AudioPlayer.durationString;
                     }
                 }, {
                     get(obj, prop) {    // 方括号传递的总是string

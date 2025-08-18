@@ -39,7 +39,9 @@ function App() {
         set: function (n) {
             if (n <= 0) return;
             this._xnum = n;
-            this.HscrollBar.refreshSize();  // 刷新横向滑动条
+            // 刷新横向滑动条
+            this.HscrollBar.refreshPosition();
+            this.HscrollBar.refreshSize();
             this.idXend = Math.min(this._xnum, Math.ceil((this.scrollX + this.spectrum.width) / this._width));
         }
     });

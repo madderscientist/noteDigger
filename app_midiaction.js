@@ -20,7 +20,7 @@ function _MidiAction(parent) {
         x2: 离散 终点
         ch: 音轨序号
         selected: 是否选中
-        v: 音量，0~127，用户创建的音符无此选项，但导入的midi有
+        v: 音量，0~127，用户创建的音符无此选项，但导入的midi有 需要undefined兼容
     } */
     this.selected = []; // 选中的音符 无序即可
     this.midi = [];     // 所有音符 需要维护有序性
