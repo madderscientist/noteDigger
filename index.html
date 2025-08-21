@@ -29,6 +29,7 @@
     <script src="./app_timebar.js"></script>
     <script src="./app_beatbar.js"></script>
     <script src="./app_hscrollbar.js"></script>
+    <script src="./dataProcess/ANA.js"></script>
     <script src="./app_analyser.js"></script>
     <script src="./app.js"></script>
     <link rel="stylesheet" href="./style/style.css">
@@ -145,8 +146,8 @@
                 <button>所有时间</button>
             </div>
         </li>
+        <li>数字谱对齐音频</li>
         <li>人工智障扒谱</li>
-        (￣ε(#￣) 别的还没做
     </ul>
 
     <ul class="paddingbox niceScroll btn-ul" id="settingPannel">
@@ -355,6 +356,9 @@
             }
             _midiExport.UI();   // 依赖文件midiExport.js
         };
+        const textfield = numberedScore.querySelector('textarea');
+        textfield.addEventListener('focus', () => app.preventShortCut = true);
+        textfield.addEventListener('blur', () => app.preventShortCut = false);
         numberedScore.querySelector('button').onclick = () => { // 转数字谱
             const note = ["1", "#1", "2", "#2", "3", "4", "#4", "5", "#5", "6", "#6", "7"];
             function indexToje(index) { // indexToje(0) -> "1"
@@ -382,7 +386,7 @@
             let out = '';
             for (let i = 0; i < scores.length; i++)
                 out += `音轨${i} :${app.MidiAction.channelDiv.channel[i].instrument}\n${scores[i]}\n`;
-            numberedScore.querySelector('textarea').value = out;
+            textfield.value = out;
         };
     }
 
@@ -391,7 +395,7 @@
         const lis = document.getElementById('analysePannel').children;
         lis[0].onclick = function () {
             // 如果已经有结果了就删除
-            if(this.childElementCount) {
+            if (this.childElementCount) {
                 this.removeChild(this.lastChild);
                 return;
             }
@@ -470,8 +474,10 @@
                 return;
             } autoFill();
         };
+        // 自动音符对齐
+        lis[2].onclick = () => app.Analyser.autoNoteAlign();
         // 人工智障扒谱
-        lis[2].onclick = function() {
+        lis[3].onclick = function () {
             if (!app.Analyser.basicamt(null, true)) return; // 仅仅判断是否可以进行AI扒谱
             const btn = this;
             // 由于效果并不好，因此不会自动执行；而程序为了省内存不会保留音频数据，因此需要重新上传音频

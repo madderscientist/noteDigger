@@ -118,15 +118,18 @@ class ChannelItem extends HTMLDivElement {
         container.lockButton.addEventListener('click', (e) => {
             e.stopPropagation();
             container.lock = !container.lock;
+            container.lockButton.blur();
         });
         container.visibleButton.addEventListener('click', (e) => {
             e.stopPropagation();
             container.visible = !container.visible;
             container.lock = !container.visible;    // 先执行本函数的目的再联动lock
+            container.visibleButton.blur();
         });
         container.muteButton.addEventListener('click', (e) => {
             e.stopPropagation();
             container.mute = !container.mute;
+            container.muteButton.blur();
         });
         // 设置原型链为ChannelItem
         Object.setPrototypeOf(container, ChannelItem.prototype);

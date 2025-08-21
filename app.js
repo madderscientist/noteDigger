@@ -87,6 +87,7 @@ function App() {
             this.MidiAction.frameXid = Math.floor((x + this.scrollX) / this._width);
         }
     });
+    this.preventShortCut = false;   // 当需要原始快捷键时(比如输入框)修改此为true
     this.audioContext = new AudioContext({ sampleRate: 44100 });
     this.synthesizer = new TinySynth(this.audioContext);
     this.Spectrogram = new _Spectrogram(this);
@@ -387,6 +388,7 @@ function App() {
     });
     document.addEventListener('keydown', (e) => { // 键盘事件
         // 以下在没有频谱数据时不启用……【目前的实现是补丁。之后视情况升级：在获取到频谱数据后注册事件回调】
+        if (this.preventShortCut) return;
         if (!this.Spectrogram._spectrogram) return;
         let shortcut = '';
         if (e.ctrlKey) shortcut += 'Ctrl+';  // Ctrl优先

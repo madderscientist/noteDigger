@@ -232,7 +232,7 @@ button {
 .btn-ul button:active {
     background-color: black;
 }
-li textarea {
+textarea {
     width: calc(100% - 0.5em);
     height: 100%;
     padding: 0.3em;
