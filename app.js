@@ -9,6 +9,8 @@ function App() {
     this.timeBar = document.getElementById('timeBar');
     this.timeBar.ctx = this.timeBar.getContext('2d', { alpha: false, desynchronized: true });
     this.midiMode = false;
+    this.TperP = -1;
+    this.PperT = -1;
     this._width = 5;    // 每格的宽度
     Object.defineProperty(this, 'width', {
         get: function () { return this._width; },

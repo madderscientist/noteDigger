@@ -359,23 +359,27 @@ function _Analyser(parent) {
         tempDiv.innerHTML = `
 <div class="request-cover">
     <div class="card hvCenter">
-        <label class="title">数字谱对齐音频</label>
+        <div class="fr" style="align-items: center;">
+            <label class="title">数字谱对齐音频</label>
+            <span style="flex:1"></span>
+            <button class="ui-cancel">取消</button>
+        </div>
         <div class="layout">
             <button class="ui-cancel">降低八度</button>
             <span style="width: 1em;"></span>
             <button class="ui-cancel">升高八度</button>
         </div>
         <div class="layout">
-            <textarea cols="35" rows="20" placeholder="\
+            <textarea cols="35" rows="12" placeholder="\
 输入没有时值的数字谱，算法将创建与音频同步的音符，相当于“数字谱+音频→midi”
 数字谱的“1”对应于C5，请自行整体添加“[]”或“()”以升/降八度
 建议先观察频谱，找到合适的八度。如果效果不好，也可以考虑升降后重试。
 数字谱示例: ((b1)7)1 #2[#34b5]"></textarea>
         </div>
         <div class="layout">
-            <button class="ui-cancel">取消</button>
+            <button class="ui-confirm">重复区间内</button>
             <span style="width: 1em;"></span>
-            <button class="ui-confirm">确认</button>
+            <button class="ui-confirm">所有时间</button>
         </div>
     </div>
 </div>`;
@@ -386,34 +390,63 @@ function _Analyser(parent) {
             parent.preventShortCut = false;
         }
         const btns = UI.getElementsByTagName('button');
-        btns[0].onclick = () => {
+        btns[0].onclick = close;
+        btns[1].onclick = () => {
             textarea.value = '(' + textarea.value + ')';
         };
-        btns[1].onclick = () => {
+        btns[2].onclick = () => {
             textarea.value = '[' + textarea.value + ']';
         };
-        btns[2].onclick = close;
-        btns[3].onclick = () => {
+        btns[3].onclick = () => {   // 重复区间内
             const numberedScore = textarea.value.trim();
             if (!numberedScore) {
                 alert("请输入数字谱！");
                 return;
             }
-            this._autoNoteAlign(numberedScore);
-            close();
+            try {
+                this._autoNoteAlign(
+                    numberedScore,
+                    parent.TimeBar.repeatStart / parent.dt,
+                    parent.TimeBar.repeatEnd / parent.dt
+                ); close();
+            } catch (error) {
+                alert(error.message);
+            }
+        };
+        btns[4].onclick = () => {   // 所有时间
+            const numberedScore = textarea.value.trim();
+            if (!numberedScore) {
+                alert("请输入数字谱！");
+                return;
+            }
+            try {
+                this._autoNoteAlign(numberedScore);
+                close();
+            } catch (error) {
+                alert(error.message);
+            }
         }
         parent.preventShortCut = true; // 禁止快捷键
         document.body.insertBefore(UI, document.body.firstChild);
     };
-    this._autoNoteAlign = (noteSeq) => {
+    this._autoNoteAlign = (noteSeq, begin, end) => {
         noteSeq = parseJE(noteSeq);
+        let spectrum = parent.Spectrogram.spectrogram;
+        if (begin != undefined) {
+            begin = Math.max(0, Math.floor(begin));
+            end = Math.min(spectrum.length, Math.ceil(end));
+            spectrum = spectrum.slice(begin, end);
+        } else begin = 0;
+        if (noteSeq.length > spectrum.length) {
+            throw new Error("数字谱长度超过频谱长度！（时长太短）");
+        }
         // 插入间隔（用-1表示）
         const paddedNoteSeq = [-1];
         for (let i = 0; i < noteSeq.length; i++) {
             // 0对应C4
             paddedNoteSeq.push(noteSeq[i] + 48, -1);
         }
-        const path = autoNoteAlign(paddedNoteSeq, parent.Spectrogram.spectrogram, 100/parent.dt);
+        const path = autoNoteAlign(paddedNoteSeq, spectrum, 100 / parent.dt);
         const chdiv = parent.MidiAction.channelDiv;
         chdiv.switchUpdateMode(false);
         const ch = chdiv.addChannel();
@@ -429,8 +462,8 @@ function _Analyser(parent) {
             const frameEnd = path[i][1] + 1;
             parent.MidiAction.midi.push({
                 y: n,
-                x1: frameIdx,
-                x2: frameEnd,
+                x1: frameIdx + begin,
+                x2: frameEnd + begin,
                 ch: chid,
                 selected: false,
             });
