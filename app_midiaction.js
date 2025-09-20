@@ -96,7 +96,7 @@ function _MidiAction(parent) {
     /**
      * 更新this.MidiAction.insight
      * 步骤繁琐，不必每次更新。触发时机:
-     * 1. channelDiv的reorder、added、removed
+     * 1. channelDiv的reorder、added、removed，实际为updateOnReorder和switchUpdateMode
      * 2. midi的增加、移动、改变长度（用户操作）。由于都会调用且最后调用changeNoteY，所以只需要在changeNoteY中调用
      * 3. scroll2
      * 4. midi的删除（用户操作）：deleteNote
@@ -122,6 +122,7 @@ function _MidiAction(parent) {
             if (viewLen > minLen) minLen = viewLen;
             if (minLen != currentLen) parent.Spectrogram.spectrogram.length = minLen;   // length触发audio.duration和this.xnum
         }
+        parent.makeDirty();
     };
     this.update = () => {     // 按照insight绘制音符
         const m = this.insight;
@@ -203,7 +204,7 @@ function _MidiAction(parent) {
         });
         _tempdx = dx;
     };
-    this.changeNoteY = () => {    // 要求在trackMouse之后添加入spectrum的mousemoveEnent
+    this.changeNoteY = () => {  // 要求在trackMouse之后添加入spectrum的mousemoveEnent
         _anyAction = true;
         let dy = parent.Keyboard.highlight - 24 - this.clickYid;
         this.selected.forEach((v) => {
@@ -212,7 +213,7 @@ function _MidiAction(parent) {
         _tempdy = dy;
         this.updateView();
     };
-    this.changeNoteX = (e) => {
+    this.changeNoteX = (e) => { // 由this.onclick_L调用
         _anyAction = true;
         let dx = (((e.offsetX + parent.scrollX) / parent._width) | 0) - this.clickXid;
         this.selected.forEach((v) => {
@@ -306,6 +307,9 @@ function _MidiAction(parent) {
             if (_anyAction) parent.snapshot.save(0b10);
         }; document.addEventListener('mouseup', removeEvent);
     };
+    /**
+     * MidiAction所有鼠标操作都由此分配
+     */
     this.onclick_L = (e) => {
         //== step 1: 判断是否点在了音符上 ==//
         _anyAction = false;

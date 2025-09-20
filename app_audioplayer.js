@@ -71,7 +71,7 @@ function _AudioPlayer(parent) {
         // 自动翻页
         if (this.autoPage && (parent.time > parent.idXend * parent.dt || parent.time < parent.idXstart * parent.dt)) {
             parent.scroll2(((parent.time / parent.dt - 1) | 0) * parent._width, parent.scrollY);  // 留一点空位
-        }
+        } else parent.makeDirty();
     };
     /**
      * 在指定的毫秒数开始播放

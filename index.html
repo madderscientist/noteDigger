@@ -545,8 +545,7 @@
         };
         const repbtn = lis[4].querySelectorAll('button');
         repbtn[0].onclick = () => {
-            app.TimeBar.repeatStart = -1;
-            app.TimeBar.repeatEnd = -1;
+            app.TimeBar.setRepeat(-1, -1);
         };
         repbtn[1].onclick = () => {
             if (checkTime(repeatInput[0].value) && checkTime(repeatInput[1].value)) {
@@ -556,8 +555,7 @@
                     let temp = i2;
                     i2 = i1; i1 = temp;
                 }
-                app.TimeBar.repeatStart = i1;
-                app.TimeBar.repeatEnd = i2;
+                app.TimeBar.setRepeat(i1, i2);
             } else alert('时间格式错误！');
         }
     }

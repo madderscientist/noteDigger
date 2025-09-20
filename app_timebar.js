@@ -10,6 +10,15 @@ function _TimeBar(parent) {
     this.repeatStart = -1;
     this.repeatEnd = -1;
     /**
+     * 设置重复区间专用函数 便于统一管理行为副作用
+     * @param {number || null} start 单位：毫秒
+     * @param {number || null} end 单位：毫秒
+     */
+    this.setRepeat = (start = null, end = null) => {
+        if (start !== null) this.repeatStart = start;
+        if (end !== null) this.repeatEnd = end;
+    };
+    /**
      * 毫秒转 分:秒:毫秒
      * @param {Number} ms 毫秒数
      * @returns [分,秒,毫秒]
@@ -92,19 +101,18 @@ function _TimeBar(parent) {
         {
             name: "设置重复区间开始位置",
             callback: (e_father, e_self) => {
-                this.repeatStart = (e_father.offsetX + parent.scrollX) * parent.TperP;
+                this.setRepeat((e_father.offsetX + parent.scrollX) * parent.TperP, null);
             }
         }, {
             name: "设置重复区间结束位置",
             callback: (e_father, e_self) => {
-                this.repeatEnd = (e_father.offsetX + parent.scrollX) * parent.TperP;
+                this.setRepeat(null, (e_father.offsetX + parent.scrollX) * parent.TperP);
             }
         }, {
             name: '<span style="color: red;">取消重复区间</span>',
             onshow: () => this.repeatStart >= 0 || this.repeatEnd >= 0,
             callback: () => {
-                this.repeatStart = -1;
-                this.repeatEnd = -1;
+                this.setRepeat(-1, -1);
             }
         }, {
             name: "从此处播放",

@@ -5,8 +5,13 @@
  * @param {App} parent 
  */
 function _Keyboard(parent) {
-    this.highlight = -1;    // 选中了哪个音 音的编号以midi协议为准 C1序号为24 根this.mouseY一起在onmousemove更新
-    this.freqTable = new FreqTable(440);    // 在this.Analyser.analyse中赋值
+    /**
+     * 选中了哪个音，音的编号以midi协议为准（C1序号为24）
+     * 
+     * 更新链: 'onmousemove' -> parent.mouseY setter -> this.highlight
+     */
+    this.highlight = -1;
+    this.freqTable = new FreqTable(440);    // 在parent.Analyser._stft中更新
 
     // 以下为画键盘所需
     const _idchange = new Int8Array([2, 2, 1, 2, 2, 2, -10, 2, 3, 2, 2, 2]);    // id变化
@@ -18,6 +23,10 @@ function _Keyboard(parent) {
         ]);
     };
 
+    /**
+     * 仅当: 视野垂直变化 或 this.highlight 更改 时需要更新
+     * 是否更新的判断 交给parent完成
+     */
     this.update = () => {
         const ctx = parent.keyboard.ctx;
         const w = parent.keyboard.width;
@@ -25,9 +34,9 @@ function _Keyboard(parent) {
         ctx.fillStyle = '#fff';
         ctx.fillRect(0, 0, w, parent.keyboard.height);
 
-        let noteID = parent.idYstart + 24;    // 最下面对应的音的编号
-        const note = noteID % 12;             // 一个八度中的第几个音
-        let baseY = parent.rectYstart + note * parent._height;   // 这个八度左下角的y坐标
+        let noteID = parent.idYstart + 24;  // 最下面对应的音的编号
+        const note = noteID % 12;           // 一个八度中的第几个音
+        let baseY = parent.rectYstart + note * parent._height;  // 这个八度左下角的y坐标
         noteID -= note;                     // 这个八度C的编号
 
         while (true) {

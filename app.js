@@ -47,17 +47,23 @@ function App() {
             this.idXend = Math.min(this._xnum, Math.ceil((this.scrollX + this.spectrum.width) / this._width));
         }
     });
+    this.dt = 50;       // 每次分析的时间间隔 单位毫秒 在this.Analyser.analyse中更新
+    this.time = -1;     // 当前时间 单位：毫秒 在this.AudioPlayer.update中更新
+
+    // 以下变量仅在scroll2中更新(特别标记的除外)
     this.scrollX = 0;   // 视野左边和世界左边的距离
     this.scrollY = 0;   // 视野下边和世界下边的距离
     this.idXstart = 0;  // 开始的X序号
     this.idYstart = 0;  // 开始的Y序号
-    this.idXend = 0;    // 在scroll2中更新
+    this.idXend = 0;    // 【还在 xnum setter 中更新】
     this.idYend = 0;
     this.rectXstart = 0;// 目前只有Spectrogram.update在使用
     this.rectYstart = 0;// 画布开始的具体y坐标(因为最下面一个不完整) 迭代应该减height 被画频谱、画键盘共享
-    this.loop = 0;      // 接收requestAnimationFrame的返回
-    this.dt = 50;       // 每次分析的时间间隔 单位毫秒 在this.Analyser.analyse中更新
-    this.time = -1;     // 当前时间 单位：毫秒 在this.AudioPlayer.update中更新
+
+    // 重绘时机: scroll2; AudioPlayer.update; 键鼠操作
+    this.dirty = true;  // 是否需要重绘
+    this.makeDirty = () => { this.dirty = true; }; // 供外部调用
+
     /**
      * 设置播放时间 如果立即播放(keep==false)则有优化
      * @param {Number} t 时间点 单位：毫秒
@@ -112,12 +118,13 @@ function App() {
             }
         },
         update: () => {
-            if (this.pitchNameDisplay._showPitchName) {
+            if (this.pitchNameDisplay._showPitchName && this.Keyboard.highlight >= 0) {
                 this.spectrum.ctx.fillStyle = 'black';
                 this.spectrum.ctx.fillText(
-                    this.pitchNameDisplay._showPitchName[this.Keyboard.highlight % 12],
-                    this._mouseX - this._height,
-                    this.spectrum.height - (this.Keyboard.highlight - 24) * this._height + this.scrollY - (this._height >> 3));
+                    `${this.pitchNameDisplay._showPitchName[this.Keyboard.highlight % 12]}${Math.floor(this.Keyboard.highlight / 12) - 1}`,
+                    this._mouseX - this._height * 1.5,
+                    this.spectrum.height - (this.Keyboard.highlight - 24) * this._height + this.scrollY - (this._height >> 3)
+                );
             }
         }
     };
@@ -274,6 +281,7 @@ function App() {
         this.rectYstart = this.spectrum.height - this.idYstart * this._height + this.scrollY;   // 画图的y从左上角开始
         // 滑动条
         this.HscrollBar.refreshPosition();
+        // 更新音符 同时触发刷新
         this.MidiAction.updateView();
     };
     /**
@@ -295,22 +303,26 @@ function App() {
         // 首先要同步时间 如果音频播放了，就同步音频时间
         this.AudioPlayer.update();
         this.MidiPlayer.update();
+        if (!this.dirty) return;
         this.Spectrogram.update();
         this.BeatBar.update();
         this.Keyboard.update();
         this.MidiAction.update();
         this.TimeBar.update();  // 必须在Spectrogram后更新，因为涉及时间指示的绘制
         this.pitchNameDisplay.update();
+        // 注释以下行恢复高刷 解决一切渲染问题
+        this.dirty = false;
     };
     this.trackMouseY = (e) => { // onmousemove
         this.mouseY = e.offsetY;
     };
-    this.trackMouseX = (e) => { // 用于框选，会更新frameX值
+    this.trackMouseX = (e) => { // 用于框选，会更新frameX值 在this.MidiAction中add和remove事件监听器
         this.mouseX = e.offsetX;
     };
     this._trackMouseX = (e) => {// 给this.Spectrogram.showPitchName专用的，只会更新_mouseX
         this._mouseX = e.offsetX;
     };
+
     /**
      * 动画循环绘制
      * @param {Boolean} loop 是否开启循环
@@ -326,6 +338,8 @@ function App() {
             cancelAnimationFrame(this.loop);
         }
     };
+    this.loop = 0;      // 接收requestAnimationFrame的返回
+
     //=========数据解析相关=========//
     this.Analyser = new _Analyser(this);
     //========= 导入导出 =========//
@@ -389,7 +403,7 @@ function App() {
         this.AudioPlayer.audio.volume = parseFloat(e.target.value);
     });
     document.addEventListener('keydown', (e) => { // 键盘事件
-        // 以下在没有频谱数据时不启用……【目前的实现是补丁。之后视情况升级：在获取到频谱数据后注册事件回调】
+        // 以下在没有频谱数据时不启用
         if (this.preventShortCut) return;
         if (!this.Spectrogram._spectrogram) return;
         let shortcut = '';
@@ -531,23 +545,15 @@ function App() {
                     let mouseUpX = mouseDownX;
                     const setRepeat = (e) => {
                         mouseUpX = e.offsetX;
-                        let newX = (e.offsetX + this.scrollX) / this._width * this.dt;
-                        if (newX > x) {
-                            this.TimeBar.repeatStart = x;
-                            this.TimeBar.repeatEnd = newX;
-                        } else {
-                            this.TimeBar.repeatEnd = x;
-                            this.TimeBar.repeatStart = newX;
-                        }
+                        const newX = (e.offsetX + this.scrollX) / this._width * this.dt;
+                        if (newX > x) this.TimeBar.setRepeat(x, newX);
+                        else this.TimeBar.setRepeat(newX, x);
                     };
                     let removeEvents = () => {
                         this.timeBar.removeEventListener('mousemove', setRepeat);
                         document.removeEventListener('mouseup', removeEvents);
                         // 有时候双击的小小移动会误触重复区间 所以如果区间太小则忽视
-                        if (Math.abs(mouseUpX - mouseDownX) < 6) {
-                            this.TimeBar.repeatStart = originStart;
-                            this.TimeBar.repeatEnd = originEnd;
-                        }
+                        if (Math.abs(mouseUpX - mouseDownX) < 6) this.TimeBar.setRepeat(originStart, originEnd);
                     };
                     this.timeBar.addEventListener('mousemove', setRepeat);
                     document.addEventListener('mouseup', removeEvents);
@@ -575,6 +581,14 @@ function App() {
             return;
         } this.Keyboard.mousedown();
     });
+
+    // 用户鼠标操作触发刷新
+    document.addEventListener('mousemove', this.makeDirty);
+    document.addEventListener('mousedown', this.makeDirty);
+    document.addEventListener('mouseup', this.makeDirty);
+    document.addEventListener('keydown', this.makeDirty);
+    // document.addEventListener('wheel', this.makeDirty);  // wheel->scroll2->updateView->makeDirty 无需再刷新
+
     this.loopUpdate(true);
 }
 /*

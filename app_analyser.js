@@ -116,6 +116,7 @@ function _Analyser(parent) {
                 }
             }
             console.timeEnd("CQT计算");
+            parent.Spectrogram.spectrogram = s;  // 通知更新
         }).catch(console.error);
     };
 
