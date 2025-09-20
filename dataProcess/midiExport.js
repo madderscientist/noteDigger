@@ -31,7 +31,8 @@ var _midiExport = {
      * 100%听感还原扒谱结果，但节奏是乱的
      */
     keepTime() {
-        const newMidi = new midi(60, [4, 4], Math.round(1000 / app.dt), [], app.AudioPlayer.name);
+        const accuracy = 10;
+        const newMidi = new midi(60, [4, 4], Math.round(1000 * accuracy / app.dt), [], app.AudioPlayer.name);
         const mts = [];
         for (const ch of app.synthesizer.channel) {
             let mt = newMidi.addTrack();
@@ -43,7 +44,7 @@ var _midiExport = {
             const midint = nt.y + 24;
             let v = mts[nt.ch]._volume;
             if (nt.v) v = Math.min(127, v * nt.v / 127);
-            mts[nt.ch].addEvent(midiEvent.note(nt.x1, nt.x2 - nt.x1, midint, v));
+            mts[nt.ch].addEvent(midiEvent.note(nt.x1 * accuracy, (nt.x2 - nt.x1) * accuracy, midint, v));
         } return newMidi;
     },
     beatAlign() {
@@ -82,16 +83,16 @@ var _midiExport = {
                 value: [midint, 0],
                 _ch: nt.ch
             }, true);
-        } moment.sort((a,b) => a.ticks - b.ticks);
+        } moment.sort((a, b) => a.ticks - b.ticks);
         // 对每个小节进行对齐
         let m_i = 0;    // moment的指针
         let tickNow = 0;    // 维护总时长
-        for(const measure of app.BeatBar.beats) {
-            if(m_i == mlen) break;
+        for (const measure of app.BeatBar.beats) {
+            if (m_i == mlen) break;
 
             //== 判断bpm是否变化 假设小节之间bpm相关性很强 ==//
             const bpmnow = measure.bpm;
-            if(Math.abs(bpmnow - lastbpm) > lastbpm * 0.065) {
+            if (Math.abs(bpmnow - lastbpm) > lastbpm * 0.065) {
                 mts[0].events.push(midiEvent.tempo(tickNow, bpmnow * 4 / measure.beatUnit));
             } lastbpm = bpmnow;
 
@@ -100,12 +101,12 @@ var _midiExport = {
             const end = (measure.interval + measure.start) / app.dt;
             // 一个八音符的格数
             const aot = measure.interval * measure.beatUnit / (measure.beatNum * 8 * app.dt);
-            while(m_i < mlen) {
+            while (m_i < mlen) {
                 const n = moment[m_i];
-                if(n.ticks > end) break;    // 给下一小节
+                if (n.ticks > end) break;    // 给下一小节
                 const threshold = n._d / 2;
                 let accuracy = aot;
-                while(accuracy > threshold) accuracy /= 2;
+                while (accuracy > threshold) accuracy /= 2;
                 n.ticks = tickNow + ((Math.round((n.ticks - begin) / accuracy) * newMidi.tick * accuracy / aot) >> 1);
                 mts[n._ch].events.push(n);
                 m_i++;

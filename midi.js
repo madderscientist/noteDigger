@@ -286,7 +286,7 @@ class mtrk {
         for (let i = 0; i < this.events.length; i++) {
             let temp = this.events[i];
             data.push(...temp.export(current, channel));
-            current = temp.ticks;
+            current = Math.round(temp.ticks);   // 避免误差累积 tick_hex用的是round
         }
         return [77, 84, 114, 107].concat(
             mtrk.number_hex(data.length + 4, 4),
