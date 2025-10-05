@@ -286,7 +286,7 @@ function App() {
     };
     /**
      * 按倍数横向缩放时频图 以鼠标指针为中心
-     * @param {Number} mouseX 
+     * @param {Number} mouseX
      * @param {Number} times 倍数 比用加减像素好，更连续
      */
     this.scaleX = (mouseX, times) => {
@@ -407,7 +407,13 @@ function App() {
         if (this.preventShortCut) return;
         if (!this.Spectrogram._spectrogram) return;
         let shortcut = '';
-        if (e.ctrlKey) shortcut += 'Ctrl+';  // Ctrl优先
+        // 检测平台并使用相应的修饰键
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const cmdKey = isMac ? e.metaKey : e.ctrlKey;
+        const ctrlKey = isMac ? e.ctrlKey : false;
+
+        if (cmdKey) shortcut += 'Ctrl+';  // 统一使用Ctrl+标识符，但实际检测平台对应的键
+        if (ctrlKey && isMac) shortcut += 'RealCtrl+';  // Mac上的真正Ctrl键
         if (e.shiftKey) shortcut += 'Shift+';
         if (e.altKey) shortcut += 'Alt+';
         if (shortcut != '') {   // 组合键
@@ -439,7 +445,10 @@ function App() {
     window.addEventListener('resize', () => { this.resize(); });
     this.spectrum.addEventListener('wheel', (e) => {
         // e.deltaY 往前滚是负数
-        if (e.ctrlKey) {    // 缩放
+        const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
+        const cmdKey = isMac ? e.metaKey : e.ctrlKey;
+
+        if (cmdKey) {    // 缩放
             e.preventDefault();
             this.scaleX(e.offsetX, e.deltaY > 0 ? 0.8 : 1.25);
         } else if (e.shiftKey) { // 垂直滚动
