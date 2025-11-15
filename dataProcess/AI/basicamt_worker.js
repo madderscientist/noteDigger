@@ -3,10 +3,11 @@
 // ort.env.wasm.wasmPaths = ort_folder;
 
 self.importScripts('./dist/bundle.min.js')
-ort.env.wasm.wasmPaths = './dist/';
+ort.env.wasm.wasmPaths = './dist/'
 
 const model = ort.InferenceSession.create(
-    './basicamt_44100.onnx', // webgpu报错cat（但是没问题啊？），webgl不支持int64，所以只能用cpu
+    './basicamt_44100.onnx',
+    { executionProviders: ['wasm'] }
 );
 
 self.onmessage = function ({data}) {
@@ -24,8 +25,8 @@ self.onmessage = function ({data}) {
 
 function createNotes(
     onsetTensor, frameTensor,
-    frame_thresh = 0.145,
-    onset_thresh = 0.42,
+    frame_thresh = 0.22,
+    onset_thresh = 0.38,
     min_note_len = 6,
     energy_tol = 10,
     midi_offset = 24
