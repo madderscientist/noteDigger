@@ -277,7 +277,7 @@
             const input = document.createElement('input');
             input.type = 'file'; input.accept = '.mid';
             input.onchange = function () {
-                app.io.midiFile.import(this.files[0]);
+                app.io.onfile(this.files[0]);
             }; input.click();
         };
         lis[2].onclick = () => {
