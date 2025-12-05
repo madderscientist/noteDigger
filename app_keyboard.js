@@ -11,7 +11,7 @@ function _Keyboard(parent) {
      * 更新链: 'onmousemove' -> parent.mouseY setter -> this.highlight
      */
     this.highlight = -1;
-    this.freqTable = new FreqTable(440);    // 在parent.Analyser._stft中更新
+    this.freqTable = new FreqTable(440);    // 在parent.Analyser.stft中更新
 
     // 以下为画键盘所需
     const _idchange = new Int8Array([2, 2, 1, 2, 2, 2, -10, 2, 3, 2, 2, 2]);    // id变化

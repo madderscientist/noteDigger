@@ -343,52 +343,7 @@ function App() {
     //=========数据解析相关=========//
     this.Analyser = new _Analyser(this);
     //========= 导入导出 =========//
-    if (window.bSaver) this.Saver = {
-        export: () => {
-            if (!this.Spectrogram._spectrogram) return null;
-            const data = {
-                midi: this.MidiAction.midi,
-                channel: this.MidiAction.channelDiv.channel,
-                beat: this.BeatBar.beats,
-                dt: this.dt,
-                A4: this.Keyboard.freqTable.A4,
-                name: this.AudioPlayer.name
-            }; return [data, this.Spectrogram._spectrogram];
-        },
-        import: (data) => {
-            const obj = data[0];
-            this.MidiAction.midi = obj.midi;
-            this.MidiAction.selected = this.MidiAction.midi.filter((obj) => obj.selected);
-            this.MidiAction.channelDiv.fromArray(obj.channel);
-            this.BeatBar.beats.copy(obj.beat);
-            this.dt = obj.dt;
-            this.Keyboard.freqTable.A4 = obj.A4;
-            this.Spectrogram.spectrogram = data[1];
-            this.snapshot.save();
-        },
-        write: (fileName = this.AudioPlayer.name) => {
-            const data = this.Saver.export();
-            bSaver.saveArrayBuffer(bSaver.combineArrayBuffers([
-                bSaver.String2Buffer("noteDigger"),
-                bSaver.Object2Buffer(data[0]),
-                bSaver.Float32Mat2Buffer(data[1])
-            ]), fileName + '.nd');
-        },
-        parse: (file) => {
-            return new Promise((resolve, reject) => {
-                bSaver.readBinary(file, (b) => {
-                    let [name, o] = bSaver.Buffer2String(b, 0);
-                    if (name != "noteDigger") {
-                        reject(new Error("incompatible file!"));
-                        return;
-                    }
-                    let [obj, o1] = bSaver.Buffer2Object(b, o);
-                    let [f32, _] = bSaver.Buffer2Float32Mat(b, o1);
-                    resolve([obj, f32]);
-                });
-            });
-        }
-    };
+    this.io = new _IO(this);
     //========= 事件注册 =========//
     document.getElementById('speedControl').addEventListener('input', (e) => { // 变速
         this.AudioPlayer.audio.playbackRate = parseFloat(e.target.value);

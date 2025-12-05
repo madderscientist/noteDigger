@@ -9,6 +9,14 @@
     <meta name="google-site-verification" content="EDvkTTOlpIs5kaPG6IxVzZxL-XkfjLrvChCOk6VKgHs" />
     <link rel="Shortcut Icon" href="./favicon.ico" type="image/x-icon" />
     <title>noteDigger~在线扒谱</title>
+
+    <!-- 导出需要，可以慢点加载 -->
+    <script src="./midi.js" async></script>
+    <!-- 可选的CQT分析 -->
+    <script src="./dataProcess/CQT/cqt.js" async></script>
+    <!-- 可选的AI扒谱 -->
+    <script src="./dataProcess/AI/basicamt.js" async></script>
+
     <script src="./siderMenu.js"></script>
     <script src="./myRange.js"></script>
     <script src="./dataProcess/fft_real.js"></script>
@@ -19,7 +27,6 @@
     <script src="./channelDiv.js"></script>
     <script src="./beatBar.js"></script>
     <script src="./saver.js"></script>
-    <script src="./dataProcess/midiExport.js"></script>
     <script src="./fakeAudio.js"></script>
     <script src="./app_spectrogram.js"></script>
     <script src="./app_midiaction.js"></script>
@@ -31,6 +38,7 @@
     <script src="./app_hscrollbar.js"></script>
     <script src="./dataProcess/ANA.js"></script>
     <script src="./app_analyser.js"></script>
+    <script src="./app_io.js"></script>
     <script src="./app.js"></script>
     <link rel="stylesheet" href="./style/style.css">
     <link rel="stylesheet" href="./style/askUI.css">
@@ -40,13 +48,6 @@
     <link rel="stylesheet" href="./style/channelDiv.css">
     <link rel="stylesheet" href="./style/icon/iconfont.css">
 </head>
-
-<!-- 导出需要，和其他文件直接没有依赖关系 -->
-<script src="./midi.js" async></script>
-<!-- 可选的CQT分析 -->
-<script src="./dataProcess/CQT/cqt.js" async></script>
-<!-- 可选的AI扒谱 -->
-<script src="./dataProcess/AI/basicamt.js" async></script>
 
 <body class="fc">
     <!-- 上半部分 工具区 -->
@@ -266,92 +267,34 @@
         input.type = 'file';    // 音频和视频都可以，但是quicktime系列需要单独处理
         input.accept = 'audio/*,video/*,.mov';
         input.onchange = function () {
-            app.Analyser.onfile(this.files[0]);
+            app.io.onfile(this.files[0]);
         }; input.click();
     }
     {
         const lis = document.getElementById('filePannel').children;
         lis[0].onclick = _uploadFile;
-        lis[1].onclick = () => {    // 导入midi
-            if (!app.Spectrogram._spectrogram) {
-                alert("请先导入音频！");
-                return;
-            }
+        lis[1].onclick = async () => {    // 导入midi
             const input = document.createElement('input');
             input.type = 'file'; input.accept = '.mid';
             input.onchange = function () {
-                bSaver.readBinary(this.files[0], (data) => {
-                    let m;
-                    try {
-                        m = midi.import(new Uint8Array(data)).JSON();
-                    } catch (error) {
-                        console.error("Error importing MIDI:", error);
-                        alert("导入MIDI文件时出错");
-                        return;
-                    }
-                    const chdiv = app.MidiAction.channelDiv;
-                    chdiv.switchUpdateMode(false);  // 下面会一次性创建大量音符，所以先关闭更新
-                    let tickTimeTable = m.header.tempos;    // bpm会随着时间改变
-                    const chArray = [];
-                    let chArrayIndex = 0;
-                    for (const mt of m.tracks) {
-                        if (mt.notes.length == 0) continue;
-
-                        var tickTimeAt = -1;
-                        var nexttickTimeChange = 0;
-                        var tickTime = 0;   // 一个tick的毫秒数/app.dt
-                        function checkChange(tick) {
-                            if (tick > nexttickTimeChange) {
-                                tickTimeAt++;
-                                nexttickTimeChange = tickTimeTable[tickTimeAt + 1] ? tickTimeTable[tickTimeAt + 1].ticks : Infinity;
-                                tickTime = 60000 / (tickTimeTable[tickTimeAt].bpm * m.header.tick * app.dt);
-                            } return tickTime;
-                        } checkChange(1);
-
-                        const ch = chdiv.addChannel();
-                        if (!ch) break; // 音轨已满，addChannel会返回undefined同时alert，所以只要break
-                        const chid = ch.index;
-                        ch.name = `导入音轨${chid}`;
-                        ch.ch.instrument = mt.instruments[0]?.number || 0;
-                        ch.instrument = TinySynth.instrument[ch.ch.instrument];
-
-                        // 音符强度归一化到0-127 演奏和导出时用的是“通道音量*音符音量/127”
-                        let maxIntensity = mt.notes.reduce((a, b) => a.intensity > b.intensity ? a : b).intensity;
-                        ch.ch.volume = maxIntensity;
-
-                        chArray[chArrayIndex++] = mt.notes.map((nt) => {
-                            const t = checkChange(nt.ticks);
-                            return {    // 理应给x1和x2取整，但是为了尽量不损失信息就不取整了 不取整会导致导出midi时要取整
-                                x1: nt.ticks * t,
-                                x2: (nt.ticks + nt.durationTicks) * t,
-                                y: nt.midi - 24,
-                                ch: chid,
-                                selected: false,
-                                v: nt.intensity / maxIntensity * 127
-                            };
-                        });
-                    }
-                    for (const ch of chArray) app.MidiAction.midi.push(...ch);
-                    app.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
-                    chdiv.switchUpdateMode(true);   // 打开更新并一次性处理积压请求
-                });
+                app.io.midiFile.import(this.files[0]);
             }; input.click();
         };
         lis[2].onclick = () => {
-            app.Analyser.onfile();
+            app.io.onfile();
         }
         lis[3].onclick = () => {
             if (!app.Spectrogram._spectrogram) {
                 alert("请先导入音频！");
                 return;
-            } app.Saver.write();
+            } app.io.projFile.write();
         }
         lis[4].onclick = () => {    // midi导出
             if (!app.Spectrogram._spectrogram) {
                 alert("请先导入音频！");
                 return;
             }
-            _midiExport.UI();   // 依赖文件midiExport.js
+            app.io.midiFile.export.UI();
         };
         const textfield = numberedScore.querySelector('textarea');
         textfield.addEventListener('focus', () => app.preventShortCut = true);
@@ -597,7 +540,7 @@
             e.preventDefault();
             document.body.classList.remove('dragIn');
             if (Array.from(e.dataTransfer.types).includes('Files')) {   // 判断是否有文件被拖入
-                app.Analyser.onfile(e.dataTransfer.files[0]);
+                app.io.onfile(e.dataTransfer.files[0]);
             }
         },
         registDrag: function () {
@@ -615,10 +558,10 @@
     }; dragEvents.registDrag();
 
     app.event.addEventListener('fileui', dragEvents.deRegistDrag);
-    app.event.addEventListener('filecancel', dragEvents.registDrag);
-    app.event.addEventListener('fileerror', () => {
+    app.event.addEventListener('fileuiclose', dragEvents.registDrag);
+    app.event.addEventListener('fileerror', (e) => {
         dragEvents.registDrag();
-        alert("文件错误！");
+        alert("文件解析！" + e.detail.message);
     });
 </script>
 

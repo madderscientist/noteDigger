@@ -5,7 +5,7 @@
 /// <reference path="./dataProcess/ANA.js" />
 
 /**
- * 数据解析相关
+ * 数据解析相关算法
  * @param {App} parent 
  */
 function _Analyser(parent) {
@@ -17,7 +17,7 @@ function _Analyser(parent) {
      * @param {Number} fftPoints 实数fft点数
      * @returns {Array<Float32Array>} 时频谱数据
      */
-    const _stft = async (audioBuffer, tNum = 20, A4 = 440, channel = -1, fftPoints = 8192) => {
+    this.stft = async (audioBuffer, tNum = 20, A4 = 440, channel = -1, fftPoints = 8192) => {
         parent.dt = 1000 / tNum;
         parent.TperP = parent.dt / parent._width; parent.PperT = parent._width / parent.dt;
         let dN = Math.round(audioBuffer.sampleRate / tNum);
@@ -99,7 +99,7 @@ function _Analyser(parent) {
      * @param {Number} channel 选择哪个channel分析 0:left 1:right 2:l+r 3:l-r else:fft(l)+fft(r)
      * @returns 不返回，直接作用于Spectrogram.spectrogram
      */
-    const _cqt = (audioData, tNum, channel) => {
+    this.cqt = (audioData, tNum, channel) => {
         if (window.location.protocol == 'file:' || window.cqt == undefined) return;    // 开worker和fetch要求http
         console.time("CQT计算");
         cqt(audioData, tNum, channel, parent.Keyboard.freqTable[0]).then((cqtData) => {
@@ -118,180 +118,6 @@ function _Analyser(parent) {
             console.timeEnd("CQT计算");
             parent.Spectrogram.spectrogram = s;  // 通知更新
         }).catch(console.error);
-    };
-
-    this.onfile = (file) => {     // 依赖askUI.css
-        let midimode = file == void 0;  // 在确认后才能parent.midiMode=midimode
-        if (midimode) {      // 不传则说明是midi编辑器模式
-            file = { name: "MIDI编辑器模式" };
-        } else if (!(file.type.startsWith('audio/') || file.type.startsWith('video/'))) {
-            parent.event.dispatchEvent(new Event('fileerror'));
-            return;
-        }
-        if (parent.Spectrogram._spectrogram && !confirm("本页面已加载音频，是否替换？")) {
-            return;
-        }
-        parent.event.dispatchEvent(new Event('fileui'));
-        let tempDiv = document.createElement('div');
-        // 为了不影响下面的事件绑定，midi模式下用display隐藏
-        tempDiv.innerHTML = `
-<div class="request-cover">
-    <div class="card hvCenter"><label class="title">${file.name}</label>&nbsp;&nbsp;<button class="ui-cancel"${midimode ? ' style="display:none;"' : ''}>使用已有结果</button>
-        <div class="layout"><span>每秒的次数：</span><input type="number" name="ui-ask" value="20" min="1" max="100"></div>
-        <div class="layout"><span>标准频率A4=</span><input type="number" name="ui-ask" value="440" step="0.1" min="55"></div>
-        <div class="layout"${midimode ? ' style="display:none;"' : ''}>分析声道：</div>
-        <div class="layout"${midimode ? ' style="display:none;"' : ''}>
-            <input type="radio" name="ui-ask" value="4" checked>Stereo
-            <input type="radio" name="ui-ask" value="2">L+R
-            <input type="radio" name="ui-ask" value="3">L-R
-            <input type="radio" name="ui-ask" value="0">L
-            <input type="radio" name="ui-ask" value="1">R
-        </div>
-        <div class="layout">
-            <button class="ui-cancel">取消</button>
-            <span style="width: 1em;"></span>
-            <button class="ui-confirm">${midimode ? '确认' : '解析'}</button>
-        </div>
-    </div>
-</div>`;
-        parent.AudioPlayer.name = file.name;
-        const ui = tempDiv.firstElementChild;
-        function close() { ui.remove(); }
-        let btns = ui.getElementsByTagName('button');
-        btns[0].onclick = () => {
-            close();
-            const input = document.createElement("input");
-            input.type = "file";
-            input.onchange = () => {
-                parent.Saver.parse(input.files[0]).then((data) => {
-                    // 再读取音频看看是否成功
-                    const fileReader = new FileReader();
-                    fileReader.onload = (e) => {
-                        // 设置音频源 缓存到浏览器
-                        parent.AudioPlayer.createAudio(e.target.result).then(() => {
-                            if (parent.AudioPlayer.name != data[0].name &&
-                                !confirm(`音频文件与分析结果(${data[0].name})不同，是否继续？`))
-                                return;
-                            parent.Saver.import(data);
-                            // 触发html中的iniEQUI
-                            parent.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));
-                        });
-                    }; fileReader.readAsDataURL(file);
-                }).catch((e) => {
-                    parent.event.dispatchEvent(new Event('fileerror'));
-                });
-            }; input.click();
-        };
-        btns[1].onclick = () => {
-            close();
-            parent.event.dispatchEvent(new Event('filecancel'));  // 为了恢复drag功能
-        };
-        btns[2].onclick = () => {
-            // 获取分析参数
-            const params = ui.querySelectorAll('[name="ui-ask"]');  // getElementsByName只能在document中用
-            let tNum = params[0].value;
-            let A4 = params[1].value;
-            let channel = 4;
-            for (let i = 2; i < 7; i++) {
-                if (params[i].checked) {
-                    channel = parseInt(params[i].value);
-                    break;
-                }
-            }
-            close();
-            parent.midiMode = midimode;
-            //==== midi模式 ====//
-            if (midimode) {
-                // 在Anaylse中的设置全局的
-                parent.dt = 1000 / tNum;
-                parent.TperP = parent.dt / parent._width; parent.PperT = parent._width / parent.dt;
-                if (parent.Keyboard.freqTable.A4 != A4) parent.Keyboard.freqTable.A4 = A4;
-                let l = Math.ceil((parent.spectrum.width << 1) / parent.width);   // 视野外还有一面
-                // 一个怎么取值都返回0的东西，充当频谱
-                parent.Spectrogram.spectrogram = new Proxy({
-                    spectrogram: new Uint8Array(parent.ynum).fill(0),
-                    _length: l,
-                    get length() { return this._length; },
-                    set length(l) { // 只要改变频谱的长度就可以改变时长 长度改变在MidiAction.updateView中
-                        if (l < 0) return;
-                        this._length = parent.xnum = l;
-                        parent.AudioPlayer.audio.duration = l / tNum;
-                        parent.AudioPlayer.play_btn.lastChild.textContent = parent.AudioPlayer.durationString;
-                    }
-                }, {
-                    get(obj, prop) {    // 方括号传递的总是string
-                        if (isNaN(Number(prop))) return obj[prop];
-                        return obj.spectrogram;
-                    },
-                    set(obj, prop, value) {
-                        if (isNaN(Number(prop))) obj[prop] = value;
-                    }
-                });
-                // 假音频 需要设置parent.midiMode=true;
-                parent.AudioPlayer.createAudio(l / tNum);
-                return;
-            }
-            //==== 音频文件分析 ====//
-            parent.event.dispatchEvent(new Event('fileaccept'));
-            // 打开另一个ui analyse加入回调以显示进度
-            let tempDiv = document.createElement('div');
-            tempDiv.innerHTML = `
-<div class="request-cover">
-    <div class="card hvCenter"><label class="title">解析中</label>
-        <span>00%</span>
-        <div class="layout">
-            <div class="porgress-track">
-                <div class="porgress-value"></div>
-            </div>
-        </div>
-    </div>
-</div>`;
-            const progressUI = tempDiv.firstElementChild;
-            const progress = progressUI.querySelector('.porgress-value');
-            const percent = progressUI.querySelector('span');
-            document.body.insertBefore(progressUI, document.body.firstChild);
-            const onprogress = ({ detail }) => {
-                if (detail < 0) {
-                    parent.event.removeEventListener('progress', onprogress);
-                    progress.style.width = '100%';
-                    percent.textContent = '100%';
-                    progressUI.style.opacity = 0;
-                    setTimeout(() => progressUI.remove(), 200);
-                } else if (detail >= 1) {
-                    detail = 1;
-                    progress.style.width = '100%';
-                    percent.textContent = "加载界面……";
-                } else {
-                    progress.style.width = (detail * 100) + '%';
-                    percent.textContent = (detail * 100).toFixed(2) + '%';
-                }
-            };
-            parent.event.addEventListener('progress', onprogress);
-            // 读取文件
-            let audioData;
-            const fileReader = new FileReader();
-            fileReader.onload = (e) => {
-                // 解码音频文件为音频缓冲区
-                parent.audioContext.decodeAudioData(e.target.result).then((decodedData) => {
-                    audioData = decodedData;
-                    return Promise.all([
-                        _stft(decodedData, tNum, A4, channel, 8192),
-                        parent.AudioPlayer.createAudio(URL.createObjectURL(file)) // fileReader.readAsDataURL(file) 将mov文件decode之后变成base64，audio无法播放 故不用
-                    ]);
-                }).then(([v, audio]) => {
-                    parent.Spectrogram.spectrogram = v;
-                }).catch((e) => {
-                    alert(e); console.error(e);
-                    parent.event.dispatchEvent(new Event('fileerror'));
-                }).finally(() => {
-                    // 最终都要关闭进度条
-                    parent.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));
-                    // 后台执行CQT
-                    _cqt(audioData, tNum, channel);
-                });
-            }; fileReader.readAsArrayBuffer(file);
-        };
-        document.body.insertBefore(ui, document.body.firstChild);   // 插入body的最前面
     };
 
     /**

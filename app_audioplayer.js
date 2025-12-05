@@ -5,8 +5,8 @@
  * @param {App} parent 
  */
 function _AudioPlayer(parent) {
-    this.name = "请上传文件";   // 在parent.Analyser.onfile中赋值
-    this.audio = new Audio();   // 在parent.Analyser.onfile中重新赋值 此处需要一个占位
+    this.name = "请上传文件";   // 在parent.io.onfile中赋值
+    this.audio = new Audio();   // 在parent.io.onfile中重新赋值 此处需要一个占位
     this.play_btn = document.getElementById("play-btn");
     this.durationString = '';   // 在parent.Analyser.audio.ondurationchange中更新
     this.autoPage = false;      // 自动翻页
@@ -45,8 +45,10 @@ function _AudioPlayer(parent) {
             a.onerror = (e) => {    // 如果正常分析，是用不到这个回调的，因为WebAudioAPI读取就会报错。但上传已有结果不会再分析
                 // 发现一些如mov格式的视频，不在video/的支持列表中，用.readAsDataURL转为base64后无法播放，会触发这个错误
                 // 改正方法是用URL.createObjectURL(file)生成一个blob地址而不是解析为base64
+                console.error("Audio load error", e);
                 reject(e);
-                parent.event.dispatchEvent(new Event('fileerror'));
+                // 不再抛出错误事件 调用者自行处理
+                // parent.event.dispatchEvent(new Event('fileerror'));
             };
             this.setAudio(a);
         });
