@@ -4,7 +4,8 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <meta name="description" content="noteDigger是一个前端辅助扒谱工具，提供可视化的频谱助力零门槛快速扒谱，工具链完善，实现了“AI扒谱-人工修正-导出”的扒谱全流程。本项目即开即用、完全开源免费！" />
+    <meta name="description"
+        content="noteDigger是一个前端辅助扒谱工具，提供可视化的频谱助力零门槛快速扒谱，工具链完善，实现了“AI扒谱-人工修正-导出”的扒谱全流程。本项目即开即用、完全开源免费！" />
     <meta name="msvalidate.01" content="675258B9620330F89A324C974E5FF134" />
     <meta name="google-site-verification" content="EDvkTTOlpIs5kaPG6IxVzZxL-XkfjLrvChCOk6VKgHs" />
     <link rel="Shortcut Icon" href="./favicon.ico" type="image/x-icon" />
@@ -16,6 +17,7 @@
     <script src="./dataProcess/CQT/cqt.js" async></script>
     <!-- 可选的AI扒谱 -->
     <script src="./dataProcess/AI/basicamt.js" async></script>
+    <script src="./dataProcess/AI/septimbre.js" async></script>
 
     <script src="./siderMenu.js"></script>
     <script src="./myRange.js"></script>
@@ -66,7 +68,8 @@
                 音&nbsp;&nbsp;音符&nbsp;<input type="range" id="midivolumeControl" max="1.5" min="0" step="0.02" value="1">
             </div>
             <div class="rangeBox">
-                量&nbsp;&nbsp;音频&nbsp;<input type="range" id="audiovolumeControl" max="1" min="0" step="0.02" value="0.2">
+                量&nbsp;&nbsp;音频&nbsp;<input type="range" id="audiovolumeControl" max="1" min="0" step="0.02"
+                    value="0.2">
             </div>
         </div>
 
@@ -146,6 +149,7 @@
         </li>
         <li>数字谱对齐音频</li>
         <li>人工智障扒谱</li>
+        <li>音色分离扒谱</li>
     </ul>
 
     <ul class="paddingbox niceScroll btn-ul" id="settingPannel">
@@ -437,6 +441,53 @@
                 }; fileReader.readAsArrayBuffer(this.files[0]);
             }; input.click();
         };
+        // 音色分离扒谱
+        lis[4].onclick = function () {
+            if (!app.Analyser.basicamt(null, true)) return; // 仅仅判断是否可以进行AI扒谱
+            const btn = this;
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'audio/*,video/*,.mov';
+            input.onchange = function () {
+                // 文件选完后弹出分离数量选择UI
+                let tempDiv = document.createElement('div');
+                tempDiv.innerHTML = `
+<div class="request-cover">
+    <div class="card hvCenter">
+        <h3>选择音色数目</h3>
+        请选择要分离的音色数目（2-4）<br>适合乐器差异较大的乐曲<br>
+        <input type="number" min="2" max="4" value="2">
+        <div class="layout">
+            <button class="ui-cancel">取消</button>
+            <span style="width: 1em;"></span>
+            <button class="ui-confirm">确认</button>
+        </div>
+    </div>
+</div>`;
+                const ui = tempDiv.firstElementChild;
+                const close = () => ui.remove();
+                ui.querySelector('.ui-cancel').onclick = close;
+                ui.querySelector('.ui-confirm').onclick = () => {
+                    let k = parseInt(ui.querySelector('input').value);
+                    if (isNaN(k) || k < 2 || k > 5) {
+                        alert('请输入2-4的整数！');
+                        return;
+                    }
+                    close();
+                    btn.innerHTML = "AI扒谱中...";
+                    const fileReader = new FileReader();
+                    fileReader.onload = (e) => {
+                        app.audioContext.decodeAudioData(e.target.result).then((decodedData) =>
+                            app.Analyser.septimbre(decodedData, k)
+                        ).then(() => {
+                            btn.innerHTML = "音色分离扒谱";
+                        });
+                    }; fileReader.readAsArrayBuffer(input.files[0]);
+                }
+                document.body.insertBefore(ui, document.body.firstChild);
+            };
+            input.click();
+        };
     }
 
     // ==== 设置界面 ==== //
@@ -501,6 +552,9 @@
                 app.TimeBar.setRepeat(i1, i2);
             } else alert('时间格式错误！');
         }
+        lis[5].onclick = lis[6].onclick = function () {
+            this.querySelector('input').click();
+        };
     }
     // ==== 交互细节 ==== //
     document.querySelector('.top-logo').addEventListener('click', () => {

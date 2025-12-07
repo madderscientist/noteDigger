@@ -121,7 +121,7 @@ function _Analyser(parent) {
     };
 
     /**
-     * 后台（worker）AI扒谱
+     * 后台（worker）AI音色无关扒谱
      * @param {AudioBuffer} audioBuffer 音频缓冲区
      * @param {Boolean} judgeOnly 是否只判断是否可以扒谱
      * @returns promise，用于指示扒谱完成。如果judgeOnly为true则返回值代表是否可以AI扒谱
@@ -165,6 +165,44 @@ function _Analyser(parent) {
                 };
             });
             parent.MidiAction.midi.push(...notes);
+            parent.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
+            chdiv.switchUpdateMode(true);
+        }).catch(alert);
+    };
+
+    /**
+     * 后台（worker）AI音色分离扒谱
+     * @param {AudioBuffer} audioBuffer 音频缓冲区
+     * @returns promise，用于指示扒谱完成
+     */
+    this.septimbre = (audioData, k = 2) => {
+        console.time("AI音色分离扒谱");
+        return septimbre(audioData, k).then((tracks) => {
+            console.timeEnd("AI音色分离扒谱");
+            const timescale = (256 * 1000) / (22050 * parent.dt);
+            // 逻辑同index.html中导入midi
+            const chdiv = parent.MidiAction.channelDiv;
+            chdiv.switchUpdateMode(false);
+            tracks.forEach((events) => {
+                const ch = chdiv.addChannel();
+                if (!ch) return;
+                const chid = ch.index;
+                ch.name = `AI分离${chid}`;
+                ch.instrument = TinySynth.instrument[(ch.ch.instrument = 4)];
+                const maxIntensity = events.reduce((a, b) => a.velocity > b.velocity ? a : b).velocity;
+                ch.ch.volume = maxIntensity * 127;
+                const notes = events.map(({ onset, offset, note, velocity }) => {
+                    return {
+                        x1: onset * timescale,
+                        x2: offset * timescale,
+                        y: note - 24,
+                        ch: chid,
+                        selected: false,
+                        v: velocity / maxIntensity * 127
+                    };
+                });
+                parent.MidiAction.midi.push(...notes);
+            });
             parent.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
             chdiv.switchUpdateMode(true);
         }).catch(alert);
