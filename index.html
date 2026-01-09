@@ -552,8 +552,11 @@
                 app.TimeBar.setRepeat(i1, i2);
             } else alert('时间格式错误！');
         }
-        lis[5].onclick = lis[6].onclick = function () {
-            this.querySelector('input').click();
+        // 扩大复选框的点击范围
+        lis[5].onclick = lis[6].onclick = function (e) {
+            const input = this.querySelector('input');
+            if (e.target === input) return; // 防止点checkbox触发两次
+            input.click();
         };
     }
     // ==== 交互细节 ==== //
