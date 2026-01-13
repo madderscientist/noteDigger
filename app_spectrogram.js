@@ -3,7 +3,7 @@
  * @param {App} parent 
  */
 function _Spectrogram(parent) {
-    this.colorStep1 = 100;
+    this.colorStep1 = 90;
     this.colorStep2 = 240;
     this.multiple = parseFloat(document.getElementById('multiControl').value);  // 幅度的倍数
     this._spectrogram = null;

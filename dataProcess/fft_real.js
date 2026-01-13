@@ -49,7 +49,7 @@ class realFFT {
     }
 
     /**
-     * 
+     * 初始化实数FFT 使用Hanning窗
      * @param {Number} N 要做几点的实数FFT
      */
     constructor(N) {
@@ -58,6 +58,31 @@ class realFFT {
         this.bufferi = new Float32Array(this.N);
         this.Xr = new Float32Array(this.N);
         this.Xi = new Float32Array(this.N);
+        this.initWindow();
+    }
+    /**
+     * 计算Hanning窗
+     * 并利用this.bufferr和this.bufferi对窗值进行重排
+     * 以加速FFT时的访问速度（随机访问->顺序访问）
+     */
+    initWindow() {
+        // this.N是实际长度的一半
+        const half_N = this.N;
+        const N = this.N << 1;
+        const pi2_N = Math.PI / half_N; // 2π/N = π/(N/2)
+        for (let n = 0; n < half_N; n++) {
+            // 利用对称性 由于最后会归一化，因此这里不用除以2
+            this.bufferr[n] = this.bufferi[half_N - n - 1] = 1 - Math.cos(pi2_N * n);
+        }
+        const window = new Float32Array(N);
+        for (let i = 0, ii = 1, j = 0; j < N; i += 2, ii += 2, j += 4) {
+            // 利用性质：reverseBits的偶数项都小于half_N（从bufferr中取值），奇数项都大于half_N（从bufferi中取值）
+            window[j] = this.bufferr[this.reverseBits[i]];
+            window[j+1] = this.bufferr[this.reverseBits[i] + 1];
+            window[j+2] = this.bufferi[this.reverseBits[ii] - half_N];
+            window[j+3] = this.bufferi[this.reverseBits[ii] - half_N + 1];
+        }
+        this.window = window;
     }
     /**
      * 预计算常量
@@ -80,12 +105,16 @@ class realFFT {
      * @returns [实部, 虚部]
      */
     fft(input, offset = 0) {
-        // 偶数次和奇数次组合并计算第一层
-        for (let i = 0, ii = 1, offseti = offset + 1; i < this.N; i += 2, ii += 2) {
+        // 偶数次和奇数次组合并计算第一层 并加窗
+        for (let i = 0, ii = 1, j = 0, offseti = offset + 1; i < this.N; i += 2, ii += 2, j += 4) {
             let xr1 = input[this.reverseBits[i] + offset] || 0;
             let xi1 = input[this.reverseBits[i] + offseti] || 0;
             let xr2 = input[this.reverseBits[ii] + offset] || 0;
             let xi2 = input[this.reverseBits[ii] + offseti] || 0;
+            xr1 *= this.window[j];
+            xi1 *= this.window[j+1];
+            xr2 *= this.window[j+2];
+            xi2 *= this.window[j+3];
             this.bufferr[i] = xr1 + xr2;
             this.bufferi[i] = xi1 + xi2;
             this.bufferr[ii] = xr1 - xr2;
@@ -99,12 +128,12 @@ class realFFT {
             // W's base desired: 2N
             // times to k: N/2, N/4 --> equals to 2*groupNum (W_base*k_times=W_base_desired)
             // offset between groups: 4, 8, ..., N --> equals to 2*groupMem
-            let groupOffset = groupMem << 1;
+            const groupOffset = groupMem << 1;
             for (let mem = 0, k = 0, dk = groupNum << 1; mem < groupMem; mem++, k += dk) {
-                let [Wr, Wi] = [this._Wr[k], this._Wi[k]];
+                const [Wr, Wi] = [this._Wr[k], this._Wi[k]];
                 for (let gn = mem; gn < this.N; gn += groupOffset) {
-                    let gn2 = gn + groupMem;
-                    let [gwr, gwi] = realFFT.ComplexMul(this.bufferr[gn2], this.bufferi[gn2], Wr, Wi);
+                    const gn2 = gn + groupMem;
+                    const [gwr, gwi] = realFFT.ComplexMul(this.bufferr[gn2], this.bufferi[gn2], Wr, Wi);
                     this.Xr[gn] = this.bufferr[gn] + gwr;
                     this.Xi[gn] = this.bufferi[gn] + gwi;
                     this.Xr[gn2] = this.bufferr[gn] - gwr;
@@ -118,7 +147,7 @@ class realFFT {
         this.Xr[0] = this.bufferi[0] + this.bufferr[0];
         this.Xi[0] = 0;
         for (let k = 1, Nk = this.N - 1; Nk; k++, Nk--) {
-            let [Ir, Ii] = realFFT.ComplexMul(this.bufferi[k] + this.bufferi[Nk], this.bufferr[Nk] - this.bufferr[k], this._Wr[k], this._Wi[k]);
+            const [Ir, Ii] = realFFT.ComplexMul(this.bufferi[k] + this.bufferi[Nk], this.bufferr[Nk] - this.bufferr[k], this._Wr[k], this._Wi[k]);
             this.Xr[k] = (this.bufferr[k] + this.bufferr[Nk] + Ir) * 0.5;
             this.Xi[k] = (this.bufferi[k] - this.bufferi[Nk] + Ii) * 0.5;
         }

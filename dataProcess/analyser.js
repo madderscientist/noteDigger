@@ -51,7 +51,7 @@ class NoteAnalyser {    // 负责解析频谱数据
         at.push(Math.round((this.freqTable[this.freqTable.length - 1] * 1.059463) / this.df))
         const range = new Float32Array(84); // 第i个区间的终点
         for (let i = 0; i < at.length - 1; i++) {
-            range[i] = (at[i] + at[i + 1]) / 2;
+            range[i] = Math.sqrt(at[i] * at[i + 1]);  // 根据音乐的对数尺度，用几何平均
         } this.rangeTable = range;
     }
     /**
