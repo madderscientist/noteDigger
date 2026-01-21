@@ -3,7 +3,7 @@
 class Snapshot extends Array {
     /**
      * 新建快照栈
-     * @param {Number} maxLen 快照历史数
+     * @param {number} maxLen 快照历史数
      * @param {*} iniState 初始状态
      */
     constructor(maxLen, iniState = '') {

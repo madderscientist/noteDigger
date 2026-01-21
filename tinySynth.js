@@ -169,19 +169,19 @@ class TinySynth {
     /**
      * 填充音色默认参数
      * @param {Object} options 配置选项
-     * @param {Number} [options.g=0] - output destination 0=final output / n=FM to specified osc即将FM效果应用在第几个osc上
-     * @param {String} [options.w="sine"] - wave type 波形类型 sine/square/sawtooth/triangle/w9999
-     * @param {Number} [options.t=1] - tune factor according to note#
-     * @param {Number} [options.f=0] - delta频率 在基频上面加的 f' = f0*t+f
-     * @param {Number} [options.v=0.5] - volume 音量 0~1
-     * @param {Number} [options.a=0] - attack time in seconds
-     * @param {Number} [options.h=0.01] - hold time in seconds
-     * @param {Number} [options.d=0.01] - decay time in seconds
-     * @param {Number} [options.s=0] - sustain level 声音在按键持续按下期间的音量
-     * @param {Number} [options.r=0.05] - release time in seconds
-     * @param {Number} [options.p=1] - pitch bend 频率变化因数(乘)
-     * @param {Number} [options.q=1] - pitch bend speed factor in seconds 从freq到freq*p所需秒数
-     * @param {Number} [options.k=0] - volume key tracking factor 在真实的乐器中，音量往往会随着音高的变化而变化
+     * @param {number} [options.g=0] - output destination 0=final output / n=FM to specified osc即将FM效果应用在第几个osc上
+     * @param {string} [options.w="sine"] - wave type 波形类型 sine/square/sawtooth/triangle/w9999
+     * @param {number} [options.t=1] - tune factor according to note#
+     * @param {number} [options.f=0] - delta频率 在基频上面加的 f' = f0*t+f
+     * @param {number} [options.v=0.5] - volume 音量 0~1
+     * @param {number} [options.a=0] - attack time in seconds
+     * @param {number} [options.h=0.01] - hold time in seconds
+     * @param {number} [options.d=0.01] - decay time in seconds
+     * @param {number} [options.s=0] - sustain level 声音在按键持续按下期间的音量
+     * @param {number} [options.r=0.05] - release time in seconds
+     * @param {number} [options.p=1] - pitch bend 频率变化因数(乘)
+     * @param {number} [options.q=1] - pitch bend speed factor in seconds 从freq到freq*p所需秒数
+     * @param {number} [options.k=0] - volume key tracking factor 在真实的乐器中，音量往往会随着音高的变化而变化
      */
     static initSoundFont({ g, w, t, f, v, a, h, d, s, r, p, q, k } = TinySynth.defaultWave) {
         // 默认的波形参数，用于填充每个基本波中缺失的默认参数
@@ -269,14 +269,14 @@ class TinySynth {
     }
     /**
      * 平方律，根据音量设置增益
-     * @param {Number} v 自然数音量
+     * @param {number} v 自然数音量
      */
     set volume(v) {
         this.out.gain.value = v * v / 16129;
     }
     /**
      * 创建一个节点
-     * @param {Number} at 插入在native channel的位置，undefined表示最后，负数表示倒数
+     * @param {number} at 插入在native channel的位置，undefined表示最后，负数表示倒数
      * @returns {Object} {out: GainNode}
      */
     addChannel(at = this.channel.length, instrument = 0, gain = 1) {
@@ -293,11 +293,11 @@ class TinySynth {
     /**
      * 播放声音
      * @param {Object} options 音符播放参数
-     * @param {Number} [options.id] - channel的id，如果不传或违规则用自身 决定了音色
-     * @param {Number} [options.f=440] - 发生频率
-     * @param {Number} [options.v=127] - 力度，最大127 会按平方律变为音量
-     * @param {Number} [options.t=0] - 发声时间(秒) 如果小于零则在this.actx.currentTime基础上加其绝对值
-     * @param {Number} [options.last=9999] - 持续时间(秒)
+     * @param {number} [options.id] - channel的id，如果不传或违规则用自身 决定了音色
+     * @param {number} [options.f=440] - 发生频率
+     * @param {number} [options.v=127] - 力度，最大127 会按平方律变为音量
+     * @param {number} [options.t=0] - 发声时间(秒) 如果小于零则在this.actx.currentTime基础上加其绝对值
+     * @param {number} [options.last=9999] - 持续时间(秒)
      * @returns {Object} note = {ch, end, gain, release}
      */
     play({ id, f = 440, v = 127, t = 0, last = 9999 } = {}) {

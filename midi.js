@@ -13,7 +13,7 @@ class midiEvent {
      * 用参数创建一个事件
      * @param {number} ticks 绝对时间，单位tick。若tisks == -1, 在mtrk.addEvent时会自动使用last_tick; 若<-1, 则last_tick - this.ticks（此时代表相对时间）
      * @param {number} code 如果有channel，则去掉channel，如0x91 -> 0x9；如果是0xf0则保留此编码；如果是0xff则需要加上后面的type，如0xff51
-     * @param {Array<Number>} value 数组，代表其余所有参数
+     * @param {Array<number>} value 数组，代表其余所有参数
      */
     #constructor_args(ticks, code, value) {
         this.ticks = ticks;

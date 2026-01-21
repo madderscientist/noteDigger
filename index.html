@@ -18,6 +18,10 @@
     <!-- 可选的AI扒谱 -->
     <script src="./dataProcess/AI/basicamt.js" async></script>
     <script src="./dataProcess/AI/septimbre.js" async></script>
+    <!-- 节奏估计 -->
+    <script src="./dataProcess/bpmEst.js" async></script>
+    <!-- 自动音符对齐 -->
+    <script src="./dataProcess/ANA.js" async></script>
 
     <script src="./siderMenu.js"></script>
     <script src="./myRange.js"></script>
@@ -38,7 +42,6 @@
     <script src="./app_timebar.js"></script>
     <script src="./app_beatbar.js"></script>
     <script src="./app_hscrollbar.js"></script>
-    <script src="./dataProcess/ANA.js"></script>
     <script src="./app_analyser.js"></script>
     <script src="./app_io.js"></script>
     <script src="./app.js"></script>
@@ -138,6 +141,7 @@
 
     <ul class="paddingbox niceScroll btn-ul" id="analysePannel">
         <li>调性分析</li>
+        <li>节奏分析</li>
         <li>自动填充 <h5 style="display: inline-block;"><input type="checkbox">在新轨道中</h5>
             <div class="wf fr">
                 黑<input type="range" max="255" min="0" value="255" step="1">红
@@ -164,8 +168,9 @@
             </div>
             <button>取消区间</button><button>应用</button>
         </li>
-        <li>显示音名<input type="checkbox" onchange="app.pitchNameDisplay.showPitchName(this.checked)"></li>
-        <li>透明度表示强度<input type="checkbox" checked onchange="app.MidiAction.alphaIntensity=this.checked"></li>
+        <li>显示音名&nbsp;<input type="checkbox" onchange="app.pitchNameDisplay.showPitchName(this.checked)"></li>
+        <li>透明度表示强度&nbsp;<input type="checkbox" checked onchange="app.MidiAction.alphaIntensity=this.checked"></li>
+        <li>播放节拍&nbsp;<input type="checkbox" onchange="app.MidiPlayer.switchBeatMode(this.checked)"></li>
     </ul>
 </div>
 <script>
@@ -366,9 +371,19 @@
             </div>`;
             this.appendChild(div);
         };
+        // 节奏分析
+        lis[1].onclick = function() {
+            // 如果已经有结果了就删除
+            if (this.childElementCount) this.removeChild(this.lastChild);
+            const [BPM, pattern, beatdown] = app.Analyser.beatEst();
+            const div = document.createElement('div');
+            div.innerHTML = `<h5>BPM: ${BPM.toFixed(2)}</h5>
+            <h5>节奏型: ${pattern}/4</h5>`;
+            this.appendChild(div);
+        };
         // 自动填充音符
-        const inputs = lis[1].querySelectorAll('input');
-        const btns = lis[1].querySelectorAll('button');
+        const inputs = lis[2].querySelectorAll('input');
+        const btns = lis[2].querySelectorAll('button');
         const checkbox = inputs[0];
         const threshold = inputs[1];
         threshold.addEventListener('input', function () {
@@ -419,9 +434,9 @@
             } autoFill();
         };
         // 自动音符对齐
-        lis[2].onclick = () => app.Analyser.autoNoteAlign();
+        lis[3].onclick = () => app.Analyser.autoNoteAlign();
         // 人工智障扒谱
-        lis[3].onclick = function () {
+        lis[4].onclick = function () {
             if (!app.Analyser.basicamt(null, true)) return; // 仅仅判断是否可以进行AI扒谱
             const btn = this;
             // 由于效果并不好，因此不会自动执行；而程序为了省内存不会保留音频数据，因此需要重新上传音频
@@ -442,7 +457,7 @@
             }; input.click();
         };
         // 音色分离扒谱
-        lis[4].onclick = function () {
+        lis[5].onclick = function () {
             if (!app.Analyser.basicamt(null, true)) return; // 仅仅判断是否可以进行AI扒谱
             const btn = this;
             const input = document.createElement('input');
@@ -553,7 +568,7 @@
             } else alert('时间格式错误！');
         }
         // 扩大复选框的点击范围
-        lis[5].onclick = lis[6].onclick = function (e) {
+        lis[5].onclick = lis[6].onclick = lis[7].onclick = function (e) {
             const input = this.querySelector('input');
             if (e.target === input) return; // 防止点checkbox触发两次
             input.click();

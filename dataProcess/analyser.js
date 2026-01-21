@@ -28,7 +28,7 @@ class FreqTable extends Float32Array {
 
 class NoteAnalyser {    // 负责解析频谱数据
     /**
-     * @param {Number} df FFT的频率分辨率
+     * @param {number} df FFT的频率分辨率
      * @param {FreqTable || Number} freq 频率表(将被引用)或中央A的频率
      */
     constructor(df, freq) {
@@ -165,9 +165,9 @@ class NoteAnalyser {    // 负责解析频谱数据
     /**
      * 标记大于阈值的音符
      * @param {Array<Float32Array>} noteTable 时频图
-     * @param {Number} threshold 阈值
-     * @param {Number} from 
-     * @param {Number} to 
+     * @param {number} threshold 阈值
+     * @param {number} from 
+     * @param {number} to 
      * @returns {Array<Note>} {x1,x2,y,ch,selected}
      */
     static autoFill(noteTable, threshold, from = 0, to = 0) {

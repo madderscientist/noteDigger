@@ -46,7 +46,7 @@ window.bSaver = {
     /**
      * 解析Float32Mat2Buffer得到的二进制数组为二维的Float32Array的Array
      * @param {ArrayBuffer} arrayBuffer 待解析的二进制数组
-     * @param {Number} offset 读取的byte偏移量
+     * @param {number} offset 读取的byte偏移量
      * @returns {[Array<Float32Array>, Number]} 解析后的二维Float32Array数组和读取结束后的byte偏移量
      */
     Buffer2Float32Mat(arrayBuffer, offset = 0) {
@@ -62,7 +62,7 @@ window.bSaver = {
     },
     /**
      * 将字符串转为可解析的二进制数组
-     * @param {String} str 字符串
+     * @param {string} str 字符串
      * @returns {ArrayBuffer} 二进制数组 开头有一个Uint32的长度信息记录BinaryData的长度
      */
     String2Buffer(str) {
@@ -77,7 +77,7 @@ window.bSaver = {
     /**
      * 解析String2Buffer得到的二进制数组为字符串
      * @param {ArrayBuffer} arrayBuffer 待解析的二进制数组
-     * @param {Number} offset 读取的byte偏移量
+     * @param {number} offset 读取的byte偏移量
      * @returns {[String, Number]} 解析后的对象和读取结束后的byte偏移量
      */
     Buffer2String(arrayBuffer, offset = 0) {
@@ -99,7 +99,7 @@ window.bSaver = {
     /**
      * 解析Object2Buffer得到的二进制数组为一个可以被JSON.stringify的对象
      * @param {ArrayBuffer} arrayBuffer 待解析的二进制数组
-     * @param {Number} offset 读取的byte偏移量
+     * @param {number} offset 读取的byte偏移量
      * @returns {[Object, Number]} 解析后的对象和读取结束后的byte偏移量
      */
     Buffer2Object(arrayBuffer, offset = 0) {
@@ -129,7 +129,7 @@ window.bSaver = {
     /**
      * 将二进制数组保存为文件
      * @param {ArrayBuffer} arrayBuffer 待保存的二进制数组
-     * @param {String} filename 保存的文件名
+     * @param {string} filename 保存的文件名
      */
     saveArrayBuffer(arrayBuffer, filename) {
         // 创建一个 Blob 对象，将合并后的 ArrayBuffer 保存为二进制文件

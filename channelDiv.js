@@ -91,8 +91,8 @@ class ChannelItem extends HTMLDivElement {
     }
     /**
      * 通过更改原型链实现构造
-     * @param {String} name 
-     * @param {String} color 
+     * @param {string} name 
+     * @param {string} color 
      * @returns {ChannelItem}
      */
     static new(name = "channel", color = "red", instrument = "Piano", visible = true, mute = false, lock = false) {
@@ -390,7 +390,7 @@ class ChannelList extends EventTarget {
      * 增加一个channel，触发add事件，发生于插入之后
      * 然后可能会触发reorder事件，取决于是否插入最后一个
      * 最后触发added事件
-     * @param {Number} at 插入音轨的序号
+     * @param {number} at 插入音轨的序号
      * @returns {ChannelItem}
      */
     addChannel(at = this.channel.length) {    // 用于一个个添加
@@ -449,7 +449,7 @@ class ChannelList extends EventTarget {
     }
     /**
      * 打开ch的设置面板
-     * @param {Number} chid 音轨序号
+     * @param {number} chid 音轨序号
      */
     settingPannel(chid) {
         const ch = this.channel[chid];

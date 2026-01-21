@@ -37,17 +37,17 @@ function _BeatBar(parent) {
             spectrum.moveTo(x, 0);
             spectrum.lineTo(x, spectrumHeight);
             // 写字 会根据间隔决定是否显示拍型
-            let Interval = measure.interval * parent.PperT;
+            const Interval = measure.interval * parent.PperT;
             ctx.fillText(Interval < 38 ? measure.id : `${measure.id}. ${measure.beatNum}/${measure.beatUnit}`, x + 2, h + 14);
             // 画更细的节拍线
-            let dp = Interval / measure.beatNum;
+            const dp = Interval / measure.beatNum;
             if (dp < this.minInterval) continue;
             x += dp;
             for (let i = measure.beatNum - 1; i > 0; i--, x += dp) beatX.push(x);
             // 画x分音符的线
-            let noteNum = 1 << Math.log2(dp / this.minInterval);
+            const noteNum = 1 << Math.log2(dp / this.minInterval);
             if (noteNum < 2) continue;
-            let noteInterval = dp / noteNum;
+            const noteInterval = dp / noteNum;
             for (let i = 0, n = noteNum * measure.beatNum; i < n; i++, x -= noteInterval) {
                 if (i % noteNum == 0) continue; // 跳过beat线
                 noteX.push(x);
@@ -108,7 +108,7 @@ function _BeatBar(parent) {
                 btns[0].onclick = close;
                 btns[1].onclick = () => {
                     if (!inputs[4].checked) {   // 后面不变
-                        bs.setMeasure(m.id + 1, false); // 让下一个生成实体
+                        bs.setMeasure(m.id + 1, undefined, false); // 让下一个生成实体
                     }
                     if (inputs[3].checked) {    // 和上一小节一样
                         let last = bs.getMeasure(m.id - 1, false);
@@ -118,23 +118,63 @@ function _BeatBar(parent) {
                         m.beatUnit = parseInt(inputs[1].value);
                         m.bpm = parseInt(inputs[2].value);
                     } bs.check(); close();
+                    parent.snapshot.save(0b100);
                 };
             }
         }, {
             name: "后方插入一小节",
             callback: (e_father) => {
                 this.beats.add((e_father.offsetX + parent.scrollX) * parent.TperP, true);
+                parent.snapshot.save(0b100);
+            }
+        }, {
+            name: "拆分该小节",
+            callback: (e_father) => {
+                const beatarr = this.beats;
+                const base = beatarr.setMeasure((e_father.offsetX + parent.scrollX) * parent.TperP, undefined, true, true);
+                const baseM = beatarr[base];
+                // 下一小节若未定义则定义 则插入一个 防止影响后面
+                if (base + 1 >= beatarr.length || beatarr[base + 1].id > baseM.id + 1)
+                    beatarr.splice(base + 1, 0, eMeasure.baseOn(baseM, baseM.id + 1));
+                // 插入新的 用id位移实现
+                baseM.interval /= 2;
+                for (let i = base + 1; i < beatarr.length; i++) beatarr[i].id++;
+                beatarr.check(true);
+                parent.snapshot.save(0b100);
+            }
+        }, {
+            name: "合并下一小节",
+            callback: (e_father) => {
+                const beatarr = this.beats;
+                const base = beatarr.setMeasure((e_father.offsetX + parent.scrollX) * parent.TperP, undefined, true, true);
+                const baseM = beatarr[base];
+                // 下下个
+                const nextnext = beatarr.setMeasure(baseM.id + 2, undefined, false, true);
+                const nextnextM = beatarr[nextnext];
+
+                if (nextnext === base + 2) {
+                    // 中间隔了一个小节头
+                    const deleted = beatarr.splice(base + 1, 1)[0];
+                    baseM.interval += deleted.interval;
+                } else {
+                    baseM.interval += baseM.interval;
+                }
+                for (let i = base + 1; i < beatarr.length; i++) beatarr[i].id--;
+                beatarr.check(true);
+                parent.snapshot.save(0b100);
             }
         }, {
             name: "重置后面所有小节",
             callback: (e_father) => {
-                let base = this.beats.getBaseIndex((e_father.offsetX + parent.scrollX) * parent.TperP, true);
+                const base = this.beats.getBaseIndex((e_father.offsetX + parent.scrollX) * parent.TperP, true);
                 this.beats.splice(base + 1);
+                parent.snapshot.save(0b100);
             }
         }, {
             name: '<span style="color: red;">删除该小节</span>',
             callback: (e_father, e_self) => {
                 this.beats.delete((e_father.offsetX + parent.scrollX) * parent.TperP, true);
+                parent.snapshot.save(0b100);
             }
         }
     ]);
@@ -153,7 +193,7 @@ function _BeatBar(parent) {
             parent.timeBar.classList.remove('selecting');
             return;
         }
-        let threshold = 6 * parent.TperP;
+        const threshold = 6 * parent.TperP;
         if (timeNow - m.start < threshold) {
             this.belongID = m.id - 1;
             parent.timeBar.classList.add('selecting');
@@ -164,5 +204,5 @@ function _BeatBar(parent) {
             this.belongID = -1;
             parent.timeBar.classList.remove('selecting');
         }
-    }
+    };
 }

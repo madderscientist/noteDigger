@@ -4,7 +4,7 @@
 class realFFT {
     /**
      * 位反转数组 最大支持2^16点
-     * @param {Number} N 2的正整数幂
+     * @param {number} N 2的正整数幂
      * @returns {Uint16Array} 位反转序列
      */
     static reverseBits(N) {
@@ -25,10 +25,10 @@ class realFFT {
     }
     /**
      * 复数乘法
-     * @param {Number} a 第一个数的实部
-     * @param {Number} b 第一个数的虚部
-     * @param {Number} c 第二个数的实部
-     * @param {Number} d 第二个数的虚部
+     * @param {number} a 第一个数的实部
+     * @param {number} b 第一个数的虚部
+     * @param {number} c 第二个数的实部
+     * @param {number} d 第二个数的虚部
      * @returns {Array} [实部, 虚部]
      */
     static ComplexMul(a = 0, b = 0, c = 0, d = 0) {
@@ -50,15 +50,21 @@ class realFFT {
 
     /**
      * 初始化实数FFT 使用Hanning窗
-     * @param {Number} N 要做几点的实数FFT
+     * @param {number} N 要做几点的实数FFT
+     * @param {string} window 窗类型 'hanning' | 'none'
      */
-    constructor(N) {
+    constructor(N, window = 'hanning') {
         this.ini(N);
         this.bufferr = new Float32Array(this.N);
         this.bufferi = new Float32Array(this.N);
-        this.Xr = new Float32Array(this.N);
-        this.Xi = new Float32Array(this.N);
-        this.initWindow();
+        // 存放最终结果的数组
+        // FFT返回Xr和Xi IFFT返回X
+        this.X = new Float32Array(this.N << 1);
+        this.Xr = this.X.subarray(0, this.N);
+        this.Xi = this.X.subarray(this.N);
+        // 窗函数初始化
+        if (window === 'hanning') this.initWindow();
+        else this.window = new Float32Array(this.N << 1).fill(1);
     }
     /**
      * 计算Hanning窗
@@ -86,7 +92,7 @@ class realFFT {
     }
     /**
      * 预计算常量
-     * @param {Number} N 2的正整数次幂
+     * @param {number} N 2的正整数次幂
      */
     ini(N) {
         // 确定FFT长度
@@ -95,31 +101,16 @@ class realFFT {
         // 位反转预计算 实际做N/2的FFT
         this.reverseBits = realFFT.reverseBits(N);
         // 旋转因子预计算 仍然需要N点的，但是只取前一半
-        this._Wr = new Float32Array(Array.from({ length: N }, (_, i) => Math.cos(Math.PI / N * i)));
-        this._Wi = new Float32Array(Array.from({ length: N }, (_, i) => -Math.sin(Math.PI / N * i)));
+        const PIN = Math.PI / N;
+        this._Wr = new Float32Array(Array.from({ length: N }, (_, i) => Math.cos(PIN * i)));
+        this._Wi = new Float32Array(Array.from({ length: N }, (_, i) => -Math.sin(PIN * i)));
     }
     /**
-     * 
-     * @param {Float32Array} input 输入
-     * @param {Number} offset 偏移量
-     * @returns [实部, 虚部]
+     * 计算除第一层外的FFT
+     * 要求第一层的结果存储于this.bufferr和this.bufferi
+     * 结果存储于this.bufferr和this.bufferi
      */
-    fft(input, offset = 0) {
-        // 偶数次和奇数次组合并计算第一层 并加窗
-        for (let i = 0, ii = 1, j = 0, offseti = offset + 1; i < this.N; i += 2, ii += 2, j += 4) {
-            let xr1 = input[this.reverseBits[i] + offset] || 0;
-            let xi1 = input[this.reverseBits[i] + offseti] || 0;
-            let xr2 = input[this.reverseBits[ii] + offset] || 0;
-            let xi2 = input[this.reverseBits[ii] + offseti] || 0;
-            xr1 *= this.window[j];
-            xi1 *= this.window[j+1];
-            xr2 *= this.window[j+2];
-            xi2 *= this.window[j+3];
-            this.bufferr[i] = xr1 + xr2;
-            this.bufferi[i] = xi1 + xi2;
-            this.bufferr[ii] = xr1 - xr2;
-            this.bufferi[ii] = xi1 - xi2;
-        }
+    _fftOther() {
         for (let groupNum = this.N >> 2, groupMem = 2; groupNum; groupNum >>= 1) {
             // groupNum: 组数；groupMem：一组里有几个蝶形结构，同时也是一个蝶形结构两个元素的序号差值
             // groupNum: N/4,  N/8, ...,    1
@@ -143,14 +134,85 @@ class realFFT {
             [this.bufferr, this.bufferi, this.Xr, this.Xi] = [this.Xr, this.Xi, this.bufferr, this.bufferi];
             groupMem = groupOffset;
         }
+    }
+    /**
+     * 输入N点实数，输出N/2点复数FFT结果；X[0]的实部存放于Xi[0]
+     * @param {Float32Array} input 输入
+     * @param {number} offset 偏移量
+     * @returns [实部, 虚部]
+     */
+    fft(input, offset = 0) {
+        // 偶数次和奇数次组合并计算第一层 并加窗
+        for (let i = 0, ii = 1, j = 0, offseti = offset + 1; i < this.N; i += 2, ii += 2, j += 4) {
+            let xr1 = input[this.reverseBits[i] + offset] || 0;
+            let xi1 = input[this.reverseBits[i] + offseti] || 0;
+            let xr2 = input[this.reverseBits[ii] + offset] || 0;
+            let xi2 = input[this.reverseBits[ii] + offseti] || 0;
+            xr1 *= this.window[j];
+            xi1 *= this.window[j+1];
+            xr2 *= this.window[j+2];
+            xi2 *= this.window[j+3];
+            this.bufferr[i] = xr1 + xr2;
+            this.bufferi[i] = xi1 + xi2;
+            this.bufferr[ii] = xr1 - xr2;
+            this.bufferi[ii] = xi1 - xi2;
+        }
+        // 其他层
+        this._fftOther();
         // 合并为实数FFT的结果
-        this.Xr[0] = this.bufferi[0] + this.bufferr[0];
-        this.Xi[0] = 0;
+        this.Xr[0] = this.bufferr[0] + this.bufferi[0];
+        this.Xi[0] = this.bufferr[0] - this.bufferi[0]; // 实际上是X[N/2]的实部
         for (let k = 1, Nk = this.N - 1; Nk; k++, Nk--) {
             const [Ir, Ii] = realFFT.ComplexMul(this.bufferi[k] + this.bufferi[Nk], this.bufferr[Nk] - this.bufferr[k], this._Wr[k], this._Wi[k]);
             this.Xr[k] = (this.bufferr[k] + this.bufferr[Nk] + Ir) * 0.5;
             this.Xi[k] = (this.bufferi[k] - this.bufferi[Nk] + Ii) * 0.5;
         }
         return [this.Xr, this.Xi];
+    }
+    /**
+     * 输入N/2点复数频域，输出N点实数时域
+     * @param {Float32Array} real 频域实部
+     * @param {Float32Array} imag 频域虚部 imag[0]存放X[N/2]的实部
+     * @returns {Float32Array} 时域实数
+     */
+    ifft(real, imag) {
+        const calci = (idx) => {
+            const xr = real[idx] || 0;
+            const xi = imag[idx] || 0;
+            const xrN = real[this.N - idx] || 0;
+            const xiN = imag[this.N - idx] || 0;
+            const [r, i] = realFFT.ComplexMul(xr - xrN, xi + xiN, this._Wi[idx], this._Wr[idx]);
+            // 先不乘0.5 到最后归一化再做
+            return [xr + xrN + r, xi - xiN + i];
+        }
+        // 拼接并计算第一层
+        {   // 单独计算第一组
+            const x1r = real[0] + imag[0];
+            const x1i = real[0] - imag[0];
+            // reverseBits为了适应FFT乘了2 这里要除回去
+            const [x2r, x2i] = calci(this.reverseBits[1] >> 1);
+            this.bufferr[0] = x1r + x2r;
+            this.bufferr[1] = x1r - x2r;
+            // IFFT需要取共轭
+            this.bufferi[0] = -(x1i + x2i);
+            this.bufferi[1] = x2i - x1i;
+        }
+        for (let i = 2, ii = 3; i < this.N; i+=2, ii+=2) {
+            const [x1r, x1i] = calci(this.reverseBits[i] >> 1);
+            const [x2r, x2i] = calci(this.reverseBits[ii] >> 1);
+            this.bufferr[i] = x1r + x2r;
+            this.bufferr[ii] = x1r - x2r;
+            this.bufferi[i] = -(x1i + x2i);
+            this.bufferi[ii] = x2i - x1i;
+        }
+        // 其他层
+        this._fftOther();
+        // 结果重排并归一化
+        const norm = 1 / (this.N << 1);     // 之前的0.5
+        for (let i = 0, j = 0; i < this.N; i++, j+=2) {
+            this.X[j] = this.bufferr[i] * norm;
+            this.X[j + 1] = -this.bufferi[i] * norm;    // 取共轭
+        }
+        return this.X;
     }
 }

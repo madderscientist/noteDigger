@@ -20,7 +20,7 @@ function _TimeBar(parent) {
     };
     /**
      * 毫秒转 分:秒:毫秒
-     * @param {Number} ms 毫秒数
+     * @param {number} ms 毫秒数
      * @returns [分,秒,毫秒]
      */
     this.msToClock = (ms) => {

@@ -66,8 +66,8 @@ function App() {
 
     /**
      * 设置播放时间 如果立即播放(keep==false)则有优化
-     * @param {Number} t 时间点 单位：毫秒
-     * @param {Boolean} keep 是否保存之前的状态 如果为false则立即开始
+     * @param {number} t 时间点 单位：毫秒
+     * @param {boolean} keep 是否保存之前的状态 如果为false则立即开始
      */
     this.setTime = (t, keep = true) => {
         this.synthesizer.stopAll();
@@ -75,6 +75,7 @@ function App() {
             this.time = t;
             this.AudioPlayer.audio.currentTime = t / 1000;
             this.AudioPlayer.play_btn.firstChild.textContent = this.TimeBar.msToClockString(t);
+            this.MidiPlayer.restart();
         } else {    // 用于双击时间轴立即播放
             this.AudioPlayer.start(t);  // 所有操作都在start中
         }
@@ -231,8 +232,8 @@ function App() {
     };
     /**
      * 改变工作区(频谱、键盘、时间轴)大小
-     * @param {Number} w 工作区的新宽度 默认充满父容器
-     * @param {Number} h 工作区的新高度 默认充满父容器
+     * @param {number} w 工作区的新宽度 默认充满父容器
+     * @param {number} h 工作区的新高度 默认充满父容器
      * 充满父容器，父容器需设置flex:1;overflow:hidden;
      */
     this.resize = (w = undefined, h = undefined) => {
@@ -267,8 +268,8 @@ function App() {
     /**
      * 移动到 scroll to (x, y)
      * 由目标位置得到合法的scrollX和scrollY，并更新XY方向的scroll离散值起点(序号)
-     * @param {Number} x 新视野左边和世界左边的距离
-     * @param {Number} y 新视野下边和世界下边的距离
+     * @param {number} x 新视野左边和世界左边的距离
+     * @param {number} y 新视野下边和世界下边的距离
      */
     this.scroll2 = (x = this.scrollX, y = this.scrollY) => {
         this.scrollX = Math.max(0, Math.min(x, this._width * this._xnum - this.spectrum.width));
@@ -286,8 +287,8 @@ function App() {
     };
     /**
      * 按倍数横向缩放时频图 以鼠标指针为中心
-     * @param {Number} mouseX
-     * @param {Number} times 倍数 比用加减像素好，更连续
+     * @param {number} mouseX
+     * @param {number} times 倍数 比用加减像素好，更连续
      */
     this.scaleX = (mouseX, times) => {
         let nw = this._width * times;
@@ -325,7 +326,7 @@ function App() {
 
     /**
      * 动画循环绘制
-     * @param {Boolean} loop 是否开启循环
+     * @param {boolean} loop 是否开启循环
      */
     this.loopUpdate = (loop = true) => {
         if (loop) {
@@ -485,13 +486,25 @@ function App() {
                 if (this.BeatBar.belongID > -1) {   // 在小节轴上
                     let _anyAction = false; // 是否存档
                     this.timeBar.removeEventListener('mousemove', this.BeatBar.moveCatch);
-                    let m = this.BeatBar.beats.setMeasure(this.BeatBar.belongID, false);
-                    let startAt = m.start * this.PperT;
-                    let setMeasure = (e2) => {
-                        _anyAction = true;
-                        m.interval = Math.max(100, (e2.offsetX + this.scrollX - startAt) * this.TperP);
-                        this.BeatBar.beats.check(false);    // 关闭小节合并 否则会丢失小节对象
-                    };
+                    const m = this.BeatBar.beats.setMeasure(this.BeatBar.belongID, undefined, false);
+                    const startAt = m.start * this.PperT;
+                    let setMeasure;
+                    if (e.shiftKey) {   // 只改变小节线位置
+                        const nextM = this.BeatBar.beats.setMeasure(m.id + 1, undefined, false);
+                        this.BeatBar.beats.setMeasure(m.id + 2, undefined, false);  // 下下个也要创建
+                        setMeasure = (e2) => {
+                            _anyAction = true;
+                            m.interval = Math.max(100, (e2.offsetX + this.scrollX - startAt) * this.TperP);
+                            nextM.interval -= m.start + m.interval - nextM.start;
+                            this.BeatBar.beats.check(false);
+                        };
+                    } else {    // 改变小节线位置并移动后续小节
+                        setMeasure = (e2) => {
+                            _anyAction = true;
+                            m.interval = Math.max(100, (e2.offsetX + this.scrollX - startAt) * this.TperP);
+                            this.BeatBar.beats.check(false);    // 关闭小节合并 否则会丢失小节对象
+                        };
+                    }
                     let removeEvents = () => {
                         document.removeEventListener('mousemove', setMeasure);
                         this.timeBar.addEventListener('mousemove', this.BeatBar.moveCatch);

@@ -12,7 +12,7 @@ class ContextMenu {
      *   }, // 返回true/false控制本项是否显示
      *   event: "click" // 确认触发本项的事件，默认是click
      * },...]
-     * @param {Array} mustShow 如果菜单项为空，是否显示
+     * @param {boolean} mustShow 如果菜单项为空，是否显示
      */
     constructor(items = [], mustShow = false) {
         this.items = items;

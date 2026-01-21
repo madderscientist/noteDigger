@@ -2,9 +2,9 @@
 class aMeasure {
     /**
      * 构造一个小节
-     * @param {Number | aMeasure} beatNum 分子 几拍为一小节; 如果是aMeasure对象则复制构造
-     * @param {Number} beatUnit 分母 几分音符是一拍
-     * @param {Number} interval 一个小节的时间，单位ms
+     * @param {number | aMeasure} beatNum 分子 几拍为一小节; 如果是aMeasure对象则复制构造
+     * @param {number} beatUnit 分母 几分音符是一拍
+     * @param {number} interval 一个小节的时间，单位ms
      */
     constructor(beatNum = 4, beatUnit = 4, interval = 2000) {
         if (typeof beatNum === 'number') {
@@ -43,11 +43,11 @@ class aMeasure {
 class eMeasure extends aMeasure {
     /**
      * 构造一个有位置信息的小节
-     * @param {Number | eMeasure} id 小节号 或 eMeasure对象（复制构造）
-     * @param {Number} start 小节开始时间 单位ms
-     * @param {Number | aMeasure} beatNum 
-     * @param {Number} beatUnit 
-     * @param {Number} interval 
+     * @param {number | eMeasure} id 小节号 或 eMeasure对象（复制构造）
+     * @param {number} start 小节开始时间 单位ms
+     * @param {number | aMeasure} beatNum 
+     * @param {number} beatUnit 
+     * @param {number} interval 
      */
     constructor(id = 0, start = 0, beatNum, beatUnit, interval) {
         if(typeof id === 'number') {
@@ -63,7 +63,7 @@ class eMeasure extends aMeasure {
     /**
      * 基于某个小节构造一个新的小节
      * @param {eMeasure} base 同类型的小节
-     * @param {Number} id 小节号
+     * @param {number} id 小节号
      * @param {aMeasure} measure 如果要修改值就传 否则参数同base
      * @returns 
      */
@@ -75,7 +75,7 @@ class eMeasure extends aMeasure {
 class Beats extends Array {
     /**
      * 构造一个稀疏数组，只存储节奏变化
-     * @param {Number} maxTime 乐曲时长 单位ms
+     * @param {number} maxTime 乐曲时长 单位ms
      */
     constructor(maxTime = 60000) {
         super(1);
@@ -84,9 +84,9 @@ class Beats extends Array {
     }
     /**
      * 找到当前小节模式的小节头
-     * @param {Number} at 当前小节的时间或小节号
-     * @param {Boolean} timeMode at是否表示毫秒时间
-     * @returns {Number} 小节头在实际数组中的位置
+     * @param {number} at 当前小节的时间或小节号
+     * @param {boolean} timeMode at是否表示毫秒时间
+     * @returns {number} 小节头在实际数组中的位置
      */
     getBaseIndex(at, timeMode = false) {
         let attr = timeMode ? 'start' : 'id';
@@ -97,8 +97,8 @@ class Beats extends Array {
     /**
      * 迭代器屏蔽了数组的稀疏性 如要连续取值，在元素多的时候效果比getMeasure(id)好
      * 注意传入的参数需要自行匹配好，否则后果未知 建议用this.iterator()代替此函数
-     * @param {Number} index 开始的序号
-     * @param {Number} baseAt 基于的eMeasure对象在实际数组中的位置
+     * @param {number} index 开始的序号
+     * @param {number} baseAt 基于的eMeasure对象在实际数组中的位置
      * @returns next()
      */
     [Symbol.iterator](index = 0, baseAt = 0) {
@@ -121,8 +121,8 @@ class Beats extends Array {
     }
     /**
      * 从任意位置开始的迭代器
-     * @param {Number} at 位置
-     * @param {Boolean} timeMode at是否表示毫秒时间
+     * @param {number} at 位置
+     * @param {boolean} timeMode at是否表示毫秒时间
      * @returns 迭代器
      */
     iterator(at, timeMode = false) {    // 由于在绘制更新中使用，故没有复用getBaseIndex以加速运行
@@ -138,8 +138,8 @@ class Beats extends Array {
     }
     /**
      * 根据小节号返回一个只读的小节
-     * @param {Number} at 小节号或覆盖该时刻的小节
-     * @param {Boolean} timeMode 传入的是否是时间
+     * @param {number} at 小节号或覆盖该时刻的小节
+     * @param {boolean} timeMode 传入的是否是时间
      * @returns {eMeasure} 小节信息，修改返回值不会影响原数组 如果越界则返回null
      */
     getMeasure(at, timeMode = false) {
@@ -152,25 +152,29 @@ class Beats extends Array {
     }
     /**
      * 返回一个可以修改的对象。若修改返回值会影响原数组，修改后应调用this.check()
-     * @param {Number} at 修改第几小节或覆盖该时间的小节
-     * @param {aMeasure} measure 小节信息
-     * @param {Boolean} timeMode at是否表示毫秒时间
-     * @returns {eMeasure} 可以修改的对象 可以不传，通过修改返回值+check()来设置 如果越界则返回null
+     * @param {number} at 修改第几小节或覆盖该时间的小节
+     * @param {aMeasure} measure 小节信息 传递后也需要外界调用this.check()来确认设置
+     * @param {boolean} timeMode at是否表示毫秒时间
+     * @param {boolean} returnIdx 是否返回索引而不是对象
+     * @returns {eMeasure} 可以修改的对象 如果越界则返回null returnIdx=true则返回索引
      */
-    setMeasure(at, measure = undefined, timeMode = false) {
+    setMeasure(at, measure = undefined, timeMode = false, returnIdx = false) {
         let i = this.getBaseIndex(at, timeMode);
         if (i == -1) return null;
         // 检查id是否存在 如果不存在就找到第一个data.id > id的位置插入
         let id = timeMode ? this[i].id + ((at - this[i].start) / this[i].interval) | 0 : at;
         if (this[i].id == id) {
             if (measure) this[i].copy(measure);
+            if (returnIdx) return i;
             return this[i];
         }
         if (this[i].id < id) {
             // 不管是否重复 重复性的检查交给check
             let m = eMeasure.baseOn(this[i], id, measure);
             if (m.start >= this.maxTime) return null;
-            this.splice(i + 1, 0, m); return m;
+            this.splice(i + 1, 0, m);
+            if (returnIdx) return i + 1;
+            return m;
         }
     }
 
@@ -196,8 +200,8 @@ class Beats extends Array {
     }
     /**
      * 删除一个小节
-     * @param {Number} at 位置
-     * @param {Boolean} timeMode at是否表示毫秒时间
+     * @param {number} at 位置
+     * @param {boolean} timeMode at是否表示毫秒时间
      */
     delete(at, timeMode = false) {
         let attr = timeMode ? 'start' : 'id';
@@ -212,8 +216,8 @@ class Beats extends Array {
     }
     /**
      * 增加一个小节，小节属性同前一个小节
-     * @param {Number} at 位置
-     * @param {Boolean} timeMode at是否表示毫秒时间
+     * @param {number} at 位置
+     * @param {boolean} timeMode at是否表示毫秒时间
      */
     add(at, timeMode = false) {
         let attr = timeMode ? 'start' : 'id';

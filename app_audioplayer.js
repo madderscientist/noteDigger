@@ -77,7 +77,7 @@ function _AudioPlayer(parent) {
     };
     /**
      * 在指定的毫秒数开始播放
-     * @param {Number} at 开始的毫秒数 如果是负数，则从当下开始
+     * @param {number} at 开始的毫秒数 如果是负数，则从当下开始
      */
     this.start = (at) => {
         const a = this.audio;

@@ -3,6 +3,7 @@
 /// <reference path="./dataProcess/CQT/cqt.js" />
 /// <reference path="./dataProcess/AI/basicamt.js" />
 /// <reference path="./dataProcess/ANA.js" />
+/// <reference path="./dataProcess/bpmEst.js" />
 
 /**
  * 数据解析相关算法
@@ -12,9 +13,9 @@ function _Analyser(parent) {
     /**
      * 对audioBuffer执行STFT
      * @param {AudioBuffer} audioBuffer 音频缓冲区
-     * @param {Number} tNum 一秒几次分析 决定步距
-     * @param {Number} channel 选择哪个channel分析 0:left 1:right 2:l+r 3:l-r else:fft(l)+fft(r)
-     * @param {Number} fftPoints 实数fft点数
+     * @param {number} tNum 一秒几次分析 决定步距
+     * @param {number} channel 选择哪个channel分析 0:left 1:right 2:l+r 3:l-r else:fft(l)+fft(r)
+     * @param {number} fftPoints 实数fft点数
      * @returns {Array<Float32Array>} 时频谱数据
      */
     this.stft = async (audioBuffer, tNum = 20, A4 = 440, channel = -1, fftPoints = 8192) => {
@@ -95,8 +96,8 @@ function _Analyser(parent) {
     /**
      * 后台（worker）计算CQT
      * @param {AudioBuffer} audioBuffer 音频缓冲区
-     * @param {Number} tNum 一秒几次分析 决定步距
-     * @param {Number} channel 选择哪个channel分析 0:left 1:right 2:l+r 3:l-r else:fft(l)+fft(r)
+     * @param {number} tNum 一秒几次分析 决定步距
+     * @param {number} channel 选择哪个channel分析 0:left 1:right 2:l+r 3:l-r else:fft(l)+fft(r)
      * @returns 不返回，直接作用于Spectrogram.spectrogram
      */
     this.cqt = (audioData, tNum, channel) => {
@@ -110,9 +111,7 @@ function _Analyser(parent) {
                 const cqtBins = cqtData[i];
                 const stftBins = s[i];
                 for (let j = 0; j < cqtBins.length; j++) {
-                    // 用非线性混合，当两者极大的时候取最大值，否则相互压制
-                    if (stftBins[j] < cqtBins[j]) stftBins[j] = cqtBins[j];
-                    else stftBins[j] = Math.sqrt(stftBins[j] * cqtBins[j]);
+                    stftBins[j] = Math.sqrt(stftBins[j] * cqtBins[j]);
                 }
             }
             console.timeEnd("CQT计算");
@@ -123,7 +122,7 @@ function _Analyser(parent) {
     /**
      * 后台（worker）AI音色无关扒谱
      * @param {AudioBuffer} audioBuffer 音频缓冲区
-     * @param {Boolean} judgeOnly 是否只判断是否可以扒谱
+     * @param {boolean} judgeOnly 是否只判断是否可以扒谱
      * @returns promise，用于指示扒谱完成。如果judgeOnly为true则返回值代表是否可以AI扒谱
      */
     this.basicamt = (audioData, judgeOnly = false) => {
@@ -336,6 +335,46 @@ function _Analyser(parent) {
         parent.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
         chdiv.switchUpdateMode(true);
     }
+
+    this.beatEst = (minBPM = 40) => {
+        const sr = Math.round(1000 / parent.dt);
+        const onset = Beat.extractOnset(parent.Spectrogram.spectrogram, 16 / sr);
+
+        const maxInterval = Math.ceil(sr * 60 / minBPM);
+        // 范围要大，所以方差大一些
+        const global = Beat.corrBPM(SIGNAL.autoCorr(onset, maxInterval), sr, 1.4, 105);
+        console.log(global)
+        const tempo = Beat.tempo(onset, sr, minBPM, 14, 1, global);
+
+        const fftSize = Beat.fs2FFTN(sr, 12.8);
+        const pulse = Beat.PLP(onset, sr, [40, 200], fftSize, Math.max(1, fftSize >> 3), Beat.PLPprior(tempo, 0.3));
+        for (let i = 0; i < pulse.length; i++) pulse[i] += onset[i];
+        const beatIdx = Beat.EllisBeatTrack(pulse, sr, 200, tempo);
+        if (beatIdx.length < 2) {
+            alert("未能检测到有效节拍！");
+            return;
+        }
+        // 不能引入pulse的干扰 得用原始的onset
+        const [pattern, beatdown] = Beat.rhythmicPattern(onset, beatIdx, [2, 3, 4]);
+        {   // 这两个估计结果有点差 暂时用1拍
+            let pattern = 1, beatdown = 0;  
+            const b = parent.BeatBar.beats;
+            b.length = 0;
+            let i = beatdown;
+            if (beatIdx[0] < 1) i+=pattern;
+            let prev = 0;
+            let id = 0;
+            for (; i < beatIdx.length; i+=pattern, id++) {
+                const at = beatIdx[i] * parent.dt;
+                b.push(new eMeasure(id, prev, pattern, 4, at - prev));
+                prev = at;
+            } b.check(true);
+        }
+        parent.snapshot.save(0b100);
+        parent.dirty = true;
+        return [global, pattern, beatdown];
+    }
+
     // 1(C4)->0
     function parseJE(txt) {
         const parts = [];

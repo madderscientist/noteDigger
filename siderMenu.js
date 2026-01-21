@@ -68,7 +68,7 @@ class SiderMenu extends HTMLDivElement {
      * 构造tabMenu和container
      * @param {HTMLDivElement} menu 存放tab的 样式: .siderTabs 每一个tab: .siderTab
      * @param {HTMLDivElement} container 展示具体内容的 样式: .siderContent 拖动条: .siderBar 每一个子内容都会加上siderItem类
-     * @param {Number} minWidth 展示具体内容的最小宽度
+     * @param {number} minWidth 展示具体内容的最小宽度
      * @returns 
      */
     static new(menu, container, minWidth) {
@@ -85,10 +85,10 @@ class SiderMenu extends HTMLDivElement {
     }
     /**
      * 添加一个菜单项及其内容
-     * @param {String} name tab的名字
-     * @param {String} tabClass tab的类名 用空格分隔
+     * @param {string} name tab的名字
+     * @param {string} tabClass tab的类名 用空格分隔
      * @param {HTMLElement} dom tab对应的内容
-     * @param {Boolean} selected 是否默认选中
+     * @param {boolean} selected 是否默认选中
      * @returns {HTMLDivElement} 添加的tab
      */
     add(name, tabClass, dom, selected = false) {
@@ -128,7 +128,7 @@ class SiderMenu extends HTMLDivElement {
     }
     /**
      * 控制面板的显示
-     * @param {Boolean} ifshow 是否显示面板
+     * @param {boolean} ifshow 是否显示面板
      */
     show(ifshow = true) {
         this.container.display = ifshow ? 'block' : 'none';
