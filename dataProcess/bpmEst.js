@@ -1,4 +1,4 @@
-///<reference path="../fft_real.js" />
+///<reference path="fft_real.js" />
 /**
  * @file bpmEst.js
  * @abstract BPM估计相关算法

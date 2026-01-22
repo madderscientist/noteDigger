@@ -375,6 +375,10 @@
         lis[1].onclick = function() {
             // 如果已经有结果了就删除
             if (this.childElementCount) this.removeChild(this.lastChild);
+            if (!app.Spectrogram._spectrogram) {
+                alert("请先导入音频！");
+                return;
+            }
             const [BPM, pattern, beatdown] = app.Analyser.beatEst();
             const div = document.createElement('div');
             div.innerHTML = `<h5>BPM: ${BPM.toFixed(2)}</h5>

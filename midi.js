@@ -67,7 +67,7 @@ class midiEvent {
      * @returns {Array<number>} midi二进制数据数组的数组
      */
     export(current_tick = 0, channel = 0) {
-        let d = mtrk.tick_hex(this.ticks - current_tick);
+        const d = mtrk.tick_hex(this.ticks - current_tick);
         if (this.code >= 0xf0) {
             if (this.code == 0xf0) d.push(0xf0, this.value.length);
             else d.push(0xff, this.type, this.value.length);
@@ -156,7 +156,7 @@ class mtrk {
         ticknum = Math.round(ticknum).toString(2);
         let i = ticknum.length, j = Math.ceil(i / 7) * 7;
         for (; i < j; i++) ticknum = '0' + ticknum;
-        let t = Array();
+        const t = Array();
         for (i = 0; i + 7 < j; i = i + 7) t.push('1' + ticknum.substring(i, i + 7));
         t.push('0' + ticknum.substr(-7, 7));
         for (i = 0; i < t.length; i++) t[i] = parseInt(t[i], 2);
@@ -170,8 +170,8 @@ class mtrk {
      * @example mtrk.string_hex("example",3) // [101,120,97]
      */
     static string_hex(str, x = -1) {
-        let Buffer = Array(x > 0 ? x : str.length).fill(0);
-        let len = Math.min(Buffer.length, str.length);
+        const Buffer = Array(x > 0 ? x : str.length).fill(0);
+        const len = Math.min(Buffer.length, str.length);
         for (let i = 0; i < len; i++) Buffer[i] = str[i].charCodeAt();
         return Buffer;
     }
@@ -189,8 +189,7 @@ class mtrk {
             for (--x; x >= 0 && num != 0; x--) {
                 Buffer[x] = num & 0xff;
                 num = num >> 8;
-            }
-            return Buffer;
+            } return Buffer;
         } else {
             let len = 0;
             let num2 = num;
@@ -202,8 +201,7 @@ class mtrk {
             for (--len; len >= 0; len--) {
                 Buffer[len] = num & 0xff;
                 num = num >> 8;
-            }
-            return Buffer;
+            } return Buffer;
         }
     }
     constructor(name = "", event_list = Array()) {
@@ -302,11 +300,11 @@ class mtrk {
      */
     JSON(track_id) {
         this.sort();
-        let Notes = [],
-            controls = [],
-            Instruments = [],
-            Tempos = [],
-            TimeSignatures = [];
+        const Notes = [],
+              controls = [],
+              Instruments = [],
+              Tempos = [],
+              TimeSignatures = [];
         for (let i = 0; i < this.events.length; i++) {
             let temp = this.events[i];
             switch (temp.code) {
@@ -716,7 +714,7 @@ class midi {
 function fanqie(mid, barNum = 4) {
     const fqnote = ["1", "1#", "2", "2#", "3", "4", "4#", "5", "5#", "6", "6#", "7"];
     const fqtime = ['////', '///', '//', '/', '-']
-    var j = mid.JSON();
+    const j = mid.JSON();
     let anote = j.header.tick;
     // 最长时间
     let maxtick = 0;

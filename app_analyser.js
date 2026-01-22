@@ -343,7 +343,6 @@ function _Analyser(parent) {
         const maxInterval = Math.ceil(sr * 60 / minBPM);
         // 范围要大，所以方差大一些
         const global = Beat.corrBPM(SIGNAL.autoCorr(onset, maxInterval), sr, 1.4, 105);
-        console.log(global)
         const tempo = Beat.tempo(onset, sr, minBPM, 14, 1, global);
 
         const fftSize = Beat.fs2FFTN(sr, 12.8);

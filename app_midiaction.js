@@ -116,7 +116,7 @@ function _MidiAction(parent) {
         // midi模式下，视野要比音符宽一页，或超出视野半页
         if (parent.midiMode) {
             const currentLen = parent.Spectrogram.spectrogram.length;
-            let apage = parent.spectrum.width / parent._width;
+            const apage = parent.spectrum.width / parent._width;
             let minLen = (m.length ? m[m.length - 1].x2 : 0) + apage * 1.5 | 0;
             let viewLen = parent.idXstart + apage | 0;    // 如果视野在很外面，需要保持视野
             if (viewLen > minLen) minLen = viewLen;
