@@ -262,7 +262,7 @@ class Beat {
     }
 
     /**
-     * 除以均值并保持非负 原位操作
+     * 除以标准差并保持非负 原位操作
      * @param {Float32Array} onsetEnv 
      * @returns {Float32Array} onsetEnv 同一个引用
      */
@@ -421,13 +421,11 @@ class Beat {
             centerBPM = centerBPM * 0.8 + BPMt[f] * 0.2;    // 动态更新中心BPM
         }
         // 处理可能的NaN
-        for (let a = NanIdx.length - 1; a >= 0; a--) {
-            const n = NanIdx[a];
-            BPMt[n] = BPMt[n + 1] || validBPM;
-        }
+        for (let a = NanIdx.length - 1; a >= 0; a--)
+            BPMt[NanIdx[a]] = BPMt[NanIdx[a + 1]] || validBPM;
         const endAt = f;
         // 其余位置证据不足，直接复制邻近值
-        for (; f < onsetEnv.length; f++) BPMt[f] = BPMt[f - 1];
+        for (f += 1 - hop; f < onsetEnv.length; f++) BPMt[f] = BPMt[f - 1];
         for (f = winLen >> 1; f > 0; f--) BPMt[f - 1] = BPMt[f];
         // 中间用线性插值
         if (hop === 1) return BPMt;
@@ -503,7 +501,7 @@ class Beat {
         let window = null;
         const getWindow = (fpb) => {
             const halfK = fpb | 0;
-            const K = (halfK << 1) + 1;
+            const K = (halfK << 1) | 1;
             if (window === null || window.length < K)
                 window = new Float32Array(K);
             const scale = 32 / fpb;
@@ -538,7 +536,7 @@ class Beat {
                     lastFpb = currentFpb;
                 }
                 let sum = 0;
-                const kMax = Math.min(i + halfK, K - 1);
+                const kMax = Math.min(i + halfK, K);
                 for (let k = Math.max(0, i + halfK - N + 1); k < kMax; k++) {
                     sum += window[k] * onsetEnvelope[i + halfK - k];
                 } localscore[i] = sum;
@@ -603,6 +601,7 @@ class Beat {
             // 累加得分到 dp 数组
             const scoreI = localscore[t];
             dp[t] = (beatT >= 0) ? (scoreI + maxS) : scoreI;
+            // if (isNaN(dp[t])) console.warn(`NaN detected at dp[${t}]`);
             // 起始点判定 在找到第一个超过阈值的有效起始点之前，不建立回溯链接
             if (firstBeat && scoreI < scoreThresh) {
                 backlink[t] = -1;
@@ -751,11 +750,11 @@ class Beat {
                     }
                 }
                 // 只保留关键频率
-                for (; i < maxAt; i++) real[i] = imag[i] = 0;
+                // for (; i < maxAt; i++) real[i] = imag[i] = 0;
                 // librosa 有归一化，但我认为不能有
-                // real[i] /= maxMag;
-                // imag[i] /= maxMag;
-                for (i = maxAt + 1; i < fMax; i++) real[i] = imag[i] = 0;
+                // real[maxAt] /= maxMag;
+                // imag[maxAt] /= maxMag;
+                // for (i = maxAt + 1; i < fMax; i++) real[i] = imag[i] = 0;
             }
             for (i = fft.N - 1; i > fMax; i--) real[i] = imag[i] = 0;
             // 还原
@@ -769,7 +768,8 @@ class Beat {
         // 仅保留正值 并归一化
         let std = 0, mean = 0, min = Infinity;
         for (let i = 0; i < pulse.length; i++) {
-            const e = pulse[i] = Math.exp(pulse[i]);
+            // const e = pulse[i] = Math.exp(pulse[i] - 1);
+            const e = pulse[i] = (pulse[i] > 0) ? pulse[i] : 0;
             mean += e;
             std += e * e;
             if (e < min) min = e;
@@ -797,27 +797,45 @@ class Beat {
         };
     }
 
-    static rhythmicPattern(onsetEnv, beatIndices, patterns = [2, 3, 4], winLen = 5) {
+    /**
+     * 获取每个节拍位置的最大onset强度
+     * @param {Float32Array} onsetEnv
+     * @param {number[]} beatIndices 节拍位置索引
+     * @param {number} winLen 搜索范围
+     * @returns {Float32Array} beat的onset强度
+     */
+    static beatStrength(onsetEnv, beatIndices, winLen = 5) {
         const halfWin = winLen >> 1;
+        const eng = new Float32Array(beatIndices.length);
+        for (let i = 0; i < beatIndices.length; i++) {
+            const idx = beatIndices[i];
+            let m = -1;
+            const end = Math.min(onsetEnv.length - 1, idx + halfWin);
+            for (let j = Math.max(0, idx - halfWin); j <= end; j++) {
+                if (onsetEnv[j] > m) m = onsetEnv[j];
+            } eng[i] = m;
+        } return eng;
+    }
+
+    /**
+     * 假设全局节奏型不变 根据节拍强度推断节奏型
+     * @param {Float32Array} beatStrength 
+     * @param {number[]} patterns 
+     * @returns {[0]:number, [1]:number} 节奏型(小节拍数), 第一个重拍的位置
+     */
+    static rhythmicPattern(beatStrength, patterns = [2, 3, 4]) {
         const pateng = (size) => {
             const eng = new Float32Array(size);
             const cnt = new Uint16Array(size);
-            for (let i = 0; i <= beatIndices.length - size; i++) {
+            for (let i = 0; i <= beatStrength.length; i++) {
                 const k = i % size;
-                const idx = beatIndices[i];
-                const subarr = onsetEnv.subarray(
-                    Math.max(0, idx - halfWin),
-                    Math.min(onsetEnv.length, idx + halfWin + 1)
-                );
-                const maxEng = Math.max(...subarr);
-                eng[k] += maxEng;
+                eng[k] += beatStrength[i];
                 cnt[k]++;
             }
             for (let i = 0; i < size; i++) {
                 if (cnt[i] === 0) throw new Error("No beats found for pattern analysis");
                 eng[i] /= cnt[i];
-            }
-            return eng;
+            } return eng;
         }
         let maxPattern = 4, maxDiff = -Infinity, maxAt = 0;
         for (const p of patterns) {
@@ -839,5 +857,132 @@ class Beat {
                 maxAt = maxIdx;
             }
         } return [maxPattern, maxAt];
+    }
+
+    /**
+     * 根据节拍强度和节拍位置，推断节奏型
+     * @param {Float32Array} beatStrength onset envelope at beat positions
+     * @param {number[]} meters 支持的小节拍数
+     * @returns {[0]:number[], [1]:number[]} 检测到的下拍索引数组，节奏型对应的小节拍数数组
+     */
+    static detectDownbeats(beatStrength, meters = [2, 3, 4]) {
+        const numBeats = beatStrength.length;
+        if (numBeats === 0) return [[], []];
+
+        Beat.onsetNorm(beatStrength);
+
+        let states = [];    // 状态=(节奏型, 相位)
+        meters.forEach(m => {
+            // m: 节奏型 p: 小节内相位(0为重拍) id: 状态唯一标识
+            for (let p = 0; p < m; p++) states.push({ m, p, id: `${m}-${p}` });
+        });
+
+        // dp 存储: s(加权重拍和), c(加权重拍数), su(加权弱拍和), cu(加权弱拍数), a(累积评分)
+        let dp = Array.from({ length: numBeats }, () => ({}));
+
+        // --- 动态参数 ---
+        const ALPHA = 0.97;             // 遗忘因子：越小局部性越强 理论最大值为 1 / (1-ALPHA)
+        const UPBEAT_W = 0.2;          // 弱拍抑制权重
+        const METER_CHANGE_PENALTY = 0.6; // 切换惩罚
+        const BIAS_44 = 0.02;            // 4/4 偏好
+        const HIST_W = 0.25;             // 历史分值权重
+
+        // 初始化第一拍
+        states.forEach(s => {
+            const isDB = (s.p === 0);
+            const str = beatStrength[0];
+            // 允许第一拍在任何相位开始
+            dp[0][s.id] = {
+                s: isDB ? str : 0,
+                c: isDB ? 1 : 0,
+                su: isDB ? 0 : str,
+                cu: isDB ? 0 : 1,
+                a: isDB ? str : -UPBEAT_W * str,
+                prev: null
+            };
+        });
+
+        // 动态规划
+        for (let i = 1; i < numBeats; i++) {
+            const str = beatStrength[i];
+            // 假设当前为curr模式
+            states.forEach(curr => {
+                let maxScore = -Infinity;
+                let bestPrevId = null;
+                let bestState = null;
+                // 遍历所有可能的前驱模式
+                states.forEach(prev => {
+                    const pInfo = dp[i - 1][prev.id];
+                    if (!pInfo) return;
+
+                    // 物理顺序约束
+                    let isSwitch = false;
+                    if (prev.m === curr.m) {
+                        // 节奏型相同，但相位不连续，不符合要求
+                        if (curr.p !== (prev.p + 1) % curr.m) return;
+                    } else {
+                        // 只有在旧小节末尾且新小节开头才允许切换
+                        if (prev.p === prev.m - 1 && curr.p === 0) isSwitch = true;
+                        else return;
+                    }
+                    // 带有遗忘因子的统计量更新
+                    const isDB = (curr.p === 0);
+                    const nextC = pInfo.c * ALPHA + (isDB ? 1 : 0);
+                    let nextSU = pInfo.su * ALPHA + (isDB ? 0 : str);
+                    const nextS = pInfo.s * ALPHA + (isDB ? str : 0);
+                    const nextCU = pInfo.cu * ALPHA + (isDB ? 0 : 1);
+                    // 计算当前局部均值对比度
+                    const avgDB = nextC > 0 ? nextS / nextC : 0;
+                    const avgUP = nextCU > 0 ? nextSU / nextCU : 0;
+                    let contrast = avgDB - (UPBEAT_W * avgUP);
+
+                    // 切换惩罚
+                    if (isSwitch) {
+                        contrast *= METER_CHANGE_PENALTY;
+                        // 仿射变换 降低对未来的相对影响
+                        nextSU = nextSU * 1.05 + 4;
+                    }
+                    // 4/4偏好
+                    if (curr.m === 4) contrast += BIAS_44;
+
+                    // 混合历史与当前
+                    const currentScore = pInfo.a * HIST_W + contrast * (1 - HIST_W);
+
+                    if (currentScore > maxScore) {
+                        maxScore = currentScore;
+                        bestPrevId = prev.id;
+                        bestState = {
+                            s: nextS,
+                            c: nextC,
+                            su: nextSU,
+                            cu: nextCU,
+                            a: currentScore
+                        };
+                    }
+                });
+                if (bestPrevId !== null)
+                    dp[i][curr.id] = { ...bestState, prev: bestPrevId };
+            });
+        }
+
+        // 回溯
+        let lastId = null;
+        let maxA = -Infinity;
+        states.forEach(s => {
+            if (dp[numBeats - 1][s.id] && dp[numBeats - 1][s.id].a > maxA) {
+                maxA = dp[numBeats - 1][s.id].a;
+                lastId = s.id;
+            }
+        });
+
+        const dbIdx = [], dbMeters = [];
+        for (let i = numBeats - 1; i >= 0; i--) {
+            if (!lastId) break;
+            const [m, p] = lastId.split('-').map(Number);
+            if (p === 0) { dbIdx.push(i); dbMeters.push(m); }
+            lastId = dp[i][lastId].prev;
+        }
+
+        return [dbIdx.reverse(), dbMeters.reverse()];
     }
 }

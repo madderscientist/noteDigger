@@ -90,6 +90,7 @@ function _BeatBar(parent) {
             <option value="16">16分</option>
         </select></div>
         <div class="layout"><span>BPM:</span><input type="number" name="ui-ask" min="1"></div>
+        <div class="layout"><span>(忽略BPM)保持小节长度</span><input type="checkbox" name="ui-ask"></div>
         <div class="layout"><span>(忽略以上)和上一小节一样</span><input type="checkbox" name="ui-ask"></div>
         <div class="layout"><span>应用到后面相邻同类型小节</span><input type="checkbox" name="ui-ask" checked></div>
         <div class="layout"><button class="ui-cancel">取消</button><button class="ui-confirm">确定</button></div>
@@ -107,16 +108,16 @@ function _BeatBar(parent) {
                 inputs[2].value = m.bpm;        // bpm
                 btns[0].onclick = close;
                 btns[1].onclick = () => {
-                    if (!inputs[4].checked) {   // 后面不变
+                    if (!inputs[5].checked) {   // 后面不变
                         bs.setMeasure(m.id + 1, undefined, false); // 让下一个生成实体
                     }
-                    if (inputs[3].checked) {    // 和上一小节一样
+                    if (inputs[4].checked) {    // 和上一小节一样
                         let last = bs.getMeasure(m.id - 1, false);
                         m.copy(last);
                     } else {
                         m.beatNum = parseInt(inputs[0].value);
                         m.beatUnit = parseInt(inputs[1].value);
-                        m.bpm = parseInt(inputs[2].value);
+                        if (!inputs[3].checked) m.bpm = parseFloat(inputs[2].value);
                     } bs.check(); close();
                     parent.snapshot.save(0b100);
                 };
@@ -128,7 +129,7 @@ function _BeatBar(parent) {
                 parent.snapshot.save(0b100);
             }
         }, {
-            name: "拆分该小节",
+            name: "均分该小节",
             callback: (e_father) => {
                 const beatarr = this.beats;
                 const base = beatarr.setMeasure((e_father.offsetX + parent.scrollX) * parent.TperP, undefined, true, true);
@@ -139,6 +140,20 @@ function _BeatBar(parent) {
                 // 插入新的 用id位移实现
                 baseM.interval /= 2;
                 for (let i = base + 1; i < beatarr.length; i++) beatarr[i].id++;
+                beatarr.check(true);
+                parent.snapshot.save(0b100);
+            }
+        }, {
+            name: "分裂为单拍",
+            callback: (e_father) => {
+                const beatarr = this.beats;
+                const base = beatarr.setMeasure((e_father.offsetX + parent.scrollX) * parent.TperP, undefined, true, true);
+                const baseM = beatarr[base];
+                if (base + 1 >= beatarr.length || beatarr[base + 1].id > baseM.id + 1)
+                    beatarr.splice(base + 1, 0, eMeasure.baseOn(baseM, baseM.id + 1));
+                const beatNum = baseM.beatNum;
+                baseM.interval /= beatNum;
+                for (let i = base + 1; i < beatarr.length; i++) beatarr[i].id += beatNum - 1;
                 beatarr.check(true);
                 parent.snapshot.save(0b100);
             }

@@ -71,8 +71,10 @@ function _AudioPlayer(parent) {
         this.play_btn.firstChild.textContent = parent.TimeBar.msToClockString(parent.time);
         this.play_btn.lastChild.textContent = this.durationString;
         // 自动翻页
-        if (this.autoPage && (parent.time > parent.idXend * parent.dt || parent.time < parent.idXstart * parent.dt)) {
-            parent.scroll2(((parent.time / parent.dt - 1) | 0) * parent._width, parent.scrollY);  // 留一点空位
+        if (parent.time > parent.idXend * parent.dt || parent.time < parent.idXstart * parent.dt) {
+            // 在视图外
+            if (this.autoPage)
+                parent.scroll2(((parent.time / parent.dt - 1) | 0) * parent._width, parent.scrollY);
         } else parent.makeDirty();
     };
     /**

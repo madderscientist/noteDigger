@@ -120,7 +120,7 @@ class CQT {
 
 self.onmessage = async ({data}) => {
     let { audioChannel, sampleRate, hop, fmin } = data;
-    const cqt = new CQT(sampleRate, fmin, 7, 12, 2.4);
+    const cqt = new CQT(sampleRate, fmin, 7, 12, 2.8);
     let cqtData = cqt.cqt(audioChannel[0], hop);
     // 第二个通道
     if (audioChannel.length > 1) {

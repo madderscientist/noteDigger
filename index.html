@@ -121,11 +121,11 @@
 </body>
 <div id="tab-Contents">
     <ul class="paddingbox niceScroll btn-ul" id="filePannel">
-        <li>导入音频</li>
-        <li>导入midi</li>
-        <li>MIDI编辑器模式</li>
-        <li>导出当前进度</li>
-        <li>导出为midi</li>
+        <li class="pointer">导入音频</li>
+        <li class="pointer">导入midi</li>
+        <li class="pointer">MIDI编辑器模式</li>
+        <li class="pointer">导出当前进度</li>
+        <li class="pointer">导出为midi</li>
         <li id="numberedScore">
             <button>转换为(更新)数字谱</button>
             <textarea cols="30" rows="16"></textarea>
@@ -140,20 +140,23 @@
     </div>
 
     <ul class="paddingbox niceScroll btn-ul" id="analysePannel">
-        <li>调性分析</li>
-        <li>节奏分析</li>
+        <li class="pointer">调性分析</li>
+        <li>
+            <div style="cursor: pointer;">节奏分析</div>
+            自动节奏型 <input type="checkbox">
+        </li>
         <li>自动填充 <h5 style="display: inline-block;"><input type="checkbox">在新轨道中</h5>
             <div class="wf fr">
-                黑<input type="range" max="255" min="0" value="255" step="1">红
+                黑&nbsp;<input type="range" max="255" min="0" value="255" step="1">&nbsp;红
             </div>
             <div class="wf fr" style="justify-content: space-around;">
                 <button>重复区间内</button>
                 <button>所有时间</button>
             </div>
         </li>
-        <li>数字谱对齐音频</li>
-        <li>人工智障扒谱</li>
-        <li>音色分离扒谱</li>
+        <li class="pointer">数字谱对齐音频</li>
+        <li class="pointer">人工智障扒谱</li>
+        <li class="pointer">音色分离扒谱</li>
     </ul>
 
     <ul class="paddingbox niceScroll btn-ul" id="settingPannel">
@@ -176,6 +179,10 @@
 <script>
     const menu = SiderMenu.new(funcTab, funcSider, 206);
     const app = new App();
+    const _checkBoxBlur = (e) => {
+        e.stopPropagation();
+        e.target.blur();
+    };
     {   // 添加菜单内容
         const tabContents = document.getElementById('tab-Contents').children;
         menu.add('文件', 'iconfont icon-file', tabContents[0]);
@@ -373,70 +380,75 @@
         };
         // 节奏分析
         lis[1].onclick = function() {
-            // 如果已经有结果了就删除
-            if (this.childElementCount) this.removeChild(this.lastChild);
+            const lastChild = this.lastElementChild;
+            if (lastChild && lastChild.tagName === 'DIV') {
+                lastChild.remove();
+            }
             if (!app.Spectrogram._spectrogram) {
                 alert("请先导入音频！");
                 return;
             }
-            const [BPM, pattern, beatdown] = app.Analyser.beatEst();
+            const patternAuto = this.querySelector('input').checked;
+            const BPM = app.Analyser.beatEst(40, patternAuto);
             const div = document.createElement('div');
-            div.innerHTML = `<h5>BPM: ${BPM.toFixed(2)}</h5>
-            <h5>节奏型: ${pattern}/4</h5>`;
+            div.innerHTML = `<h5>BPM: ${BPM.toFixed(2)}</h5>`;
             this.appendChild(div);
         };
-        // 自动填充音符
-        const inputs = lis[2].querySelectorAll('input');
-        const btns = lis[2].querySelectorAll('button');
-        const checkbox = inputs[0];
-        const threshold = inputs[1];
-        threshold.addEventListener('input', function () {
-            this.style.background = app.Spectrogram.getColor(this.value)
-        });
-        hideLableRange.new(threshold).reset().parentElement.classList.add('fullRange');
-        function autoFill(from, to) {
-            let ch;
-            const chdiv = app.MidiAction.channelDiv;
-            chdiv.switchUpdateMode(false);
-            if (checkbox.checked) {  // 新建音轨
-                ch = chdiv.addChannel();
-                if (!ch) return;    // addChannel会alert
-            } else ch = chdiv.selected;
-            if (!ch) {
-                alert("未选中音轨！");
-                return;
+        lis[1].querySelector('input').addEventListener('click', _checkBoxBlur);
+        {   // 自动填充音符
+            const inputs = lis[2].querySelectorAll('input');
+            const btns = lis[2].querySelectorAll('button');
+            const checkbox = inputs[0];
+            checkbox.addEventListener('click', _checkBoxBlur);
+            const threshold = inputs[1];
+            threshold.addEventListener('input', function () {
+                this.style.background = app.Spectrogram.getColor(this.value)
+            });
+            hideLableRange.new(threshold).reset().parentElement.classList.add('fullRange');
+            function autoFill(from, to) {
+                let ch;
+                const chdiv = app.MidiAction.channelDiv;
+                chdiv.switchUpdateMode(false);
+                if (checkbox.checked) {  // 新建音轨
+                    ch = chdiv.addChannel();
+                    if (!ch) return;    // addChannel会alert
+                } else ch = chdiv.selected;
+                if (!ch) {
+                    alert("未选中音轨！");
+                    return;
+                }
+                let id = ch.index;
+                let notes = NoteAnalyser.autoFill(
+                    app.Spectrogram._spectrogram,
+                    parseInt(threshold.value) / app.Spectrogram.multiple,
+                    from, to
+                );
+                for (const nt of notes) nt.ch = id;
+                app.MidiAction.midi.push(...notes);
+                app.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
+                chdiv.switchUpdateMode(true, true);     // 强制更新，因为不一定调用了addChannel
             }
-            let id = ch.index;
-            let notes = NoteAnalyser.autoFill(
-                app.Spectrogram._spectrogram,
-                parseInt(threshold.value) / app.Spectrogram.multiple,
-                from, to
-            );
-            for (const nt of notes) nt.ch = id;
-            app.MidiAction.midi.push(...notes);
-            app.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
-            chdiv.switchUpdateMode(true, true);     // 强制更新，因为不一定调用了addChannel
+            btns[0].onclick = () => {   // 重复区间内
+                if (!app.Spectrogram._spectrogram) {
+                    alert('请导入音频！');
+                    return;
+                }
+                if (app.TimeBar.repeatEnd <= app.TimeBar.repeatStart) {
+                    alert('区间错误！(起点不能晚于终点)');
+                    return;
+                }
+                autoFill(
+                    (app.TimeBar.repeatStart / app.dt) | 0,
+                    app.TimeBar.repeatEnd / app.dt
+                );
+            };
+            btns[1].onclick = () => {
+                if (!app.Spectrogram._spectrogram) {
+                    alert('请导入音频！');
+                    return;
+                } autoFill();
+            };
         }
-        btns[0].onclick = () => {   // 重复区间内
-            if (!app.Spectrogram._spectrogram) {
-                alert('请导入音频！');
-                return;
-            }
-            if (app.TimeBar.repeatEnd <= app.TimeBar.repeatStart) {
-                alert('区间错误！(起点不能晚于终点)');
-                return;
-            }
-            autoFill(
-                (app.TimeBar.repeatStart / app.dt) | 0,
-                app.TimeBar.repeatEnd / app.dt
-            );
-        };
-        btns[1].onclick = () => {
-            if (!app.Spectrogram._spectrogram) {
-                alert('请导入音频！');
-                return;
-            } autoFill();
-        };
         // 自动音符对齐
         lis[3].onclick = () => app.Analyser.autoNoteAlign();
         // 人工智障扒谱
@@ -572,10 +584,11 @@
             } else alert('时间格式错误！');
         }
         // 扩大复选框的点击范围
+        for (const l of [lis[5], lis[6], lis[7]]) {
+            l.querySelector('input')?.addEventListener('click', _checkBoxBlur);
+        }
         lis[5].onclick = lis[6].onclick = lis[7].onclick = function (e) {
-            const input = this.querySelector('input');
-            if (e.target === input) return; // 防止点checkbox触发两次
-            input.click();
+            this.querySelector('input')?.click();
         };
     }
     // ==== 交互细节 ==== //

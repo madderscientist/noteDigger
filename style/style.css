@@ -345,3 +345,7 @@ textarea {
 canvas.selecting {
     cursor: ew-resize;
 }
+
+.pointer {
+    cursor: pointer;
+}

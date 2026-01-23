@@ -334,45 +334,87 @@ function _Analyser(parent) {
         }
         parent.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
         chdiv.switchUpdateMode(true);
-    }
+    };
 
-    this.beatEst = (minBPM = 40) => {
+    /**
+     * 自动节拍检测并生成节拍线
+     * @param {number} minBPM 最小BPM
+     * @param {boolean} autoDownBeat 是否自动检测重拍位置
+     * @returns {number} 全局估计的BPM值
+     */
+    this.beatEst = (minBPM = 40, autoDownBeat = false) => {
         const sr = Math.round(1000 / parent.dt);
         const onset = Beat.extractOnset(parent.Spectrogram.spectrogram, 16 / sr);
 
         const maxInterval = Math.ceil(sr * 60 / minBPM);
         // 范围要大，所以方差大一些
         const global = Beat.corrBPM(SIGNAL.autoCorr(onset, maxInterval), sr, 1.4, 105);
-        const tempo = Beat.tempo(onset, sr, minBPM, 14, 1, global);
+        const tempo = Beat.tempo(onset, sr, minBPM, 12.8, 1.6, global);
 
         const fftSize = Beat.fs2FFTN(sr, 12.8);
-        const pulse = Beat.PLP(onset, sr, [40, 200], fftSize, Math.max(1, fftSize >> 3), Beat.PLPprior(tempo, 0.3));
+        const pulse = Beat.PLP(onset, sr, [40, 200], fftSize, Math.max(1, fftSize >> 3), Beat.PLPprior(tempo, 0.1));
         for (let i = 0; i < pulse.length; i++) pulse[i] += onset[i];
-        const beatIdx = Beat.EllisBeatTrack(pulse, sr, 200, tempo);
+        const beatIdx = Beat.EllisBeatTrack(pulse, sr, 300, tempo);
         if (beatIdx.length < 2) {
             alert("未能检测到有效节拍！");
             return;
         }
+        if (beatIdx[0] == 0) beatIdx.shift();
+
         // 不能引入pulse的干扰 得用原始的onset
-        const [pattern, beatdown] = Beat.rhythmicPattern(onset, beatIdx, [2, 3, 4]);
-        {   // 这两个估计结果有点差 暂时用1拍
-            let pattern = 1, beatdown = 0;  
-            const b = parent.BeatBar.beats;
-            b.length = 0;
-            let i = beatdown;
-            if (beatIdx[0] < 1) i+=pattern;
-            let prev = 0;
-            let id = 0;
-            for (; i < beatIdx.length; i+=pattern, id++) {
+        const beatStrength = Beat.beatStrength(onset, beatIdx);
+        const beatbar = parent.BeatBar.beats;
+        if (autoDownBeat) { // 用动态规划求解重拍位置 但不够稳定
+            const [downbeatIndices, downbeatMeters] = Beat.detectDownbeats(beatStrength, [2, 3, 4]);
+            // 处理前面的拍
+            beatbar.length = 0;
+            let prev = 0, id = 0, i = 0;
+            for (; i <= downbeatIndices[0]; i++, id++) {
                 const at = beatIdx[i] * parent.dt;
-                b.push(new eMeasure(id, prev, pattern, 4, at - prev));
+                beatbar.push(new eMeasure(id, prev, 1, 4, at - prev));
                 prev = at;
-            } b.check(true);
+            }
+            for (i = 0; i < downbeatIndices.length; i++, id++) {
+                const pattern = downbeatMeters[i];
+                const beatdown = downbeatIndices[i];
+                if (i + 1 < downbeatIndices.length) {
+                    const nextBeatdown = downbeatIndices[i + 1];
+                    const endtime = beatIdx[nextBeatdown] * parent.dt;
+                    beatbar.push(new eMeasure(id, prev, pattern, 4, endtime - prev));
+                    prev = endtime;
+                } else {
+                    let endtime;
+                    const time = beatIdx[beatIdx.length - 1] * parent.dt - prev;
+                    const cnt = beatIdx.length - 1 - beatdown;
+                    beatbar.push(new eMeasure(id, prev, pattern, 4, time / cnt * pattern));
+                }
+            }
+        } else {   // 这两个估计结果有点差 暂时用1拍
+            // const [g_pattern, g_beatdown] = Beat.rhythmicPattern(beatStrength, [2, 3, 4]);
+            let g_pattern = 1, g_beatdown = 0;
+            beatbar.length = 0;
+            let prev = 0, id = 0, i = 0;
+            // 前面的用单小节处理 注意应该有等号
+            for (; i <= g_beatdown; i++, id++) {
+                const at = beatIdx[i] * parent.dt;
+                beatbar.push(new eMeasure(id, prev, 1, 4, at - prev));
+                prev = at;
+            }
+            for (i = i - 1 + g_pattern; i < beatIdx.length; i+=g_pattern, id++) {
+                const at = beatIdx[i] * parent.dt;
+                beatbar.push(new eMeasure(id, prev, g_pattern, 4, at - prev));
+                prev = at;
+            } 
         }
+        beatbar.check(true);
         parent.snapshot.save(0b100);
-        parent.dirty = true;
-        return [global, pattern, beatdown];
-    }
+        parent.makeDirty();
+        // 如果正在用节拍则刷新节拍信息
+        if (parent.AudioPlayer.audio.paused === false && parent.MidiPlayer._ifBeat) {
+            parent.MidiPlayer.restart(true);
+        }
+        return global;
+    };
 
     // 1(C4)->0
     function parseJE(txt) {
