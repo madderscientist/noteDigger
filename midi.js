@@ -5,7 +5,7 @@
  * - 不记录通道信息（在导出为二进制时由mtrk加上通道信息）
  */
 class midiEvent {
-    ticks;  // 无需是整数 因为export时会被mtrk.tick_hex转为整数
+    ticks;  // 绝对时间 无需是整数 因为export时会被mtrk.tick_hex转为整数
     code;   // 必须是整数 由构造函数保证，但不限制范围
     value;  // 每一项必须是整数 由构造函数保证，但不限制范围
     // 范围的限制由static方法保证
@@ -149,7 +149,7 @@ class mtrk {
     /**
      * 将tick数转换为midi的时间格式
      * @param {number} ticknum float，但会转换为int
-     * @returns midi tick array
+     * @returns {number[]} midi tick array
      * @example mtrk.tick_hex(555555) // [0x08, 0x7A, 0x23]
      */
     static tick_hex(ticknum) {
@@ -163,23 +163,36 @@ class mtrk {
         return t;
     }
     /**
-     * 将字符串转换为ascii数组
+     * 将字符串转换为UTF-8数组
      * @param {string} name string
      * @param {number} x array's length (default:self-adaption)
-     * @returns array
+     * @returns {number[]} byte array
      * @example mtrk.string_hex("example",3) // [101,120,97]
      */
-    static string_hex(str, x = -1) {
-        const Buffer = Array(x > 0 ? x : str.length).fill(0);
-        const len = Math.min(Buffer.length, str.length);
-        for (let i = 0; i < len; i++) Buffer[i] = str[i].charCodeAt();
-        return Buffer;
+    static string_hex(str, maxBytes = -1) {
+        const encoder = new TextEncoder();
+        const bytes = encoder.encode(str);
+        if (maxBytes > 0) {
+            const result = new Array(maxBytes).fill(0);
+            const len = Math.min(maxBytes, bytes.length);
+            for (let i = 0; i < len; i++) result[i] = bytes[i];
+            return result;
+        } return Array.from(bytes);
+    }
+    /**
+     * 将UTF-8数组转换为字符串
+     * @param {Array} bytes byte array
+     * @returns {string}
+     */
+    static hex_string(bytes) {
+        const decoder = new TextDecoder();
+        return decoder.decode(new Uint8Array(bytes));
     }
     /**
      * 将一个正整数按16进制拆分成各个位放在数组中, 最低位在数组最高位
      * @param {number} num float，但会转换为int
      * @param {number} x array's length (default:self-adaption)
-     * @returns array
+     * @returns {number[]}
      * @example mtrk.number_hex(257,5) // [0,0,0,1,1]
      */
     static number_hex(num, x = -1) {
@@ -263,7 +276,7 @@ class mtrk {
     /**
      * 将mtrk转换为track_id音轨上的midi数据
      * @param {number} track_id int, [0, 15]
-     * @returns Array
+     * @returns {number[]} midi binary data array
      */
     export(track_id) {
         this.sort();
@@ -296,7 +309,7 @@ class mtrk {
     /**
      * 将音轨转为可JSON对象
      * @param {number} track_id 音轨所属轨道id (从0开始)
-     * @returns json object
+     * @returns {Object} json
      */
     JSON(track_id) {
         this.sort();
@@ -393,8 +406,9 @@ class midi {
     }
     /**
      * 添加音轨，如果无参则创建并返回
-     * @param {mtrk} newtrack
-     * @returns mtrk
+     * @param {mtrk} newtrack null则创建新音轨
+     * @param {number} channel_id 指定音轨位置，默认-1表示添加到最后
+     * @returns {mtrk} 新添加的音轨
      * @example track = m.addTrack(); m2.addTrack(new mtrk("test"))
      */
     addTrack(newtrack = null, channel_id = -1) {
@@ -489,9 +503,7 @@ class midi {
                                         break;
                                     case 0x03:
                                         // 给当前mtrk块同序号的音轨改名
-                                        newmidi.Mtrk[n].name = '';
-                                        for (let q = 1; q <= midi_file[i]; q++)
-                                            newmidi.Mtrk[n].name += String.fromCharCode(midi_file[i + q]);
+                                        newmidi.Mtrk[n].name = mtrk.hex_string(midi_file.slice(i + 1, i + 1 + midi_file[i]));
                                         break;
                                     case 0x21:
                                         midiPort = midi_file[i + 1];
@@ -590,8 +602,8 @@ class midi {
     }
     /**
      * 转换为midi数据
-     * @param {*} type midi file type [0 or 1(default)]
-     * @returns Uint8Array
+     * @param {number} type midi file type [0 or 1(default)]
+     * @returns {Uint8Array}
      */
     export(type = 1) {
         if (type == 0) {    // midi0创建 由于事件不记录音轨，需要归并排序输出
@@ -667,7 +679,7 @@ class midi {
 
     /**
      * 将midi转换为json对象。原理：每个音轨转换为json对象并对事件进行合并
-     * @returns json object
+     * @returns {Object} json
      */
     JSON() {
         let j = {
