@@ -234,6 +234,7 @@ function _IO(parent) {
             });
         };
         document.body.insertBefore(ui, document.body.firstChild);   // 插入body的最前面
+        ui.focus();
         return donePromise;
     };
 
@@ -295,19 +296,21 @@ function _IO(parent) {
     <div class="card hvCenter" style="overflow: visible;"><label class="title">导出为midi</label>
         <div class="layout"><button class="ui-confirm labeled" data-tooltip="可用于制谱；可能会损失、扭曲一些信息">导出时节奏对齐</button></div>
         <div class="layout"><button class="ui-confirm labeled" data-tooltip="保证播放起来和这里一模一样，但丢失节奏信息">和听起来一样</button></div>
+        <div class="layout">仅导出可见音轨<input type="checkbox"></div>
         <div class="layout"><button class="ui-cancel">取消</button></div>
     </div>
 </div>`;
                 const card = tempDiv.firstElementChild;
                 const close = () => { card.remove(); };
+                const checkbox = card.querySelector('input[type="checkbox"]');
                 const btns = card.querySelectorAll('button');
                 btns[0].onclick = () => {
-                    const midi = this.beatAlign();
+                    const midi = this.beatAlign(checkbox.checked);
                     bSaver.saveArrayBuffer(midi.export(1), midi.name + '.mid');
                     close();
                 };
                 btns[1].onclick = () => {
-                    const midi = this.keepTime();
+                    const midi = this.keepTime(checkbox.checked);
                     bSaver.saveArrayBuffer(midi.export(1), midi.name + '.mid');
                     close();
                 };
@@ -319,7 +322,7 @@ function _IO(parent) {
             /**
              * 100%听感还原扒谱结果，但节奏是乱的
              */
-            keepTime() {
+            keepTime(onlyVisible = false) {
                 const accuracy = 10;
                 const newMidi = new midi(60, [4, 4], Math.round(1000 * accuracy / parent.dt), [], parent.AudioPlayer.name);
                 const mts = [];
@@ -330,13 +333,14 @@ function _IO(parent) {
                     mts.push(mt);
                 }
                 for (const nt of parent.MidiAction.midi) {
+                    if (onlyVisible && !parent.MidiAction.channelDiv.channel[nt.ch].visible) continue;
                     const midint = nt.y + 24;
                     let v = mts[nt.ch]._volume;
                     if (nt.v) v = Math.min(127, v * nt.v / 127);
                     mts[nt.ch].addEvent(midiEvent.note(nt.x1 * accuracy, (nt.x2 - nt.x1) * accuracy, midint, v));
                 } return newMidi;
             },
-            beatAlign() {
+            beatAlign(onlyVisible = false) {
                 // 初始化midi
                 let begin = parent.BeatBar.beats[0];
                 let lastbpm = begin.bpm;    // 用于自适应bpm
@@ -393,12 +397,13 @@ function _IO(parent) {
                     while (m_i < mlen) {
                         const n = moment[m_i];
                         if (n.ticks > end) break;    // 给下一小节
+                        m_i++;
+                        if (onlyVisible && !parent.MidiAction.channelDiv.channel[n._ch].visible) continue;
                         const threshold = n._d / 2;
                         let accuracy = aot;
                         while (accuracy > threshold) accuracy /= 2;
                         n.ticks = tickNow + ((Math.round((n.ticks - begin) / accuracy) * newMidi.tick * accuracy / aot) >> 1);
                         mts[n._ch].events.push(n);
-                        m_i++;
                     } tickNow += newMidi.tick * measure.beatNum * 4 / measure.beatUnit;
                 } return newMidi;
             }
