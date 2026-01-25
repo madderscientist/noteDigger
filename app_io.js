@@ -141,7 +141,7 @@ function _IO(parent) {
                 parent.dt = 1000 / tNum;
                 parent.TperP = parent.dt / parent._width; parent.PperT = parent._width / parent.dt;
                 if (parent.Keyboard.freqTable.A4 != A4) parent.Keyboard.freqTable.A4 = A4;
-                let l = Math.ceil((parent.spectrum.width << 1) / parent.width);   // 视野外还有一面
+                let l = Math.ceil((parent.layers.width << 1) / parent.width);   // 视野外还有一面
                 // 一个怎么取值都返回0的东西，充当频谱
                 parent.Spectrogram.spectrogram = new Proxy({
                     spectrogram: new Uint8Array(parent.ynum).fill(0),

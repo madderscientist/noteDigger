@@ -16,8 +16,8 @@ function _BeatBar(parent) {
         const h = canvas.height >> 1;
         ctx.fillRect(0, h, canvas.width, canvas.width);
         ctx.fillStyle = '#8e95a6';
-        const spectrum = parent.spectrum.ctx;
-        const spectrumHeight = parent.spectrum.height;
+        const spectrum = parent.layers.action.ctx;
+        const spectrumHeight = parent.layers.action.height;
         ctx.strokeStyle = '#f0f0f0';
         spectrum.strokeStyle = '#c0c0c0';
 

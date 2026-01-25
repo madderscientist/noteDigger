@@ -116,24 +116,24 @@ function _MidiAction(parent) {
         // midi模式下，视野要比音符宽一页，或超出视野半页
         if (parent.midiMode) {
             const currentLen = parent.Spectrogram.spectrogram.length;
-            const apage = parent.spectrum.width / parent._width;
+            const apage = parent.layers.width / parent._width;
             let minLen = (m.length ? m[m.length - 1].x2 : 0) + apage * 1.5 | 0;
             let viewLen = parent.idXstart + apage | 0;    // 如果视野在很外面，需要保持视野
             if (viewLen > minLen) minLen = viewLen;
             if (minLen != currentLen) parent.Spectrogram.spectrogram.length = minLen;   // length触发audio.duration和this.xnum
         }
-        parent.makeDirty();
+        parent.layers.action.dirty = true;
     };
     this.update = () => {     // 按照insight绘制音符
         const m = this.insight;
-        const s = parent.spectrum.ctx;
+        const s = parent.layers.action.ctx;
         const c = this.channelDiv.channel;
         for (let ch = m.length - 1; ch >= 0; ch--) {
             if (m[ch].length === 0 || !c[ch].visible) continue;
             let ntcolor = c[ch].color;
             if (c[ch].lock) s.setLineDash([5, 5]);
             for (const note of m[ch]) {
-                const params = [note.x1 * parent._width - parent.scrollX, parent.spectrum.height - note.y * parent._height + parent.scrollY, (note.x2 - note.x1) * parent._width, -parent._height];
+                const params = [note.x1 * parent._width - parent.scrollX, parent.layers.height - note.y * parent._height + parent.scrollY, (note.x2 - note.x1) * parent._width, -parent._height];
                 if (note.selected) {
                     s.fillStyle = '#ffffff';
                     s.fillRect(...params);
@@ -160,16 +160,16 @@ function _MidiAction(parent) {
             x1 = xmin * parent._width - parent.scrollX;
             x2 = (xmax - xmin) * parent._width;
             y1 = 0;
-            y2 = parent.spectrum.height;
+            y2 = parent.layers.height;
         } else if (this.frameMode == 2) {   // 行选
             x1 = 0;
-            x2 = parent.spectrum.width;
-            y1 = parent.spectrum.height - ymax * parent._height + parent.scrollY;
+            x2 = parent.layers.width;
+            y1 = parent.layers.height - ymax * parent._height + parent.scrollY;
             y2 = (ymax - ymin) * parent._height;
         } else {    // 框选
             x1 = xmin * parent._width - parent.scrollX;
             x2 = (xmax - xmin) * parent._width;
-            y1 = parent.spectrum.height - ymax * parent._height + parent.scrollY;
+            y1 = parent.layers.height - ymax * parent._height + parent.scrollY;
             y2 = (ymax - ymin) * parent._height;
         } s.fillRect(x1, y1, x2, y2);
     };
@@ -230,9 +230,9 @@ function _MidiAction(parent) {
     this.selectAction = (mode = 0) => {
         this.frameXid = this.clickXid; // 先置大于零，表示开始绘制
         if (mode == 1) {    // 列选
-            parent.spectrum.addEventListener('mousemove', parent.trackMouseX);
+            parent.layerContainer.addEventListener('mousemove', parent.trackMouseX);
             const up = () => {
-                parent.spectrum.removeEventListener('mousemove', parent.trackMouseX);
+                parent.layerContainer.removeEventListener('mousemove', parent.trackMouseX);
                 document.removeEventListener('mouseup', up);
                 let ch = this.channelDiv.selected;
                 if (ch && !ch.lock) {
@@ -255,9 +255,9 @@ function _MidiAction(parent) {
                 } this.frameXid = -1;
             }; document.addEventListener('mouseup', up);
         } else {    // 框选
-            parent.spectrum.addEventListener('mousemove', parent.trackMouseX);
+            parent.layerContainer.addEventListener('mousemove', parent.trackMouseX);
             const up = () => {
-                parent.spectrum.removeEventListener('mousemove', parent.trackMouseX);
+                parent.layerContainer.removeEventListener('mousemove', parent.trackMouseX);
                 document.removeEventListener('mouseup', up);
                 let ch = this.channelDiv.selected;
                 if (ch && !ch.lock) {
@@ -297,11 +297,11 @@ function _MidiAction(parent) {
         }
         _anyAction = true;
         this.updateView();
-        parent.spectrum.addEventListener('mousemove', this.changeNoteDuration);
-        parent.spectrum.addEventListener('mousemove', this.changeNoteY);
+        parent.layerContainer.addEventListener('mousemove', this.changeNoteDuration);
+        parent.layerContainer.addEventListener('mousemove', this.changeNoteY);
         const removeEvent = () => {
-            parent.spectrum.removeEventListener('mousemove', this.changeNoteDuration);
-            parent.spectrum.removeEventListener('mousemove', this.changeNoteY);
+            parent.layerContainer.removeEventListener('mousemove', this.changeNoteDuration);
+            parent.layerContainer.removeEventListener('mousemove', this.changeNoteY);
             document.removeEventListener('mouseup', removeEvent);
             // 鼠标松开则存档
             if (_anyAction) parent.snapshot.save(0b10);
@@ -383,21 +383,21 @@ function _MidiAction(parent) {
         }
         //== step 4: 如果点击到了音符，添加移动事件 ==//
         if (((e.offsetX + parent.scrollX) << 1) > (n.x2 + n.x1) * parent._width) {    // 靠近右侧，调整时长
-            parent.spectrum.addEventListener('mousemove', this.changeNoteDuration);
-            parent.spectrum.addEventListener('mousemove', this.changeNoteY);
+            parent.layerContainer.addEventListener('mousemove', this.changeNoteDuration);
+            parent.layerContainer.addEventListener('mousemove', this.changeNoteY);
             const removeEvent = () => {
-                parent.spectrum.removeEventListener('mousemove', this.changeNoteDuration);
-                parent.spectrum.removeEventListener('mousemove', this.changeNoteY);
+                parent.layerContainer.removeEventListener('mousemove', this.changeNoteDuration);
+                parent.layerContainer.removeEventListener('mousemove', this.changeNoteY);
                 document.removeEventListener('mouseup', removeEvent);
                 // 鼠标松开则存档
                 if (_anyAction) parent.snapshot.save(0b10);
             }; document.addEventListener('mouseup', removeEvent);
         } else {    // 靠近左侧，调整位置
-            parent.spectrum.addEventListener('mousemove', this.changeNoteX);
-            parent.spectrum.addEventListener('mousemove', this.changeNoteY);
+            parent.layerContainer.addEventListener('mousemove', this.changeNoteX);
+            parent.layerContainer.addEventListener('mousemove', this.changeNoteY);
             const removeEvent = () => {
-                parent.spectrum.removeEventListener('mousemove', this.changeNoteX);
-                parent.spectrum.removeEventListener('mousemove', this.changeNoteY);
+                parent.layerContainer.removeEventListener('mousemove', this.changeNoteX);
+                parent.layerContainer.removeEventListener('mousemove', this.changeNoteY);
                 document.removeEventListener('mouseup', removeEvent);
                 this.midi.sort((a, b) => a.x1 - b.x1);   // 排序非常重要 因为查找被点击的音符依赖顺序
                 // 鼠标松开则存档

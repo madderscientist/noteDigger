@@ -75,7 +75,7 @@ function _AudioPlayer(parent) {
             // 在视图外
             if (this.autoPage)
                 parent.scroll2(((parent.time / parent.dt - 1) | 0) * parent._width, parent.scrollY);
-        } else parent.makeDirty();
+        } else parent.layers.action.dirty = true;
     };
     /**
      * 在指定的毫秒数开始播放

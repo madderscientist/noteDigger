@@ -126,6 +126,15 @@ button {
     overflow: hidden;
 }
 
+#spectrum-layers {
+    position: relative;
+    canvas {
+        position: absolute;
+        top: 0;
+        left: 0;
+    }
+}
+
 .tools {
     background-color: transparent;
     display: flex;

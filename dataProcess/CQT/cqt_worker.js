@@ -53,15 +53,16 @@ class CQT {
         for (let i = 0; i < binNum; i++) {
             const freq = fmin * Math.pow(2, i / bins_per_octave);
             const len = Math.ceil(Q * fs / freq);
-            const temp_kernel_r = kernel_r[i] = new Float32Array(len);
-            const temp_kernel_i = kernel_i[i] = new Float32Array(len);
+            const tmp_kernel = new Float32Array(len << 1);
+            const tmp_kernel_r = kernel_r[i] = tmp_kernel.subarray(0, len);
+            const tmp_kernel_i = kernel_i[i] = tmp_kernel.subarray(len, len << 1);
             const window = CQT.blackmanHarris(len);
             const omega = 2 * Math.PI * freq / fs;
             const half_len = len >> 1;
             for (let j = 0; j < len; j++) {
                 const angle = omega * (j - half_len);   // 中心的相位为0
-                temp_kernel_r[j] = Math.cos(angle) * window[j];
-                temp_kernel_i[j] = Math.sin(angle) * window[j]; // 按DFT应该加负号，但是最后的结果是能量，加不加都一样
+                tmp_kernel_r[j] = Math.cos(angle) * window[j];
+                tmp_kernel_i[j] = -Math.sin(angle) * window[j];
                 // 而且CQT1992继承自本类，用正相位增加的旋转因子可以让频域带宽在正频率上
             }
         } return [kernel_r, kernel_i];

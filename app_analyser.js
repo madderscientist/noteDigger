@@ -408,7 +408,7 @@ function _Analyser(parent) {
         }
         beatbar.check(true);
         parent.snapshot.save(0b100);
-        parent.makeDirty();
+        parent.layers.action.dirty = true;
         // 如果正在用节拍则刷新节拍信息
         if (parent.AudioPlayer.audio.paused === false && parent.MidiPlayer._ifBeat) {
             parent.MidiPlayer.restart(true);

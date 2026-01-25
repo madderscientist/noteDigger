@@ -110,7 +110,10 @@
                 </div>
                 <div class="f wf">
                     <canvas id="piano" width="80px" height="500px"></canvas>
-                    <canvas id="spectrum" width="1000px" height="500px"></canvas>
+                    <div id="spectrum-layers" class="flexfull">
+                        <canvas id="spectrum" width="1000px" height="500px" style="z-index: 1;"></canvas>
+                        <canvas id="actions" width="1000px" height="500px" style="z-index: 2;"></canvas>
+                    </div>
                 </div>
             </div>
             <div id="scrollbar-track">

@@ -2,6 +2,7 @@
 
 /**
  * 左侧键盘
+ * 会使用 parent.keyboard 画布
  * @param {App} parent 
  */
 function _Keyboard(parent) {
@@ -28,6 +29,12 @@ function _Keyboard(parent) {
      * 是否更新的判断 交给parent完成
      */
     this.update = () => {
+        // 绘制频谱区音符高亮
+        const actionCtx = parent.layers.action.ctx;
+        actionCtx.fillStyle = "#ffffff4f";
+        const noteY = parent.layers.height - (this.highlight - 24) * parent._height + parent.scrollY;
+        actionCtx.fillRect(0, noteY, parent.layers.width, -parent._height);
+
         const ctx = parent.keyboard.ctx;
         const w = parent.keyboard.width;
         const w2 = w * 0.618;

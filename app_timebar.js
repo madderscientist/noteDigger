@@ -58,8 +58,8 @@ function _TimeBar(parent) {
         //== 画重复区间 ==//
         let begin = parent._width * this.repeatStart / parent.dt - parent.scrollX;  // 单位：像素
         let end = parent._width * this.repeatEnd / parent.dt - parent.scrollX;
-        const spectrum = parent.spectrum.ctx;
-        const spectrumHeight = parent.spectrum.height;
+        const spectrum = parent.layers.action.ctx;
+        const spectrumHeight = parent.layers.height;
         // 画线
         if (begin >= 0 && begin < canvas.width) {   // 画左边
             ctx.beginPath(); spectrum.beginPath();

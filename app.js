@@ -2,12 +2,36 @@
 // 防止在html初始化之前getElement，所以封装成了构造函数，而不是直接写obj
 function App() {
     this.event = new EventTarget();
-    this.spectrum = document.getElementById('spectrum');
-    this.spectrum.ctx = this.spectrum.getContext('2d'); // 绘制相关参数的更改在this.resize中
+    // 键盘和时间轴
     this.keyboard = document.getElementById('piano');
     this.keyboard.ctx = this.keyboard.getContext('2d', { alpha: false, desynchronized: true });
     this.timeBar = document.getElementById('timeBar');
     this.timeBar.ctx = this.timeBar.getContext('2d', { alpha: false, desynchronized: true });
+    // 工作区图层
+    const getCanvasCtx = (id, alpha = true, desynchronized = false) => {
+        const canvas = document.getElementById(id);
+        canvas.ctx = canvas.getContext('2d', { alpha, desynchronized});
+        canvas.dirty = true;
+        return canvas;
+    }
+    this.layerContainer = document.getElementById('spectrum-layers');
+    this.layers = this.layerContainer.layers = {
+        spectrum: getCanvasCtx('spectrum', false),
+        action: getCanvasCtx('actions', true),
+    };
+    Object.defineProperty(this.layers, 'width', {
+        get: function () { return this.spectrum.width; },
+        set: function (w) {
+            for (const c in this) this[c].width = w;
+        }, enumerable: false
+    });
+    Object.defineProperty(this.layers, 'height', {
+        get: function () { return this.spectrum.height; },
+        set: function (h) {
+            for (const c in this) this[c].height = h;
+        }, enumerable: false
+    });
+
     this.midiMode = false;
     this.TperP = -1;
     this.PperT = -1;
@@ -31,7 +55,7 @@ function App() {
             this._height = h;
             this.Keyboard.setYchange(h);
             this.keyboard.ctx.font = `${h + 2}px Arial`;
-            this.spectrum.ctx.font = `${h}px Arial`;
+            this.layers.action.ctx.font = `${h}px Arial`;
         }
     });
     this.ynum = 84;     // 一共84个按键
@@ -44,7 +68,7 @@ function App() {
             // 刷新横向滑动条
             this.HscrollBar.refreshPosition();
             this.HscrollBar.refreshSize();
-            this.idXend = Math.min(this._xnum, Math.ceil((this.scrollX + this.spectrum.width) / this._width));
+            this.idXend = Math.min(this._xnum, Math.ceil((this.scrollX + this.layers.width) / this._width));
         }
     });
     this.dt = 50;       // 每次分析的时间间隔 单位毫秒 在this.Analyser.analyse中更新
@@ -60,9 +84,9 @@ function App() {
     this.rectXstart = 0;// 目前只有Spectrogram.update在使用
     this.rectYstart = 0;// 画布开始的具体y坐标(因为最下面一个不完整) 迭代应该减height 被画频谱、画键盘共享
 
-    // 重绘时机: scroll2; AudioPlayer.update; 键鼠操作
-    this.dirty = true;  // 是否需要重绘
-    this.makeDirty = () => { this.dirty = true; }; // 供外部调用
+    // spectrum的重绘仅在 视野滚动(scroll2) 数据改变(会触发scroll2)
+    // 下面的函数控制action层的重绘 重绘时机: scroll2; AudioPlayer.update; 键鼠操作
+    this.makeActDirty = () => { this.layers.action.dirty = true; }; // 供外部调用
 
     /**
      * 设置播放时间 如果立即播放(keep==false)则有优化
@@ -85,7 +109,7 @@ function App() {
         get: function () { return this._mouseY; },
         set: function (y) {
             this._mouseY = y;
-            this.Keyboard.highlight = Math.floor((this.scrollY + this.spectrum.height - y) / this._height) + 24;
+            this.Keyboard.highlight = Math.floor((this.scrollY + this.layers.height - y) / this._height) + 24;
         }
     });
     this._mouseX = 0;   // 鼠标当前x坐标
@@ -111,20 +135,20 @@ function App() {
         _showPitchName: null,
         showPitchName: (ifshow) => {
             if (ifshow) {
-                this.spectrum.addEventListener('mousemove', this._trackMouseX);
+                this.layerContainer.addEventListener('mousemove', this._trackMouseX);
                 this.pitchNameDisplay._showPitchName = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
             } else {
-                this.spectrum.removeEventListener('mousemove', this._trackMouseX);
+                this.layerContainer.removeEventListener('mousemove', this._trackMouseX);
                 this.pitchNameDisplay._showPitchName = null;
             }
         },
         update: () => {
             if (this.pitchNameDisplay._showPitchName && this.Keyboard.highlight >= 0) {
-                this.spectrum.ctx.fillStyle = 'black';
-                this.spectrum.ctx.fillText(
+                this.layers.action.ctx.fillStyle = 'black';
+                this.layers.action.ctx.fillText(
                     `${this.pitchNameDisplay._showPitchName[this.Keyboard.highlight % 12]}${Math.floor(this.Keyboard.highlight / 12) - 1}`,
                     this._mouseX - this._height * 1.5,
-                    this.spectrum.height - (this.Keyboard.highlight - 24) * this._height + this.scrollY - (this._height >> 3)
+                    this.layers.height - (this.Keyboard.highlight - 24) * this._height + this.scrollY - (this._height >> 3)
                 );
             }
         }
@@ -240,25 +264,32 @@ function App() {
         const box = document.getElementById('Canvases-Container').getBoundingClientRect();
         w = w || box.width;
         h = h || box.height;
+        let spectrumWidth, spectrumHeight;
         if (w > 80) {
-            this.spectrum.width = w - 80;
+            spectrumWidth = w - 80;
             this.keyboard.width = 80;
         } else {
-            this.spectrum.width = 0.4 * w;
+            spectrumWidth = 0.4 * w;
             this.keyboard.width = 0.6 * w;
         }
         if (h > 40) {
-            this.spectrum.height = h - 40;
+            spectrumHeight = h - 40;
             this.timeBar.height = 40;
         } else {
-            this.spectrum.height = 0.4 * h;
+            spectrumHeight = 0.4 * h;
             this.timeBar.height = 0.6 * h;
         }
-        this.keyboard.height = this.spectrum.height;
-        this.timeBar.width = this.spectrum.width;
+        this.layers.height = this.keyboard.height = spectrumHeight;
+        this.layers.width = this.timeBar.width = spectrumWidth;
+        for (const c in this.layers) {
+            const canvas = this.layers[c];
+            canvas.width = spectrumWidth;
+            canvas.height = spectrumHeight;
+            canvas.ctx.lineWidth = 1;
+            canvas.ctx.font = `${this._height}px Arial`;
+        }
         document.getElementById('play-btn').style.width = this.keyboard.width + 'px';
         // 改变画布长宽之后，设置的值会重置，需要重新设置
-        this.spectrum.ctx.lineWidth = 1; this.spectrum.ctx.font = `${this._height}px Arial`;
         this.keyboard.ctx.lineWidth = 1; this.keyboard.ctx.font = `${this._height + 2}px Arial`;
         this.timeBar.ctx.font = '14px Arial';
         // 更新滑动条大小
@@ -272,18 +303,19 @@ function App() {
      * @param {number} y 新视野下边和世界下边的距离
      */
     this.scroll2 = (x = this.scrollX, y = this.scrollY) => {
-        this.scrollX = Math.max(0, Math.min(x, this._width * this._xnum - this.spectrum.width));
-        this.scrollY = Math.max(0, Math.min(y, this._height * this.ynum - this.spectrum.height));
+        this.scrollX = Math.max(0, Math.min(x, this._width * this._xnum - this.layers.width));
+        this.scrollY = Math.max(0, Math.min(y, this._height * this.ynum - this.layers.height));
         this.idXstart = (this.scrollX / this._width) | 0;
         this.idYstart = (this.scrollY / this._height) | 0;
-        this.idXend = Math.min(this._xnum, Math.ceil((this.scrollX + this.spectrum.width) / this._width));
-        this.idYend = Math.min(this.ynum, Math.ceil((this.scrollY + this.spectrum.height) / this._height));
+        this.idXend = Math.min(this._xnum, Math.ceil((this.scrollX + this.layers.width) / this._width));
+        this.idYend = Math.min(this.ynum, Math.ceil((this.scrollY + this.layers.height) / this._height));
         this.rectXstart = this.idXstart * this._width - this.scrollX;
-        this.rectYstart = this.spectrum.height - this.idYstart * this._height + this.scrollY;   // 画图的y从左上角开始
+        this.rectYstart = this.layers.height - this.idYstart * this._height + this.scrollY;   // 画图的y从左上角开始
         // 滑动条
         this.HscrollBar.refreshPosition();
-        // 更新音符 同时触发刷新
+        // 更新音符 action.dirty 置位
         this.MidiAction.updateView();
+        this.layers.spectrum.dirty = true;
     };
     /**
      * 按倍数横向缩放时频图 以鼠标指针为中心
@@ -293,7 +325,7 @@ function App() {
     this.scaleX = (mouseX, times) => {
         let nw = this._width * times;
         if (nw < 2) return;
-        if (nw > this.spectrum.width >> 2) return;
+        if (nw > this.layers.spectrum.width >> 2) return;
         this.width = nw;
         this.scroll2((this.scrollX + mouseX) * times - mouseX, this.scrollY);
     };
@@ -304,15 +336,19 @@ function App() {
         // 首先要同步时间 如果音频播放了，就同步音频时间
         this.AudioPlayer.update();
         this.MidiPlayer.update();
-        if (!this.dirty) return;
-        this.Spectrogram.update();
-        this.BeatBar.update();
-        this.Keyboard.update();
-        this.MidiAction.update();
-        this.TimeBar.update();  // 必须在Spectrogram后更新，因为涉及时间指示的绘制
-        this.pitchNameDisplay.update();
-        // 注释以下行恢复高刷 解决一切渲染问题
-        this.dirty = false;
+        if (this.layers.spectrum.dirty) {
+            this.Spectrogram.update();  // 只更新spectrum画布
+            this.layers.spectrum.dirty = false;
+        }
+        if (this.layers.action.dirty) {
+            this.layers.action.ctx.clearRect(0, 0, this.layers.width, this.layers.height);
+            this.Keyboard.update(); // 应最先 因为高亮显示不重要应该在最下面
+            this.BeatBar.update();
+            this.MidiAction.update();   // 应在BeatBar之后，节拍线应在音符下面
+            this.TimeBar.update();  // 应最后绘制 因为时间指针应该在最上面
+            this.pitchNameDisplay.update();
+            this.layers.action.dirty = false;
+        }
     };
     this.trackMouseY = (e) => { // onmousemove
         this.mouseY = e.offsetY;
@@ -386,8 +422,8 @@ function App() {
                 case 'ArrowRight': this.scroll2(this.scrollX + this._width, this.scrollY); break;
                 case 'Delete': this.MidiAction.deleteNote(); break;
                 case ' ': this.AudioPlayer.play_btn.click(); break;
-                case 'PageUp': this.scroll2(this.scrollX - this.spectrum.width, this.scrollY); break;
-                case 'PageDown': this.scroll2(this.scrollX + this.spectrum.width, this.scrollY); break;
+                case 'PageUp': this.scroll2(this.scrollX - this.layers.spectrum.width, this.scrollY); break;
+                case 'PageDown': this.scroll2(this.scrollX + this.layers.spectrum.width, this.scrollY); break;
                 case 'Home': this.scroll2(0); this.setTime(0); break;
             }
         }
@@ -399,7 +435,7 @@ function App() {
     });
     window.addEventListener('load', () => { this.resize(); });
     window.addEventListener('resize', () => { this.resize(); });
-    this.spectrum.addEventListener('wheel', (e) => {
+    this.layerContainer.addEventListener('wheel', (e) => {
         // e.deltaY 往前滚是负数
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
         const cmdKey = isMac ? e.metaKey : e.ctrlKey;
@@ -415,7 +451,7 @@ function App() {
         }   // 只改状态，但不绘图。绘图交给固定时间刷新完成
         this.trackMouseY(e);
     });
-    this.spectrum.contextMenu = new ContextMenu([
+    this.layerContainer.contextMenu = new ContextMenu([
         {
             name: "撤销", callback: () => {
                 this.shortcutActions['Ctrl+Z']();
@@ -447,13 +483,13 @@ function App() {
             }, onshow: () => this.Spectrogram._spectrogram && this.MidiAction.selected.length > 0
         }
     ]);
-    this.spectrum.addEventListener('mousedown', (e) => {
+    this.layerContainer.addEventListener('mousedown', (e) => {
         if (e.button == 1) {    // 中键按下 动作同触摸板滑动 视窗移动
             const moveWindow = (e) => {
                 this.scroll2(this.scrollX - e.movementX, this.scrollY + e.movementY);
-            }; this.spectrum.addEventListener('mousemove', moveWindow);
+            }; this.layerContainer.addEventListener('mousemove', moveWindow);
             const up = () => {
-                this.spectrum.removeEventListener('mousemove', moveWindow);
+                this.layerContainer.removeEventListener('mousemove', moveWindow);
                 document.removeEventListener('mouseup', up);
             }; document.addEventListener('mouseup', up);
             return;
@@ -462,13 +498,13 @@ function App() {
         if (this.Spectrogram._spectrogram) {
             if (e.button == 0) this.MidiAction.onclick_L(e);    // midi音符相关
             else if (e.button == 2 && e.shiftKey) {
-                this.spectrum.contextMenu.show(e);
+                this.layerContainer.contextMenu.show(e);
                 e.stopPropagation();
             } else this.MidiAction.clearSelected();    // 取消音符选中
         } this.Keyboard.mousedown();    // 将发声放到后面，因为onclick_L会改变选中的音轨
     });
-    this.spectrum.addEventListener('mousemove', this.trackMouseY);
-    this.spectrum.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
+    this.layerContainer.addEventListener('mousemove', this.trackMouseY);
+    this.layerContainer.addEventListener('contextmenu', (e) => { e.preventDefault(); e.stopPropagation(); });
     this.timeBar.addEventListener('dblclick', (e) => {
         if (this.AudioPlayer.audio.readyState != 4) return;
         this.setTime((e.offsetX + this.scrollX) * this.AudioPlayer.audio.duration * 1000 / (this._xnum * this._width), false);
@@ -560,11 +596,11 @@ function App() {
     });
 
     // 用户鼠标操作触发刷新
-    document.addEventListener('mousemove', this.makeDirty);
-    document.addEventListener('mousedown', this.makeDirty);
-    document.addEventListener('mouseup', this.makeDirty);
-    document.addEventListener('keydown', this.makeDirty);
-    // document.addEventListener('wheel', this.makeDirty);  // wheel->scroll2->updateView->makeDirty 无需再刷新
+    document.addEventListener('mousemove', this.makeActDirty);
+    document.addEventListener('mousedown', this.makeActDirty);
+    document.addEventListener('mouseup', this.makeActDirty);
+    document.addEventListener('keydown', this.makeActDirty);
+    // wheel->scroll2 已触发刷新
 
     this.loopUpdate(true);
 }

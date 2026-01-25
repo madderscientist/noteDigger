@@ -1,5 +1,6 @@
 /**
  * 管理频谱显示
+ * 会使用 parent.layers.spectrum 画布
  * @param {App} parent 
  */
 function _Spectrogram(parent) {
@@ -18,9 +19,10 @@ function _Spectrogram(parent) {
             hue = 240 - ((value - this.colorStep1) / (this.colorStep2 - this.colorStep1)) * 240;
         } return `hsl(${hue}, 100%, ${lightness}%)`;
     };
-    this.update = () => {   // 不能用画图的坐标去限制，因为数据可能填不满画布 必须用id
-        const canvas = parent.spectrum;
-        const ctx = parent.spectrum.ctx;
+    // 不能用画图的坐标去限制，因为数据可能填不满画布 必须用id
+    this.update = () => {   
+        const canvas = parent.layers.spectrum;
+        const ctx = canvas.ctx;
         let rectx = parent.rectXstart;
         for (let x = parent.idXstart; x < parent.idXend; x++) {
             const s = this._spectrogram[x];
@@ -51,10 +53,6 @@ function _Spectrogram(parent) {
         // 铺底色以凸显midi音符
         ctx.fillStyle = this.mask;
         ctx.fillRect(0, 0, rectx, canvas.height);
-        // 更新note
-        ctx.fillStyle = "#ffffff4f";
-        rectx = canvas.height - (parent.Keyboard.highlight - 24) * parent._height + parent.scrollY;
-        ctx.fillRect(0, rectx, canvas.width, -parent._height);
     };
 
     Object.defineProperty(this, 'spectrogram', {
@@ -80,6 +78,7 @@ function _Spectrogram(parent) {
         set: function(a) {
             a = Math.min(255, Math.max(a | 0, 0));
             this.mask = '#25262d' + a.toString(16).padStart(2, '0');
+            parent.layers.spectrum.dirty = true;
         }
     });
 }
