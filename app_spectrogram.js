@@ -6,7 +6,16 @@
 function _Spectrogram(parent) {
     this.colorStep1 = 90;
     this.colorStep2 = 240;
-    this.multiple = parseFloat(document.getElementById('multiControl').value);  // 幅度的倍数
+
+    this._multiple = parseFloat(document.getElementById('multiControl').value);  // 幅度的倍数
+    Object.defineProperty(this, 'multiple', {
+        get: function() { return this._multiple; },
+        set: function(m) {
+            this._multiple = m;
+            parent.layers.spectrum.dirty = true;
+        }
+    });
+
     this._spectrogram = null;
     this.mask = '#25262daa';
     this.getColor = (value) => {    // 0-step1，是蓝色的亮度从0变为50%；step1-step2，是颜色由蓝色变为红色；step2-255，保持红色
@@ -28,7 +37,7 @@ function _Spectrogram(parent) {
             const s = this._spectrogram[x];
             let recty = parent.rectYstart;
             for (let y = parent.idYstart; y < parent.idYend; y++) {
-                ctx.fillStyle = this.getColor(s[y] * this.multiple);
+                ctx.fillStyle = this.getColor(s[y] * this._multiple);
                 ctx.fillRect(rectx, recty, parent._width, -parent._height);
                 recty -= parent._height;
             }

@@ -84,7 +84,7 @@ function App() {
     this.rectXstart = 0;// 目前只有Spectrogram.update在使用
     this.rectYstart = 0;// 画布开始的具体y坐标(因为最下面一个不完整) 迭代应该减height 被画频谱、画键盘共享
 
-    // spectrum的重绘仅在 视野滚动(scroll2) 数据改变(会触发scroll2)
+    // spectrum的重绘仅在 视野滚动(scroll2) 数据改变(会触发scroll2) 倍率改变
     // 下面的函数控制action层的重绘 重绘时机: scroll2; AudioPlayer.update; 键鼠操作
     this.makeActDirty = () => { this.layers.action.dirty = true; }; // 供外部调用
 
