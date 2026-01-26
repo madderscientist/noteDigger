@@ -26,6 +26,22 @@
     font-weight: bold;
     color: white;
 }
+/* 无特殊情况用label，特殊情况用span */
+.request-cover span.title {
+    overflow: hidden;
+    display: inline-block;
+    max-width: 11em;
+    min-width: 8em;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+    vertical-align: middle;
+}
+.request-cover span.title:hover {
+    overflow: visible;
+    white-space: normal;
+    z-index: 100;
+    max-width: none;
+}
 
 .card.hvCenter .layout {
     display: flex;
@@ -66,6 +82,7 @@
     color: inherit;
     margin: 0 0.8em;
     padding-left: 0.6em;
+    padding: 0.35em 0em 0.3em 0.5em;
 }
 
 /* 进度条 */

@@ -30,10 +30,10 @@ function _Analyser(parent) {
         var analyser = new NoteAnalyser(audioBuffer.sampleRate / fftPoints, parent.Keyboard.freqTable);
 
         const a = async (t) => { // 对t执行STFT，并整理为时频谱
-            let nFinal = t.length - fftPoints;
-            const result = new Array((nFinal / dN) | 0);
+            let n = dN >> 1;
+            const result = new Array(1 + (t.length - n) / dN | 0);
             const window_left = fftPoints >> 1; // 窗口左边界偏移量
-            for (let n = dN >> 1, k = 0; n <= nFinal; n += dN) {    // n为窗口中心
+            for (let k = 0; n <= t.length; n += dN) {    // n为窗口中心
                 result[k++] = analyser.analyse(...fft.fft(t, n - window_left));
                 // 一帧一次也太慢了。这里固定更新帧率
                 let tnow = performance.now();
@@ -41,7 +41,7 @@ function _Analyser(parent) {
                     lastFrame = tnow;
                     // 打断分析 更新UI 等待下一周期
                     parent.event.dispatchEvent(new CustomEvent("progress", {
-                        detail: progressTrans(k / (result.length - 1))
+                        detail: progressTrans(k / result.length)
                     }));
                     await new Promise(resolve => setTimeout(resolve, 0));
                 }
@@ -98,12 +98,13 @@ function _Analyser(parent) {
      * @param {AudioBuffer} audioBuffer 音频缓冲区
      * @param {number} tNum 一秒几次分析 决定步距
      * @param {number} channel 选择哪个channel分析 0:left 1:right 2:l+r 3:l-r else:fft(l)+fft(r)
+     * @param {boolean} useGPU 是否使用GPU加速计算CQT
      * @returns 不返回，直接作用于Spectrogram.spectrogram
      */
-    this.cqt = (audioData, tNum, channel) => {
+    this.cqt = (audioData, tNum, channel, useGPU = false) => {
         if (window.location.protocol == 'file:' || window.cqt == undefined) return;    // 开worker和fetch要求http
         console.time("CQT计算");
-        cqt(audioData, tNum, channel, parent.Keyboard.freqTable[0]).then((cqtData) => {
+        cqt(audioData, tNum, channel, parent.Keyboard.freqTable[0], useGPU).then((cqtData) => {
             // CQT结果准确但琐碎，STFT结果粗糙但平滑，所以混合一下
             const s = parent.Spectrogram.spectrogram;
             let tLen = Math.min(cqtData.length, s.length);

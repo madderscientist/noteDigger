@@ -174,9 +174,9 @@
             </div>
             <button>取消区间</button><button>应用</button>
         </li>
-        <li>显示音名&nbsp;<input type="checkbox" onchange="app.pitchNameDisplay.showPitchName(this.checked)"></li>
-        <li>透明度表示强度&nbsp;<input type="checkbox" checked onchange="app.MidiAction.alphaIntensity=this.checked"></li>
-        <li>播放节拍&nbsp;<input type="checkbox" onchange="app.MidiPlayer.switchBeatMode(this.checked)"></li>
+        <li><label>显示音名&nbsp;<input type="checkbox" onchange="app.pitchNameDisplay.showPitchName(this.checked)"></label></li>
+        <li><label>透明度表示强度&nbsp;<input type="checkbox" checked onchange="app.MidiAction.alphaIntensity=this.checked"></label></li>
+        <li><label>播放节拍&nbsp;<input type="checkbox" onchange="app.MidiPlayer.switchBeatMode(this.checked)"></label></li>
     </ul>
 </div>
 <script>
@@ -590,9 +590,6 @@
         for (const l of [lis[5], lis[6], lis[7]]) {
             l.querySelector('input')?.addEventListener('click', _checkBoxBlur);
         }
-        lis[5].onclick = lis[6].onclick = lis[7].onclick = function (e) {
-            this.querySelector('input')?.click();
-        };
     }
     // ==== 交互细节 ==== //
     document.querySelector('.top-logo').addEventListener('click', () => {

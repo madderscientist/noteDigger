@@ -1,5 +1,5 @@
 // 开启CQT的Worker线程，因为CQT是耗时操作，所以放在Worker线程中
-function cqt(audioBuffer, tNum, channel, fmin) {
+function cqt(audioBuffer, tNum, channel, fmin, useGPU = false) {
     var audioChannel;
     switch (channel) {
         case 0: audioChannel = [audioBuffer.getChannelData(0)]; break;
@@ -42,7 +42,8 @@ function cqt(audioBuffer, tNum, channel, fmin) {
             audioChannel: audioChannel,
             sampleRate: audioBuffer.sampleRate,
             hop: Math.round(audioBuffer.sampleRate / tNum),
-            fmin: fmin,
+            fmin,
+            useGPU
         }, audioChannel.map(x => x.buffer));
     });
 }

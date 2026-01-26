@@ -60,18 +60,31 @@ function _IO(parent) {
         parent.event.dispatchEvent(new Event('fileui'));    // 关闭drag功能
         let tempDiv = document.createElement('div');
         // 为了不影响下面的事件绑定，midi模式下用display隐藏
+        const midiModeStyle = midimode ? ' style="display:none;"' : '';
         tempDiv.innerHTML = `
 <div class="request-cover">
-    <div class="card hvCenter"><label class="title">${file.name}</label>&nbsp;&nbsp;<button class="ui-cancel"${midimode ? ' style="display:none;"' : ''}>使用已有结果</button>
+    <div class="card hvCenter">
+        <span class="title" style="text-align: center;">${file.name}</span>
+        <button class="ui-cancel"${midiModeStyle}>使用已有结果</button>
         <div class="layout"><span>每秒的次数：</span><input type="number" name="ui-ask" value="20" min="1" max="100"></div>
         <div class="layout"><span>标准频率A4=</span><input type="number" name="ui-ask" value="440" step="0.1" min="55"></div>
-        <div class="layout"${midimode ? ' style="display:none;"' : ''}>分析声道：</div>
-        <div class="layout"${midimode ? ' style="display:none;"' : ''}>
-            <input type="radio" name="ui-ask" value="4" checked>Stereo
-            <input type="radio" name="ui-ask" value="2">L+R
-            <input type="radio" name="ui-ask" value="3">L-R
-            <input type="radio" name="ui-ask" value="0">L
-            <input type="radio" name="ui-ask" value="1">R
+        <div${midiModeStyle}>
+            <div class="layout">分析声道：</div>
+            <div class="layout">
+                <input type="radio" name="ui-ask" value="4" checked>Stereo
+                <input type="radio" name="ui-ask" value="2">L+R
+                <input type="radio" name="ui-ask" value="3">L-R
+                <input type="radio" name="ui-ask" value="0">L
+                <input type="radio" name="ui-ask" value="1">R
+            </div>
+            <div class="layout">
+                <label class="labeled" data-tooltip="CQT分析更精准,将在后台进行">
+                    后台计算CQT<input type="checkbox" id="calc-cqt" checked>
+                </label>
+                <label class="labeled" data-tooltip="GPU更快,但中途页面易卡顿">
+                    优先用GPU算CQT<input type="checkbox" id="prefer-gpu">
+                </label>
+            </div>
         </div>
         <div class="layout">
             <button class="ui-cancel">取消</button>
@@ -83,7 +96,12 @@ function _IO(parent) {
         parent.AudioPlayer.name = file.name;
         const ui = tempDiv.firstElementChild;
         const close = () => ui.remove();
-        let btns = ui.getElementsByTagName('button');
+        const checkboxCQT = ui.querySelector('#calc-cqt');
+        const checkboxGPU = ui.querySelector('#prefer-gpu');
+        checkboxCQT.onchange = () => {
+            checkboxGPU.parentElement.style.display = checkboxCQT.checked ? 'block' : 'none';
+        };
+        const btns = ui.getElementsByTagName('button');
         btns[0].onclick = () => {   // 进度上传
             const input = document.createElement("input");
             input.type = "file";
@@ -221,7 +239,7 @@ function _IO(parent) {
                     parent.Spectrogram.spectrogram = v;
                     resolve();
                     // 后台执行CQT CQT的报错已经被拦截不会冒泡到下面的catch中
-                    parent.Analyser.cqt(audioData, tNum, channel);
+                    parent.Analyser.cqt(audioData, tNum, channel, checkboxCQT.checked && checkboxGPU.checked);
                 }).catch((e) => {
                     console.error(e);
                     parent.event.dispatchEvent(new CustomEvent('fileerror', { detail: e }));
