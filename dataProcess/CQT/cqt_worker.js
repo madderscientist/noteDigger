@@ -113,13 +113,12 @@ class CQT {
             const delta = frameEnergy[t] - meanEnergy;
             sigma += delta * delta;
         }
-        sigma = Math.sqrt(sigma / (output_length - 1));
+        sigma = Math.sqrt(sigma / output_length);
         for (const frame of output) {
             for (let i = 0; i < frame.length; i++) {
                 frame[i] = Math.sqrt(frame[i] / sigma);
             }
-        }
-        return output;
+        } return output;
     }
 
     /**
@@ -188,7 +187,7 @@ class CQT {
 
         // --- CQT代码 ---
         const shaderModule = device.createShaderModule({
-            label: 'CQT Energy/Phase Compute Shader',
+            label: 'CQT Energy Compute Shader',
             code: /* wgsl */`
 struct KernelInfo {
     real_offset: u32,
@@ -201,15 +200,11 @@ struct Config {
     num_frames: u32,
     first_frame_center_offset: u32,
 };
-struct CQTResult {
-    energy: f32,
-    phase: f32,
-};
 @group(0) @binding(0) var<storage, read> all_kernels: array<f32>;
 @group(0) @binding(1) var<storage, read> kernel_infos: array<KernelInfo>;
 @group(0) @binding(2) var<storage, read> config: Config;
 @group(0) @binding(3) var<storage, read> audio: array<f32>;
-@group(0) @binding(4) var<storage, read_write> output: array<CQTResult>;
+@group(0) @binding(4) var<storage, read_write> output: array<f32>;
 // 共享内存 用于协作加载 kernel 能提速6%
 var<workgroup> s_kernel_r: array<f32, ${workgroupsize}>;
 var<workgroup> s_kernel_i: array<f32, ${workgroupsize}>;
@@ -253,12 +248,9 @@ fn main(
         } workgroupBarrier();
     }
     if (frame >= config.num_frames) { return; }
-    let energy = real * real + imag * imag;
-    let phase = atan2(imag, real);
-    // 时间优先存储
-    let out_index = config.num_frames * bin_idx + frame;
-    output[out_index].energy = energy;
-    output[out_index].phase = phase;
+    // 频率优先存储
+    let out_index = ${this.bins} * frame + bin_idx;
+    output[out_index] = output[out_index] + real * real + imag * imag;  // 如果多通道会累加
 }`
         });
         this.CQTpipeline ??= device.createComputePipeline({
@@ -288,9 +280,9 @@ fn main(
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
         });
         device.queue.writeBuffer(this.inputAudioBuffer, 0, audioData);
-        // 输出缓冲区
+        // 输出
         const totalValues = numFrames * numBins;
-        const outputBufferSize = 2 * totalValues * Float32Array.BYTES_PER_ELEMENT; // 能量+相位
+        const outputBufferSize = totalValues * Float32Array.BYTES_PER_ELEMENT;
         this.outputBuffer ??= device.createBuffer({
             label: "CQT Output Buffer",
             size: outputBufferSize,
@@ -315,350 +307,186 @@ fn main(
         pass.dispatchWorkgroups(numBins, Math.ceil(numFrames / this.workgroupsize));
         pass.end();
         device.queue.submit([encoder.finish()]);
-        return { numFrames, outputBufferSize };
+        return numFrames;
     }
 
     /**
-     * 后处理一个通道的GPU计算结果
-     * @param {GPUBuffer} channelBuffer 
-     * @param {number} numFrames 
-     * @param {number} fhop 
-     * @returns {Promise<{amp: Array<Float32Array>, freq: Array<Float32Array>}>} 
+     * 提取GPU数据并用CPU归一化
+     * @param {GPUBuffer} buffer 要归一化的
+     * @param {number} numFrames 帧数
+     * @returns {Array<Float32Array>} 归一化后的幅度谱矩阵
      */
-    async ChannelPostProcess(channelBuffer, numFrames, fhop) {
+    async norm_CPU(buffer, numFrames) {
         const device = this.device;
-        const numBins = this.bins;
-        // 输出
-        const combineEngBuffer = device.createBuffer({
-            label: "CQT Combined Energy Buffer",
-            size: numFrames * numBins * Float32Array.BYTES_PER_ELEMENT,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+        const readBuffer = device.createBuffer({
+            label: "Read CQT Buffer",
+            size: buffer.size,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
         });
-        const combineFreqBuffer = device.createBuffer({
-            label: "CQT Combined Frequency Buffer",
-            size: (numFrames - 1) * numBins * Float32Array.BYTES_PER_ELEMENT,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-        });
-
-        const freqParamArray = new Float32Array(this.bins * 2); // {f, p}
-        for (let i = 0; i < this.bins; i++) {
-            const freq = this.fmin * Math.pow(2, i / this.bins_per_octave);
-            const expected_dphi = 2 * Math.PI * freq * fhop;
-            freqParamArray[i * 2] = freq;
-            freqParamArray[i * 2 + 1] = expected_dphi;
-        }
-        const freqParamUniformBuffer = device.createBuffer({
-            label: "FreqParamUniformBuffer",
-            size: freqParamArray.byteLength,
-            usage: GPUBufferUsage.UNIFORM,
-            mappedAtCreation: true,
-        });
-        new Float32Array(freqParamUniformBuffer.getMappedRange()).set(freqParamArray);
-        freqParamUniformBuffer.unmap();
-
-        const shaderModule = device.createShaderModule({
-            label: 'CQT 1 Channel Postprocess Compute Shader',
-            code: /* wgsl */`
-struct CQTResult {
-    energy: f32,
-    phase: f32,
-};
-struct FreqParam {
-    f: f32,
-    p: f32,
-};
-// 输入为行优先
-@group(0) @binding(0) var<storage, read_write> combined_energy: array<f32>;
-@group(0) @binding(1) var<storage, read_write> combined_frequency: array<f32>;
-@group(0) @binding(2) var<uniform> freq_params: array<FreqParam, ${numBins}>;
-@group(0) @binding(3) var<storage, read> channel: array<CQTResult>;
-
-const PI: f32 = 3.14159265358979323846;
-const TWO_PI: f32 = 6.28318530717958647692;
-const BIN_NUM: u32 = ${numBins}u;
-const FRAME_NUM: u32 = ${numFrames}u;
-const FHOP: f32 = ${fhop};
-
-fn unwrap(phase_diff: f32) -> f32 {
-    return phase_diff - TWO_PI * floor((phase_diff + PI) / TWO_PI);
-}
-
-@compute @workgroup_size(${this.workgroupsize})
-fn main(
-    @builtin(workgroup_id) workgroup_id: vec3<u32>,
-    @builtin(local_invocation_id) local_id: vec3<u32>
-) {
-    let bin_idx = workgroup_id.x;
-    let frame = workgroup_id.y * ${this.workgroupsize}u + local_id.x;
-    if (frame >= FRAME_NUM) {return;}
-    let param = freq_params[bin_idx];
-    let at = frame + bin_idx * FRAME_NUM;
-    combined_energy[BIN_NUM * frame + bin_idx] = channel[at].energy;
-    if (frame == 0u) {return;}
-    let at_prev = at - 1u;
-    let dp = channel[at].phase - channel[at_prev].phase;
-    let dphi = unwrap(dp - param.p);
-    combined_frequency[at_prev] = dphi / (TWO_PI * FHOP) + param.f;
-}`
-        });
-        const computePipeline = device.createComputePipeline({
-            label: 'CQT Full Compute Pipeline', layout: 'auto',
-            compute: { module: shaderModule, entryPoint: 'main' },
-        });
-        const bindGroup = device.createBindGroup({
-            label: 'CQT Full Bind Group', layout: computePipeline.getBindGroupLayout(0),
-            entries: [
-                { binding: 0, resource: { buffer: combineEngBuffer } },
-                { binding: 1, resource: { buffer: combineFreqBuffer } },
-                { binding: 2, resource: { buffer: freqParamUniformBuffer } },
-                { binding: 3, resource: { buffer: channelBuffer } },
-            ],
-        });
-
-        // 读取
-        const stagingEngBuffer = device.createBuffer({
-            label: "Staging Combined Energy Buffer",
-            size: combineEngBuffer.size,
-            usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-        });
-        const stagingFreqBuffer = device.createBuffer({
-            label: "Staging Combined Frequency Buffer",
-            size: combineFreqBuffer.size,
-            usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-        });
-
         const encoder = device.createCommandEncoder();
-        const pass = encoder.beginComputePass();
-        pass.setPipeline(computePipeline);
-        pass.setBindGroup(0, bindGroup);
-        pass.dispatchWorkgroups(numBins, Math.ceil(numFrames / this.workgroupsize));
-        pass.end();
-        encoder.copyBufferToBuffer(combineEngBuffer, 0, stagingEngBuffer, 0, stagingEngBuffer.size);
-        encoder.copyBufferToBuffer(combineFreqBuffer, 0, stagingFreqBuffer, 0, stagingFreqBuffer.size);
+        encoder.copyBufferToBuffer(buffer, 0, readBuffer, 0, buffer.size);
         device.queue.submit([encoder.finish()]);
-
-        await stagingEngBuffer.mapAsync(GPUMapMode.READ);
-        const combinedEnergy = new Float32Array(stagingEngBuffer.getMappedRange());
-        const spectrum = CQT.organizeGPUEngResult(combinedEnergy, numFrames, numBins);
-        stagingEngBuffer.unmap();
-        await stagingFreqBuffer.mapAsync(GPUMapMode.READ);
-        const combinedFrequency = new Float32Array(stagingFreqBuffer.getMappedRange());
-        const frequency = CQT.organizeGPUFreqResult(combinedFrequency, numFrames - 1, numBins);
-        stagingFreqBuffer.unmap();
-
-        // 清理
-        freqParamUniformBuffer.destroy();
-        combineEngBuffer.destroy();
-        combineFreqBuffer.destroy();
-        stagingEngBuffer.destroy();
-        stagingFreqBuffer.destroy();
-
-        return {
-            amp: spectrum,
-            freq: frequency
-        };
-    }
-
-    /**
-     * 合并2通道的GPU计算结果
-     * @param {GPUBuffer[2]} channelBuffers 
-     * @param {number} numFrames
-     * @param {number} fhop hop的频率 应该为hop/sampleRate
-     * @returns {Promise<{amp: Array<Float32Array>, freq: Array<Float32Array>}>} 
-     */
-    async combine2GPUChannels(channelBuffers, numFrames, fhop) {
-        const device = this.device;
-        const numBins = this.bins;
-        // 输出
-        const combineEngBuffer = device.createBuffer({
-            label: "CQT Combined Energy Buffer",
-            size: numFrames * numBins * Float32Array.BYTES_PER_ELEMENT,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-        });
-        const combineFreqBuffer = device.createBuffer({
-            label: "CQT Combined Frequency Buffer",
-            size: (numFrames - 1) * numBins * Float32Array.BYTES_PER_ELEMENT,
-            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
-        });
-        // 频率参数 预计算确实加速
-        const freqParamArray = new Float32Array(this.bins * 2); // {f, p}
-        for (let i = 0; i < this.bins; i++) {
-            const freq = this.fmin * Math.pow(2, i / this.bins_per_octave);
-            const expected_dphi = 2 * Math.PI * freq * fhop;
-            freqParamArray[i * 2] = freq;
-            freqParamArray[i * 2 + 1] = expected_dphi;
+        await readBuffer.mapAsync(GPUMapMode.READ);
+        const resultArray = new Float32Array(readBuffer.getMappedRange()).slice();
+        const ampMatrix = Array(numFrames);
+        for (let t = 0, offset = 0; t < numFrames; t++) {
+            const next = offset + this.bins;
+            ampMatrix[t] = resultArray.subarray(offset, next);
+            offset = next;
         }
-        const freqParamUniformBuffer = device.createBuffer({
-            label: "FreqParamUniformBuffer",
-            size: freqParamArray.byteLength,
-            usage: GPUBufferUsage.UNIFORM,
-            mappedAtCreation: true,
-        });
-        new Float32Array(freqParamUniformBuffer.getMappedRange()).set(freqParamArray);
-        freqParamUniformBuffer.unmap();
-
-        const shaderModule = device.createShaderModule({
-            label: 'CQT Channel Combine Compute Shader',
-            code: /* wgsl */`
-struct CQTResult {
-    energy: f32,
-    phase: f32,
-};
-struct FreqParam {
-    f: f32,
-    p: f32,
-};
-// 输入为行优先
-@group(0) @binding(0) var<storage, read_write> combined_energy: array<f32>;
-@group(0) @binding(1) var<storage, read_write> combined_frequency: array<f32>;
-@group(0) @binding(2) var<uniform> freq_params: array<FreqParam, ${numBins}>;
-@group(0) @binding(3) var<storage, read> channel0: array<CQTResult>;
-@group(0) @binding(4) var<storage, read> channel1: array<CQTResult>;
-
-const PI: f32 = 3.14159265358979323846;
-const TWO_PI: f32 = 6.28318530717958647692;
-const BIN_NUM: u32 = ${numBins}u;
-const FRAME_NUM: u32 = ${numFrames}u;
-const FHOP: f32 = ${fhop};
-
-fn unwrap(phase_diff: f32) -> f32 {
-    return phase_diff - TWO_PI * floor((phase_diff + PI) / TWO_PI);
-}
-
-@compute @workgroup_size(${this.workgroupsize})
-fn main(
-    @builtin(workgroup_id) workgroup_id: vec3<u32>, // (numBins, blocks, 1)
-    @builtin(local_invocation_id) local_id: vec3<u32>
-) {
-    let bin_idx = workgroup_id.x;
-    let frame = workgroup_id.y * ${this.workgroupsize}u + local_id.x;
-    if (frame >= FRAME_NUM) {return;}
-    let param = freq_params[bin_idx];
-    let at = frame + bin_idx * FRAME_NUM;
-    // 能量列优先
-    combined_energy[BIN_NUM * frame + bin_idx] = channel0[at].energy + channel1[at].energy;
-    if (frame == 0u) {return;}
-    let at_prev = at - 1u;
-    let weight1 = sqrt(channel0[at].energy * channel0[at_prev].energy);
-    let weight2 = sqrt(channel1[at].energy * channel1[at_prev].energy);
-    let phase1: f32 = channel0[at].phase - channel0[at_prev].phase;
-    let phase2: f32 = channel1[at].phase - channel1[at_prev].phase;
-    let imag_sum: f32 = weight1 * sin(phase1) + weight2 * sin(phase2);
-    let real_sum: f32 = weight1 * cos(phase1) + weight2 * cos(phase2);
-    let dphi: f32 = unwrap(atan2(imag_sum, real_sum) - param.p);
-    combined_frequency[at_prev] = dphi / (TWO_PI * FHOP) + param.f;
-}`
-        });
-        const computePipeline = device.createComputePipeline({
-            label: 'CQT Full Compute Pipeline', layout: 'auto',
-            compute: { module: shaderModule, entryPoint: 'main' },
-        });
-        const bindGroup = device.createBindGroup({
-            label: 'CQT Full Bind Group', layout: computePipeline.getBindGroupLayout(0),
-            entries: [
-                { binding: 0, resource: { buffer: combineEngBuffer } },
-                { binding: 1, resource: { buffer: combineFreqBuffer } },
-                { binding: 2, resource: { buffer: freqParamUniformBuffer } },
-                { binding: 3, resource: { buffer: channelBuffers[0] } },
-                { binding: 4, resource: { buffer: channelBuffers[1] } }
-            ],
-        });
-
-        // 读取
-        const stagingEngBuffer = device.createBuffer({
-            label: "Staging Combined Energy Buffer",
-            size: combineEngBuffer.size,
-            usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-        });
-        const stagingFreqBuffer = device.createBuffer({
-            label: "Staging Combined Frequency Buffer",
-            size: combineFreqBuffer.size,
-            usage: GPUBufferUsage.MAP_READ | GPUBufferUsage.COPY_DST,
-        });
-
-        const encoder = device.createCommandEncoder();
-        const pass = encoder.beginComputePass();
-        pass.setPipeline(computePipeline);
-        pass.setBindGroup(0, bindGroup);
-        pass.dispatchWorkgroups(numBins, Math.ceil(numFrames / this.workgroupsize));
-        pass.end();
-        encoder.copyBufferToBuffer(combineEngBuffer, 0, stagingEngBuffer, 0, stagingEngBuffer.size);
-        encoder.copyBufferToBuffer(combineFreqBuffer, 0, stagingFreqBuffer, 0, stagingFreqBuffer.size);
-        device.queue.submit([encoder.finish()]);
-
-        await stagingEngBuffer.mapAsync(GPUMapMode.READ);
-        const combinedEnergy = new Float32Array(stagingEngBuffer.getMappedRange());
-        const spectrum = CQT.organizeGPUEngResult(combinedEnergy, numFrames, numBins);
-        stagingEngBuffer.unmap();
-        await stagingFreqBuffer.mapAsync(GPUMapMode.READ);
-        const combinedFrequency = new Float32Array(stagingFreqBuffer.getMappedRange());
-        const frequency = CQT.organizeGPUFreqResult(combinedFrequency, numFrames - 1, numBins);
-        stagingFreqBuffer.unmap();
-
-        // 清理
-        freqParamUniformBuffer.destroy();
-        combineEngBuffer.destroy();
-        combineFreqBuffer.destroy();
-        stagingEngBuffer.destroy();
-        stagingFreqBuffer.destroy();
-
-        return {
-            amp: spectrum,
-            freq: frequency
-        };
-    }
-
-    /**
-     * 从GPU内存的CPU视图中复制、整理频率结果
-     * 频率是行优先存储的
-     * @param {Float32Array} GPUresult 内存还在GPU上
-     * @param {number} numFrames 是实际长度-1
-     * @param {number} numBins this.bins
-     * @returns {Array<Float32Array>} 频率矩阵 行优先
-     */
-    static organizeGPUFreqResult(GPUresult, numFrames, numBins) {
-        const cpuarr = new Float32Array(GPUresult);
-        const freqMatrix = Array(numBins);
-        for (let f = 0, offset = 0; f < numBins; f++) {
-            const freqFrame = freqMatrix[f] = cpuarr.subarray(offset, offset + numFrames);
-            offset += numFrames;
-        } return freqMatrix;
-    }
-
-    /**
-     * 从GPU内存的CPU视图中复制、整理能量结果
-     * 能量是列优先存储的 不用GPU也很快
-     * @param {Float32Array} GPUresult 内存还在GPU上
-     * @param {number} numFrames 是实际长度
-     * @param {number} numBins this.bins
-     * @returns {Array<Float32Array>} 幅度矩阵 列优先
-     */
-    static organizeGPUEngResult(GPUresult, numFrames, numBins) {
-        // 一次性分配所有内存
-        const bigArray = new Float32Array(GPUresult);
-        const engMatrix = Array(numFrames);
-        let enerygSum = 0;
-        let frameEnergy = new Float32Array(numFrames);
-        for (let t = 0; t < numFrames; t++) {
-            const offset = t * numBins;
-            const engFrame = engMatrix[t] = bigArray.subarray(offset, offset + numBins);
-            for (let b = 0; b < numBins; b++)
-                frameEnergy[t] += engFrame[b];
-            enerygSum += frameEnergy[t];
-        }
+        readBuffer.destroy();
         // 归一化
+        const frameEnergy = new Float32Array(numFrames);
+        let energySum = 0;
+        for (let t = 0; t < numFrames; t++) {
+            const frame = ampMatrix[t];
+            for (let i = 0; i < frame.length; i++)
+                frameEnergy[t] += frame[i];
+            energySum += frameEnergy[t];
+        }
+        // 计算能量方差
         let sigma = 1e-8;
-        const meanEnergy = enerygSum / numFrames;
-        for (let t = 0; t < engMatrix.length; t++) {
+        const meanEnergy = energySum / numFrames;
+        for (let t = 0; t < numFrames; t++) {
             const delta = frameEnergy[t] - meanEnergy;
             sigma += delta * delta;
         }
-        sigma = Math.sqrt(sigma / (engMatrix.length - 1));
-        for (const frame of engMatrix) {
-            for (let i = 0; i < frame.length; i++) {
-                frame[i] = Math.sqrt(frame[i] / sigma);
-            }
-        } return engMatrix;
+        sigma = Math.sqrt(sigma / numFrames);
+        // 归一化
+        for (let i = 0; i < resultArray.length; i++) {
+            resultArray[i] = Math.sqrt(resultArray[i] / sigma);
+        } return ampMatrix;
+    }
+
+    async norm_GPU(buffer, numFrames) {
+        const device = this.device;
+        // 求帧能量
+        const sumBuffer = device.createBuffer({
+            label: "sum Buffer",
+            size: numFrames * Float32Array.BYTES_PER_ELEMENT,
+            usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
+        });
+        const sumShader = device.createShaderModule({
+            label: 'Freq Sum Compute Shader',
+            code: /* wgsl */`
+@group(0) @binding(0) var<storage, read_write> spectrum: array<f32>;
+@group(0) @binding(1) var<storage, read_write> rowSums: array<f32>;
+@compute @workgroup_size(${this.workgroupsize})
+fn main(
+    @builtin(workgroup_id) workgroup_id: vec3<u32>, // (blocks, 1, 1)
+    @builtin(local_invocation_id) local_id: vec3<u32>
+) {
+    var sum: f32 = 0.0;
+    let frame = workgroup_id.x * ${this.workgroupsize}u + local_id.x;
+    let base = frame * ${this.bins}u;
+    if (frame >= ${numFrames}u) { return; }
+    for (var bin: u32 = 0u; bin < ${this.bins}u; bin = bin + 1u) {
+        sum = sum + spectrum[base + bin];
+    } rowSums[frame] = sum;
+}`});
+        const sumPipe = device.createComputePipeline({
+            label: 'Freq Sum Compute Pipeline', layout: 'auto',
+            compute: { module: sumShader, entryPoint: 'main' },
+        });
+        const sum_bindGroup = device.createBindGroup({
+            label: 'CQT Bind Group', layout: sumPipe.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: buffer } },
+                { binding: 1, resource: { buffer: sumBuffer } },
+            ],
+        });
+        // 拷贝到CPU计算方差
+        const readSumBuffer = device.createBuffer({
+            label: "Read Sum Buffer",
+            size: sumBuffer.size,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+        // 提交指令
+        const encoder1 = device.createCommandEncoder();
+        const pass1 = encoder1.beginComputePass();
+        pass1.setPipeline(sumPipe);
+        pass1.setBindGroup(0, sum_bindGroup);
+        pass1.dispatchWorkgroups(Math.ceil(numFrames / this.workgroupsize));
+        pass1.end();
+        encoder1.copyBufferToBuffer(sumBuffer, 0, readSumBuffer, 0, readSumBuffer.size);
+        device.queue.submit([encoder1.finish()]);
+
+        const thread_works = this.bins; // 每个线程处理几频点 防止调度开销过大
+        const normShader = device.createShaderModule({
+            label: 'CQT Norm Compute Shader',
+            code: /* wgsl */`
+@group(0) @binding(0) var<storage, read_write> spectrum: array<f32>;
+@group(0) @binding(1) var<uniform> sigma: f32;
+@compute @workgroup_size(${this.workgroupsize})
+fn main(
+    @builtin(global_invocation_id) workgroup_id: vec3<u32>
+) {
+    var frame = ${thread_works}u * workgroup_id.x;
+    if (frame >= ${numFrames}u) { return; }
+    for (var i: u32 = 0u; i < ${thread_works}u; i = i + 1u) {
+        spectrum[frame] = sqrt(spectrum[frame] / sigma);
+        frame = frame + 1u;
+    }
+}`});
+        const normPipe = device.createComputePipeline({
+            label: 'CQT Norm Compute Pipeline', layout: 'auto',
+            compute: { module: normShader, entryPoint: 'main' },
+        });
+        const sigmaBuffer = device.createBuffer({
+            size: Float32Array.BYTES_PER_ELEMENT,
+            usage: GPUBufferUsage.UNIFORM,
+            mappedAtCreation: true,
+        });
+        const norm_bindGroup = device.createBindGroup({
+            label: 'CQT Norm Bind Group', layout: normPipe.getBindGroupLayout(0),
+            entries: [
+                { binding: 0, resource: { buffer: buffer } },
+                { binding: 1, resource: { buffer: sigmaBuffer } },
+            ],
+        });
+
+        // 读取结果算方差
+        await readSumBuffer.mapAsync(GPUMapMode.READ);
+        const rowSums = new Float32Array(readSumBuffer.getMappedRange());
+        const std = (arr) => {
+            let mean = 0, M2 = 0, n = 0;
+            for (const x of arr) {
+                n++;
+                const delta = x - mean;
+                mean += delta / n;
+                M2 += delta * (x - mean);
+            } return Math.sqrt(M2 / n);
+        }
+        const sigma = std(rowSums);
+        sumBuffer.destroy();
+        readSumBuffer.destroy();
+        new Float32Array(sigmaBuffer.getMappedRange()).set(new Float32Array([sigma]));
+        sigmaBuffer.unmap();
+
+        const readBuffer = device.createBuffer({
+            label: "Read CQT Buffer",
+            size: buffer.size,
+            usage: GPUBufferUsage.COPY_DST | GPUBufferUsage.MAP_READ,
+        });
+        const encoder2 = device.createCommandEncoder();
+        const pass2 = encoder2.beginComputePass();
+        pass2.setPipeline(normPipe);
+        pass2.setBindGroup(0, norm_bindGroup);
+        pass2.dispatchWorkgroups(Math.ceil(numFrames * this.bins / (this.workgroupsize * thread_works)));
+        pass2.end();
+        encoder2.copyBufferToBuffer(buffer, 0, readBuffer, 0, buffer.size);
+        device.queue.submit([encoder2.finish()]);
+        await readBuffer.mapAsync(GPUMapMode.READ);
+        const resultArray = new Float32Array(readBuffer.getMappedRange()).slice();
+        const ampMatrix = Array(numFrames);
+        for (let t = 0, offset = 0; t < numFrames; t++) {
+            const next = offset + this.bins;
+            ampMatrix[t] = resultArray.subarray(offset, next);
+            offset = next;
+        }
+        sigmaBuffer.destroy();
+        readBuffer.destroy();
+        return ampMatrix;
     }
 
     freeGPU() {
@@ -686,27 +514,15 @@ self.onmessage = async ({ data }) => {
         if (useGPU === false) throw new Error("强制使用CPU计算");
         await cqt.initWebGPU(256);
         console.log("WebGPU初始化成功,使用GPU计算CQT");
-        const {numFrames, outputBufferSize} = cqt.cqt_GPU(audioChannel[0], hop);
+        const numFrames = cqt.cqt_GPU(audioChannel[0], hop);
         if (audioChannel.length > 1) {
-            // 先复制到另一个buffer
-            const channel0 = cqt.device.createBuffer({
-                label: "Staging Buffer",
-                size: outputBufferSize,
-                usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_DST,
-            });
-            const encoder = cqt.device.createCommandEncoder();
-            encoder.copyBufferToBuffer(cqt.outputBuffer, 0, channel0, 0, outputBufferSize);
-            cqt.device.queue.submit([encoder.finish()]);
-            // 开启第二通道的计算
+            // 开启第二通道的计算 会累加到cqt.outputBuffer
             cqt.device.queue.writeBuffer(cqt.inputAudioBuffer, 0, audioChannel[1]);
             cqt.cqt_GPU(audioChannel[1], hop);
-            cqtData = await cqt.combine2GPUChannels([channel0, cqt.outputBuffer], numFrames, hop / sampleRate);
-            channel0.destroy();
-        } else {
-            cqtData = await cqt.ChannelPostProcess(cqt.outputBuffer, numFrames, hop / sampleRate);
         }
+        cqtData = await cqt.norm_CPU(cqt.outputBuffer, numFrames);
+        // cqtData = await cqt.norm_GPU(cqt.outputBuffer, numFrames);
         cqt.freeGPU();
-        cqtData = cqtData.amp;  // 暂时只返回能量
     } catch (e) {
         console.log("使用CPU计算CQT\n原因:", e.message);
         cqtData = cqt.cqt(audioChannel[0], hop);

@@ -105,7 +105,7 @@ class NoteAnalyser {    // 负责解析频谱数据
             const delta = frameEnergy[t] - meanEnergy;
             sigma += delta * delta;
         }
-        sigma = Math.sqrt(sigma / (engSpectrum.length - 1));
+        sigma = Math.sqrt(sigma / engSpectrum.length);
         // 归一化
         for (const frame of engSpectrum) {
             for (let i = 0; i < frame.length; i++) {
