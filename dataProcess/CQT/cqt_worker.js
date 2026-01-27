@@ -339,13 +339,14 @@ fn main(
             size: (numFrames - 1) * numBins * Float32Array.BYTES_PER_ELEMENT,
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
         });
-
-        const freqParamArray = new Float32Array(this.bins * 2); // {f, p}
+        // uniform是16字节对齐只能浪费一半了
+        const freqParamArray = new Float32Array(this.bins << 2); // {f, p, pad, pad}
         for (let i = 0; i < this.bins; i++) {
             const freq = this.fmin * Math.pow(2, i / this.bins_per_octave);
             const expected_dphi = 2 * Math.PI * freq * fhop;
-            freqParamArray[i * 2] = freq;
-            freqParamArray[i * 2 + 1] = expected_dphi;
+            const base = i << 2;
+            freqParamArray[base] = freq;
+            freqParamArray[base + 1] = expected_dphi;
         }
         const freqParamUniformBuffer = device.createBuffer({
             label: "FreqParamUniformBuffer",
@@ -366,6 +367,8 @@ struct CQTResult {
 struct FreqParam {
     f: f32,
     p: f32,
+    _pad0: f32,
+    _pad1: f32,
 };
 // 输入为行优先
 @group(0) @binding(0) var<storage, read_write> combined_energy: array<f32>;
@@ -398,7 +401,8 @@ fn main(
     let at_prev = at - 1u;
     let dp = channel[at].phase - channel[at_prev].phase;
     let dphi = unwrap(dp - param.p);
-    combined_frequency[at_prev] = dphi / (TWO_PI * FHOP) + param.f;
+    let out_freq_idx = at_prev - bin_idx;
+    combined_frequency[out_freq_idx] = dphi / (TWO_PI * FHOP) + param.f;
 }`
         });
         const computePipeline = device.createComputePipeline({
@@ -481,12 +485,13 @@ fn main(
             usage: GPUBufferUsage.STORAGE | GPUBufferUsage.COPY_SRC,
         });
         // 频率参数 预计算确实加速
-        const freqParamArray = new Float32Array(this.bins * 2); // {f, p}
+        const freqParamArray = new Float32Array(this.bins << 2); // {f, p, pad, pad}
         for (let i = 0; i < this.bins; i++) {
             const freq = this.fmin * Math.pow(2, i / this.bins_per_octave);
             const expected_dphi = 2 * Math.PI * freq * fhop;
-            freqParamArray[i * 2] = freq;
-            freqParamArray[i * 2 + 1] = expected_dphi;
+            const base = i << 2;
+            freqParamArray[base] = freq;
+            freqParamArray[base + 1] = expected_dphi;
         }
         const freqParamUniformBuffer = device.createBuffer({
             label: "FreqParamUniformBuffer",
@@ -507,6 +512,8 @@ struct CQTResult {
 struct FreqParam {
     f: f32,
     p: f32,
+    _pad0: f32,
+    _pad1: f32,
 };
 // 输入为行优先
 @group(0) @binding(0) var<storage, read_write> combined_energy: array<f32>;
@@ -546,7 +553,8 @@ fn main(
     let imag_sum: f32 = weight1 * sin(phase1) + weight2 * sin(phase2);
     let real_sum: f32 = weight1 * cos(phase1) + weight2 * cos(phase2);
     let dphi: f32 = unwrap(atan2(imag_sum, real_sum) - param.p);
-    combined_frequency[at_prev] = dphi / (TWO_PI * FHOP) + param.f;
+    let out_freq_idx = at_prev - bin_idx;
+    combined_frequency[out_freq_idx] = dphi / (TWO_PI * FHOP) + param.f;
 }`
         });
         const computePipeline = device.createComputePipeline({
@@ -682,6 +690,7 @@ self.onmessage = async ({ data }) => {
     let { audioChannel, sampleRate, hop, fmin, useGPU } = data;
     const cqt = new CQT(sampleRate, fmin, 7, 12, 2.8);
     let cqtData;
+    const bufferTransfer = [...audioChannel.map(x => x.buffer)];
     try {
         if (useGPU === false) throw new Error("强制使用CPU计算");
         await cqt.initWebGPU(256);
@@ -706,7 +715,7 @@ self.onmessage = async ({ data }) => {
             cqtData = await cqt.ChannelPostProcess(cqt.outputBuffer, numFrames, hop / sampleRate);
         }
         cqt.freeGPU();
-        cqtData = cqtData.amp;  // 暂时只返回能量
+        bufferTransfer.push(cqtData.amp[0].buffer, cqtData.freq[0].buffer);
     } catch (e) {
         console.log("使用CPU计算CQT\n原因:", e.message);
         cqtData = cqt.cqt(audioChannel[0], hop);
@@ -720,8 +729,10 @@ self.onmessage = async ({ data }) => {
                     temp1[j] = (temp1[j] + temp2[j]) * 0.5;
             }
         }
+        cqtData = { amp: cqtData }
+        bufferTransfer.push(cqtData.amp[0].buffer);
     }
-    // 要求cqtData都是一整块
-    self.postMessage(cqtData, [cqtData[0].buffer, ...audioChannel.map(x => x.buffer)]);
+    // 要求cqtData[i]都是一整块 分为amp和freq两类
+    self.postMessage(cqtData, bufferTransfer);
     self.close();
 };

@@ -106,12 +106,13 @@ function _Analyser(parent) {
     this.cqt = (audioData, tNum, channel, useGPU = false) => {
         if (window.location.protocol == 'file:' || window.cqt == undefined) return;    // 开worker和fetch要求http
         console.time("CQT计算");
-        cqt(audioData, tNum, channel, parent.Keyboard.freqTable[0], useGPU).then((cqtData) => {
+        cqt(audioData, tNum, channel, parent.Keyboard.freqTable[0], useGPU).then((CQTRes) => {
             // CQT结果准确但琐碎，STFT结果粗糙但平滑，所以混合一下
             const s = parent.Spectrogram.spectrogram;
-            let tLen = Math.min(cqtData.length, s.length);
+            const cqtAmp = CQTRes.amp;
+            let tLen = Math.min(cqtAmp.length, s.length);
             for (let i = 0; i < tLen; i++) {
-                const cqtBins = cqtData[i];
+                const cqtBins = cqtAmp[i];
                 const stftBins = s[i];
                 for (let j = 0; j < cqtBins.length; j++) {
                     stftBins[j] = Math.sqrt(stftBins[j] * cqtBins[j]);
@@ -119,6 +120,7 @@ function _Analyser(parent) {
             }
             console.timeEnd("CQT计算");
             parent.Spectrogram.spectrogram = s;  // 通知更新
+            parent.FreqLine.phase = CQTRes.freq;
         }).catch(console.error);
     };
 

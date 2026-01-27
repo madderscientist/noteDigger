@@ -130,6 +130,7 @@ function App() {
     this.Keyboard = new _Keyboard(this); this.height = this._height; // 更新this.Keyboard._ychange
     this.TimeBar = new _TimeBar(this);
     this.BeatBar = new _BeatBar(this);
+    this.FreqLine = new _FreqLine(this);
     // 小插件对象
     this.pitchNameDisplay = {   // 音名显示 配合设置中的checkbox使用
         _showPitchName: null,
@@ -339,6 +340,7 @@ function App() {
         if (this.layers.spectrum.dirty) {
             this.Spectrogram.update();  // 只更新spectrum画布
             this.layers.spectrum.dirty = false;
+            this.FreqLine.update();
         }
         if (this.layers.action.dirty) {
             this.layers.action.ctx.clearRect(0, 0, this.layers.width, this.layers.height);
