@@ -58,10 +58,11 @@ class NoteAnalyser {    // 负责解析频谱数据
      * 从频谱提取音符的频谱 原理是区间内求和
      * @param {Float32Array} real 实部
      * @param {Float32Array} imag 虚部
+     * @param {Float32Array} buffer 可选的缓冲区 避免重复分配
      * @returns {Float32Array} 音符的幅度谱 数据很小
      */
-    analyse(real, imag) {
-        const noteAm = new Float32Array(84);
+    analyse(real, imag, buffer = null) {
+        const noteAm = buffer ?? new Float32Array(84);
         let at = this.rangeTable[0] | 0;
         for (let i = 0; i < this.rangeTable.length; i++) {
             let end = this.rangeTable[i];
@@ -87,7 +88,7 @@ class NoteAnalyser {    // 负责解析频谱数据
      * @param {Array<Float32Array>} engSpectrum 能量谱 每个元素未开方
      */
     static normalize(engSpectrum) {
-        // 1. 求每一帧的能量
+        // 求每一帧的能量
         let energySum = 0;
         let frameEnergy = new Float32Array(engSpectrum.length);
         for (let t = 0; t < engSpectrum.length; t++) {
@@ -97,7 +98,7 @@ class NoteAnalyser {    // 负责解析频谱数据
             }
             energySum += frameEnergy[t];
         }
-        // 2. 计算能量方差
+        // 计算能量方差
         let sigma = 1e-8;
         const meanEnergy = energySum / engSpectrum.length;
         for (let t = 0; t < engSpectrum.length; t++) {
@@ -105,13 +106,12 @@ class NoteAnalyser {    // 负责解析频谱数据
             sigma += delta * delta;
         }
         sigma = Math.sqrt(sigma / (engSpectrum.length - 1));
-        // 3. 归一化
+        // 归一化
         for (const frame of engSpectrum) {
             for (let i = 0; i < frame.length; i++) {
                 frame[i] = Math.sqrt(frame[i] / sigma);
             }
-        }
-        return engSpectrum;
+        } return engSpectrum;
     }
     /**
      * 调性分析，原理是音符能量求和

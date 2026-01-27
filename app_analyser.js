@@ -28,13 +28,15 @@ function _Analyser(parent) {
         // 创建分析工具
         var fft = new realFFT(fftPoints); // 8192点在44100采样率下，最低能分辨F#2，但是足矣
         var analyser = new NoteAnalyser(audioBuffer.sampleRate / fftPoints, parent.Keyboard.freqTable);
+        const nbins = parent.Keyboard.freqTable.length;
 
         const a = async (t) => { // 对t执行STFT，并整理为时频谱
             let n = dN >> 1;
             const result = new Array(1 + (t.length - n) / dN | 0);
+            const _data = new Float32Array(result.length * nbins);
             const window_left = fftPoints >> 1; // 窗口左边界偏移量
-            for (let k = 0; n <= t.length; n += dN) {    // n为窗口中心
-                result[k++] = analyser.analyse(...fft.fft(t, n - window_left));
+            for (let k = 0, sub = 0; n <= t.length; n += dN, sub += nbins) {    // n为窗口中心
+                result[k++] = analyser.analyse(...fft.fft(t, n - window_left), _data.subarray(sub, sub + nbins));
                 // 一帧一次也太慢了。这里固定更新帧率
                 let tnow = performance.now();
                 if (tnow - lastFrame > 200) {
@@ -60,7 +62,7 @@ function _Analyser(parent) {
                     const timeDomain = new Float32Array(audioBuffer.getChannelData(0));
                     if (audioBuffer.numberOfChannels > 1) {
                         let channelData = audioBuffer.getChannelData(1);
-                        for (let i = 0; i < length; i++) timeDomain[i] = (timeDomain[i] + channelData[i]) * 0.5;
+                        for (let i = 0; i < length; i++) timeDomain[i] = timeDomain[i] + channelData[i];
                     } return await a(timeDomain);
                 }
                 case 3: {   // L-R
@@ -68,7 +70,7 @@ function _Analyser(parent) {
                     const timeDomain = new Float32Array(audioBuffer.getChannelData(0));
                     if (audioBuffer.numberOfChannels > 1) {
                         let channelData = audioBuffer.getChannelData(1);
-                        for (let i = 0; i < length; i++) timeDomain[i] = (timeDomain[i] - channelData[i]) * 0.5;
+                        for (let i = 0; i < length; i++) timeDomain[i] = timeDomain[i] - channelData[i];
                     } return await a(timeDomain);
                 }
                 default: {  // fft(L) + fft(R)
