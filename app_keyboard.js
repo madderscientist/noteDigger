@@ -8,7 +8,6 @@
 function _Keyboard(parent) {
     /**
      * 选中了哪个音，音的编号以midi协议为准（C1序号为24）
-     * 
      * 更新链: 'onmousemove' -> parent.mouseY setter -> this.highlight
      */
     this.highlight = -1;

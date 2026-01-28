@@ -1,7 +1,7 @@
 /// <reference path="./dataProcess/fft_real.js" />
 /// <reference path="./dataProcess/analyser.js" />
 /// <reference path="./dataProcess/CQT/cqt.js" />
-/// <reference path="./dataProcess/AI/basicamt.js" />
+/// <reference path="./dataProcess/AI/AIEntrance.js" />
 /// <reference path="./dataProcess/ANA.js" />
 /// <reference path="./dataProcess/bpmEst.js" />
 
@@ -104,7 +104,7 @@ function _Analyser(parent) {
      * @returns 不返回，直接作用于Spectrogram.spectrogram
      */
     this.cqt = (audioData, tNum, channel, useGPU = false) => {
-        if (window.location.protocol == 'file:' || window.cqt == undefined) return;    // 开worker和fetch要求http
+        if (!parent.io.canUseExternalWorker || window.cqt == undefined) return; // 开worker和fetch要求http
         console.time("CQT计算");
         cqt(audioData, tNum, channel, parent.Keyboard.freqTable[0], useGPU).then((cqtData) => {
             // CQT结果准确但琐碎，STFT结果粗糙但平滑，所以混合一下
@@ -129,7 +129,7 @@ function _Analyser(parent) {
      * @returns promise，用于指示扒谱完成。如果judgeOnly为true则返回值代表是否可以AI扒谱
      */
     this.basicamt = (audioData, judgeOnly = false) => {
-        if (window.location.protocol == 'file:' || window.basicamt == undefined) {  // 开worker和fetch要求https
+        if (!parent.io.canUseExternalWorker || window.AI == undefined) {
             alert("file协议下无法使用AI扒谱！");
             return false;
         }
@@ -143,7 +143,7 @@ function _Analyser(parent) {
         }
         if (judgeOnly) return true;
         console.time("AI扒谱");
-        return basicamt(audioData).then((events) => {
+        return AI.basicamt(audioData).then((events) => {
             console.timeEnd("AI扒谱");
             const timescale = (256 * 1000) / (22050 * parent.dt); // basicAMT在22050Hz下以hop=256分析
             // 逻辑同index.html中导入midi
@@ -179,7 +179,7 @@ function _Analyser(parent) {
      */
     this.septimbre = (audioData, k = 2) => {
         console.time("AI音色分离扒谱");
-        return septimbre(audioData, k).then((tracks) => {
+        return AI.septimbre(audioData, k).then((tracks) => {
             console.timeEnd("AI音色分离扒谱");
             const timescale = (256 * 1000) / (22050 * parent.dt);
             // 逻辑同index.html中导入midi

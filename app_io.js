@@ -6,6 +6,7 @@
  * @param {App} parent 
  */
 function _IO(parent) {
+    this.canUseExternalWorker = typeof window.Worker !== 'undefined' && window.location.protocol !== 'file:';
     /**
      * 会发出如下event:
      * - fileui: 展示本函数的UI，需要外界关闭drag功能
@@ -77,7 +78,7 @@ function _IO(parent) {
                 <input type="radio" name="ui-ask" value="0">L
                 <input type="radio" name="ui-ask" value="1">R
             </div>
-            <div class="layout">
+            <div class="layout"${this.canUseExternalWorker ? '' : ' style="display:none;"'}>
                 <label class="labeled" data-tooltip="CQT分析更精准,将在后台进行">
                     后台计算CQT<input type="checkbox" id="calc-cqt" checked>
                 </label>
