@@ -96,7 +96,7 @@ class realFFT {
      */
     ini(N) {
         // 确定FFT长度
-        N = Math.pow(2, Math.ceil(Math.log2(N)) - 1);
+        N = 1 << (Math.ceil(Math.log2(N)) - 1);
         this.N = N;     // 存的是实际FFT的点数
         // 位反转预计算 实际做N/2的FFT
         this.reverseBits = realFFT.reverseBits(N);

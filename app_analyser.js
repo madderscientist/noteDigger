@@ -14,29 +14,65 @@ function _Analyser(parent) {
      * 对audioBuffer执行STFT
      * @param {AudioBuffer} audioBuffer 音频缓冲区
      * @param {number} tNum 一秒几次分析 决定步距
+     * @param {number} A4 频率表的A4频率
      * @param {number} channel 选择哪个channel分析 0:left 1:right 2:l+r 3:l-r else:fft(l)+fft(r)
      * @param {number} fftPoints 实数fft点数
-     * @returns {Array<Float32Array>} 时频谱数据
+     * @param {boolean} useGPU 是否使用GPU加速
+     * @returns {Promise<Array<Float32Array>>} 时频谱数据
      */
-    this.stft = async (audioBuffer, tNum = 20, A4 = 440, channel = -1, fftPoints = 8192) => {
+    this.stft = async (audioBuffer, tNum = 20, A4 = 440, channel = -1, fftPoints = 8192, useGPU = true) => {// 8192点在44100采样率下，最低能分辨F#2，但是足矣
         parent.dt = 1000 / tNum;
         parent.TperP = parent.dt / parent._width; parent.PperT = parent._width / parent.dt;
-        let dN = Math.round(audioBuffer.sampleRate / tNum);
+        const dN = Math.round(audioBuffer.sampleRate / tNum);
         if (parent.Keyboard.freqTable.A4 != A4) parent.Keyboard.freqTable.A4 = A4;   // 更新频率表
-        let progressTrans = (x) => x;   // 如果分阶段执行则需要自定义进度的变换
+        const channels = [];
+        switch (channel) {
+            case 0: channels.push(audioBuffer.getChannelData(0)); break;
+            case 1: channels.push(audioBuffer.getChannelData(audioBuffer.numberOfChannels - 1)); break;
+            case 2: { // L+R
+                let length = audioBuffer.length;
+                const timeDomain = new Float32Array(audioBuffer.getChannelData(0));
+                if (audioBuffer.numberOfChannels > 1) {
+                    let channelData = audioBuffer.getChannelData(1);
+                    for (let i = 0; i < length; i++) timeDomain[i] = timeDomain[i] + channelData[i];
+                } channels.push(timeDomain); break;
+            }
+            case 3: { // L-R
+                let length = audioBuffer.length;
+                const timeDomain = new Float32Array(audioBuffer.getChannelData(0));
+                if (audioBuffer.numberOfChannels > 1) {
+                    let channelData = audioBuffer.getChannelData(1);
+                    for (let i = 0; i < length; i++) timeDomain[i] = timeDomain[i] - channelData[i];
+                } channels.push(timeDomain); break;
+            }
+            default: { // fft(L)+fft(R)
+                for (let c = 0; c < audioBuffer.numberOfChannels; c++)
+                    channels.push(audioBuffer.getChannelData(c));
+                break;
+            }
+        } let STFT;
+        try {
+            if (!useGPU) throw new Error("强制使用CPU计算STFT");
+            STFT = await stftGPU(audioBuffer.sampleRate, channels, dN, fftPoints);
+        } catch (e) {
+            console.warn("GPU加速STFT失败,回退至CPU计算\n原因:", e.message);
+            STFT = await stftCPU(audioBuffer.sampleRate, channels, dN, fftPoints);
+        } return NoteAnalyser.normalize(STFT);
+    }
 
-        // 创建分析工具
-        var fft = new realFFT(fftPoints); // 8192点在44100采样率下，最低能分辨F#2，但是足矣
-        var analyser = new NoteAnalyser(audioBuffer.sampleRate / fftPoints, parent.Keyboard.freqTable);
+    async function stftCPU(fs, channels, hop, fftPoints) {
+        const progressPerChannel = 1 / channels.length;
+        var progressTrans = (x) => x * progressPerChannel;   // 如果分阶段执行则需要自定义进度的变换
+        const fft = new realFFT(fftPoints);
+        const analyser = new NoteAnalyser(fs / fftPoints, parent.Keyboard.freqTable);
         const nbins = parent.Keyboard.freqTable.length;
-
         const a = async (t) => { // 对t执行STFT，并整理为时频谱
-            let n = dN >> 1;
-            const result = new Array(1 + (t.length - n) / dN | 0);
+            let n = hop >> 1;
+            const result = new Array(1 + (t.length - n) / hop | 0);
             const _data = new Float32Array(result.length * nbins);
             const window_left = fftPoints >> 1; // 窗口左边界偏移量
-            for (let k = 0, sub = 0; n <= t.length; n += dN, sub += nbins) {    // n为窗口中心
-                result[k++] = analyser.analyse(...fft.fft(t, n - window_left), _data.subarray(sub, sub + nbins));
+            for (let k = 0, sub = 0; n <= t.length; n += hop, sub += nbins) {    // n为窗口中心
+                result[k++] = analyser.mel(...fft.fft(t, n - window_left), _data.subarray(sub, sub + nbins));
                 // 一帧一次也太慢了。这里固定更新帧率
                 let tnow = performance.now();
                 if (tnow - lastFrame > 200) {
@@ -48,52 +84,39 @@ function _Analyser(parent) {
                     await new Promise(resolve => setTimeout(resolve, 0));
                 }
             }   // 通知UI关闭的事件分发移到了audio.onloadeddata中
+            result.raw = _data;
             return result;
         };
-
         await new Promise(resolve => setTimeout(resolve, 0));   // 等待UI
         var lastFrame = performance.now();
-        const getEnergyData = async () => {
-            switch (channel) {
-                case 0: return await a(audioBuffer.getChannelData(0));
-                case 1: return await a(audioBuffer.getChannelData(audioBuffer.numberOfChannels - 1));
-                case 2: {   // L+R
-                    let length = audioBuffer.length;
-                    const timeDomain = new Float32Array(audioBuffer.getChannelData(0));
-                    if (audioBuffer.numberOfChannels > 1) {
-                        let channelData = audioBuffer.getChannelData(1);
-                        for (let i = 0; i < length; i++) timeDomain[i] = timeDomain[i] + channelData[i];
-                    } return await a(timeDomain);
-                }
-                case 3: {   // L-R
-                    let length = audioBuffer.length;
-                    const timeDomain = new Float32Array(audioBuffer.getChannelData(0));
-                    if (audioBuffer.numberOfChannels > 1) {
-                        let channelData = audioBuffer.getChannelData(1);
-                        for (let i = 0; i < length; i++) timeDomain[i] = timeDomain[i] - channelData[i];
-                    } return await a(timeDomain);
-                }
-                default: {  // fft(L) + fft(R)
-                    if (audioBuffer.numberOfChannels > 1) {
-                        progressTrans = (x) => x / 2;
-                        const l = await a(audioBuffer.getChannelData(0));
-                        progressTrans = (x) => 0.5 + x / 2;
-                        const r = await a(audioBuffer.getChannelData(1));
-                        for (let i = 0; i < l.length; i++) {
-                            const li = l[i];
-                            for (let j = 0; j < li.length; j++)
-                                // 由于归一化，这里无需平均
-                                li[j] += r[i][j];
-                        } return l;
-                    } else {
-                        progressTrans = (x) => x;
-                        return await a(audioBuffer.getChannelData(0));
-                    }
-                }
-            }
-        };
-        return NoteAnalyser.normalize(await getEnergyData());
+        const result = await a(channels[0]);
+        for (let i = 1; i < channels.length; i++) {
+            progressTrans = (x) => (i + x) * progressPerChannel;
+            const other = (await a(channels[i])).raw;
+            const raw = result.raw;
+            for (let j = 0; j < raw.length; j++) raw[j] += other[j];
+        } return result;
     };
+
+    async function stftGPU(fs, channels, hop, fftPoints) {
+        const stftGPU = new STFTGPU(fftPoints, hop);
+        parent.event.dispatchEvent(new CustomEvent("progress", {
+            detail: 0.4
+        }));
+        await stftGPU.initWebGPU();
+        console.log("WebGPU初始化成功,使用GPU计算STFT");
+        const analyser = new NoteAnalyser(fs / fftPoints, parent.Keyboard.freqTable);
+        for (const c of channels) stftGPU.stft(c);
+        const stftRes = await stftGPU.readGPU();
+        stftGPU.free();
+        const result = new Array(stftRes.length);
+        const nbins = parent.Keyboard.freqTable.length;
+        const _data = new Float32Array(result.length * nbins);
+        for (let i = 0; i < stftRes.length; i++)
+            result[i] = analyser.mel2(stftRes[i], _data.subarray(i * nbins, (i + 1) * nbins));
+        result.raw = _data;
+        return result;
+    }
 
     /**
      * 后台（worker）计算CQT

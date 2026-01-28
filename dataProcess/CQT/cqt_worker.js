@@ -138,7 +138,12 @@ class CQT {
         if (!navigator.gpu) throw new Error("WebGPU not supported.");
         const adapter = this.adapter ??= await navigator.gpu.requestAdapter();
         if (!adapter) throw new Error("No GPUAdapter found.");
-        const device = this.device ??= await adapter.requestDevice();
+        const device = this.device ??= await adapter.requestDevice({
+            requiredLimits: {
+                maxStorageBufferBindingSize: adapter.limits.maxStorageBufferBindingSize,
+                maxBufferSize: adapter.limits.maxBufferSize,
+            }
+        });
         this.workgroupsize = workgroupsize;
 
         // --- kernel 缓冲区创建 ---

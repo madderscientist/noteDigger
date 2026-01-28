@@ -55,13 +55,13 @@ class NoteAnalyser {    // 负责解析频谱数据
         } this.rangeTable = range;
     }
     /**
-     * 从频谱提取音符的频谱 原理是区间内求和
+     * 从FFT提取音符的频谱 原理是区间内求和
      * @param {Float32Array} real 实部
      * @param {Float32Array} imag 虚部
      * @param {Float32Array} buffer 可选的缓冲区 避免重复分配
      * @returns {Float32Array} 音符的幅度谱 数据很小
      */
-    analyse(real, imag, buffer = null) {
+    mel(real, imag, buffer = null) {
         const noteAm = buffer ?? new Float32Array(84);
         let at = this.rangeTable[0] | 0;
         for (let i = 0; i < this.rangeTable.length; i++) {
@@ -69,9 +69,7 @@ class NoteAnalyser {    // 负责解析频谱数据
             if (at == end) {   // 如果相等则就算一次 乘法比幂运算快
                 noteAm[i] = real[at] * real[at] + imag[at] * imag[at];
             } else {
-                for (; at < end; at++) {
-                    noteAm[i] += real[at] * real[at] + imag[at] * imag[at];
-                }
+                for (; at < end; at++) noteAm[i] += real[at] * real[at] + imag[at] * imag[at];
                 if (at == end) {  // end是整数，需要对半分
                     let a2 = (real[end] * real[end] + imag[end] * imag[end]) / 2;
                     noteAm[i] += a2;
@@ -81,6 +79,23 @@ class NoteAnalyser {    // 负责解析频谱数据
             // FFT的结果需要除以N才是DTFT的结果 由于结果太小，统一放大10倍 经验得到再乘700可在0~255得到较好效果
             // 由于后续有归一化，所以这里不除也不开方
             // noteAm[i] = Math.sqrt(noteAm[i]) * 16 / real.length;
+        } return noteAm;
+    }
+    // 上面函数的平方和版本
+    mel2(eng, buffer = null) {
+        const noteAm = buffer ?? new Float32Array(84);
+        let at = this.rangeTable[0] | 0;
+        for (let i = 0; i < this.rangeTable.length; i++) {
+            let end = this.rangeTable[i];
+            if (at == end) noteAm[i] = eng[at];
+            else {
+                for (; at < end; at++) noteAm[i] += eng[at];
+                if (at == end) {
+                    let a2 = (eng[end]) / 2;
+                    noteAm[i] += a2;
+                    if (i < noteAm.length - 1) noteAm[i + 1] += a2;
+                }
+            }
         } return noteAm;
     }
     /**
@@ -93,9 +108,8 @@ class NoteAnalyser {    // 负责解析频谱数据
         let frameEnergy = new Float32Array(engSpectrum.length);
         for (let t = 0; t < engSpectrum.length; t++) {
             const frame = engSpectrum[t];
-            for (let i = 0; i < frame.length; i++) {
+            for (let i = 0; i < frame.length; i++)
                 frameEnergy[t] += frame[i];
-            }
             energySum += frameEnergy[t];
         }
         // 计算能量方差
@@ -108,9 +122,8 @@ class NoteAnalyser {    // 负责解析频谱数据
         sigma = Math.sqrt(sigma / engSpectrum.length);
         // 归一化
         for (const frame of engSpectrum) {
-            for (let i = 0; i < frame.length; i++) {
+            for (let i = 0; i < frame.length; i++)
                 frame[i] = Math.sqrt(frame[i] / sigma);
-            }
         } return engSpectrum;
     }
     /**

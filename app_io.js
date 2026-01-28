@@ -70,7 +70,9 @@ function _IO(parent) {
         <div class="layout"><span>每秒的次数：</span><input type="number" name="ui-ask" value="20" min="1" max="100"></div>
         <div class="layout"><span>标准频率A4=</span><input type="number" name="ui-ask" value="440" step="0.1" min="55"></div>
         <div${midiModeStyle}>
-            <div class="layout">分析声道：</div>
+            <div class="layout">分析声道：
+                <label class="labeled" data-tooltip="快,只是进度条没动画">GPU加速<input type="checkbox" id="stft-gpu" checked></label>
+            </div>
             <div class="layout">
                 <input type="radio" name="ui-ask" value="4" checked>Stereo
                 <input type="radio" name="ui-ask" value="2">L+R
@@ -97,6 +99,7 @@ function _IO(parent) {
         parent.AudioPlayer.name = file.name;
         const ui = tempDiv.firstElementChild;
         const close = () => ui.remove();
+        const checkboxSTFTGPU = ui.querySelector('#stft-gpu');
         const checkboxCQT = ui.querySelector('#calc-cqt');
         const checkboxGPU = ui.querySelector('#prefer-gpu');
         checkboxCQT.onchange = () => {
@@ -233,7 +236,7 @@ function _IO(parent) {
                 parent.audioContext.decodeAudioData(audioBuffer).then((decodedData) => {
                     audioData = decodedData;
                     return Promise.all([
-                        parent.Analyser.stft(decodedData, tNum, A4, channel, 8192),
+                        parent.Analyser.stft(decodedData, tNum, A4, channel, 8192, checkboxSTFTGPU.checked),
                         parent.AudioPlayer.createAudio(URL.createObjectURL(file)) // fileReader.readAsDataURL(file) 将mov文件decode之后变成base64，audio无法播放 故不用
                     ]);
                 }).then(([v, audio]) => {
