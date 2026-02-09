@@ -7,6 +7,36 @@
  */
 function _IO(parent) {
     this.canUseExternalWorker = typeof window.Worker !== 'undefined' && window.location.protocol !== 'file:';
+    // midi模式下的假音频
+    function fakeInput(l = 0, tNum = 1000 / parent.dt) {
+        if (!l || l <= 0) l = Math.ceil((parent.layers.width << 1) / parent.width);
+        // 一个怎么取值都返回0的东西，充当频谱
+        parent.Spectrogram.spectrogram = new Proxy({
+            spectrogram: new Uint8Array(parent.ynum).fill(0),
+            _length: l,
+            get length() { return this._length; },
+            set length(l) { // 只要改变频谱的长度就可以改变时长 长度改变在MidiAction.updateView中
+                if (l < 0) return;
+                this._length = parent.xnum = l;
+                parent.AudioPlayer.audio.duration = l / tNum;
+                parent.AudioPlayer.play_btn.lastChild.textContent = parent.AudioPlayer.durationString;
+            },
+            *[Symbol.iterator]() {
+                for (let i = 0; i < this.length; i++) yield this.spectrogram;
+            }
+        }, {
+            get(obj, prop) {    // 方括号传递的总是string
+                if (isNaN(Number(prop))) return obj[prop];
+                return obj.spectrogram;
+            },
+            set(obj, prop, value) {
+                if (isNaN(Number(prop))) obj[prop] = value;
+            }
+        });
+        // 假音频 需要设置parent.midiMode=true;
+        return parent.AudioPlayer.createAudio(l / tNum);
+    }
+
     /**
      * 会发出如下event:
      * - fileui: 展示本函数的UI，需要外界关闭drag功能
@@ -114,6 +144,12 @@ function _IO(parent) {
                     if (parent.AudioPlayer.name != data[0].name &&
                         !confirm(`音频文件与进度(${data[0].name})不同，是否继续？`))
                         return;
+                    // 如果保存的是midi模式，则data[1]是都为undefined的数组
+                    if (Array.isArray(data[1]) && data[1][0] === void 0) {
+                        parent.io.projFile.import(data);
+                        fakeInput().then(resolve).catch(reject);
+                        return;
+                    }
                     // 再读取音频看看是否成功
                     loadAudio(true).then((audioBuffer) => {
                         // 设置音频源 缓存到浏览器
@@ -163,33 +199,7 @@ function _IO(parent) {
                 parent.dt = 1000 / tNum;
                 parent.TperP = parent.dt / parent._width; parent.PperT = parent._width / parent.dt;
                 if (parent.Keyboard.freqTable.A4 != A4) parent.Keyboard.freqTable.A4 = A4;
-                let l = Math.ceil((parent.layers.width << 1) / parent.width);   // 视野外还有一面
-                // 一个怎么取值都返回0的东西，充当频谱
-                parent.Spectrogram.spectrogram = new Proxy({
-                    spectrogram: new Uint8Array(parent.ynum).fill(0),
-                    _length: l,
-                    get length() { return this._length; },
-                    set length(l) { // 只要改变频谱的长度就可以改变时长 长度改变在MidiAction.updateView中
-                        if (l < 0) return;
-                        this._length = parent.xnum = l;
-                        parent.AudioPlayer.audio.duration = l / tNum;
-                        parent.AudioPlayer.play_btn.lastChild.textContent = parent.AudioPlayer.durationString;
-                    }
-                }, {
-                    get(obj, prop) {    // 方括号传递的总是string
-                        if (isNaN(Number(prop))) return obj[prop];
-                        return obj.spectrogram;
-                    },
-                    set(obj, prop, value) {
-                        if (isNaN(Number(prop))) obj[prop] = value;
-                    }
-                });
-                // 假音频 需要设置parent.midiMode=true;
-                parent.AudioPlayer.createAudio(l / tNum).then(() => {
-                    resolve();
-                }).catch((e) => {
-                    reject(e);
-                });
+                fakeInput(0, tNum).then(resolve).catch(reject);
                 parent.event.dispatchEvent(new Event('fileuiclose'));  // 恢复drag功能
                 return;
             }
@@ -271,9 +281,13 @@ function _IO(parent) {
                 dt: parent.dt,
                 A4: parent.Keyboard.freqTable.A4,
                 name: parent.AudioPlayer.name
-            }; return [data, parent.Spectrogram._spectrogram];
+            };
+            if (parent.midiMode) return [data, {
+                length: parent.Spectrogram._spectrogram.length
+            }]; // midi模式不保存频谱
+            else return [data, parent.Spectrogram._spectrogram];
         },
-        import(data) {
+        import(data) {  // data: output of parse [obj, f32]
             const obj = data[0];
             parent.MidiAction.midi = obj.midi;
             parent.MidiAction.selected = parent.MidiAction.midi.filter((obj) => obj.selected);
@@ -366,6 +380,7 @@ function _IO(parent) {
                 // 初始化midi
                 let begin = parent.BeatBar.beats[0];
                 let lastbpm = begin.bpm;    // 用于自适应bpm
+                let lastPattern = `${begin.beatNum}/${begin.beatUnit}`;
                 const newMidi = new midi(lastbpm, [begin.beatNum, begin.beatUnit], 480, [], parent.AudioPlayer.name);
                 const mts = [];
                 for (const ch of parent.synthesizer.channel) {
@@ -405,11 +420,15 @@ function _IO(parent) {
                 for (const measure of parent.BeatBar.beats) {
                     if (m_i == mlen) break;
 
-                    //== 判断bpm是否变化 假设小节之间bpm相关性很强 ==//
+                    //== 判断小节是否变化 假设小节之间bpm相关性很强 ==//
                     const bpmnow = measure.bpm;
                     if (Math.abs(bpmnow - lastbpm) > lastbpm * 0.065) {
                         mts[0].events.push(midiEvent.tempo(tickNow, bpmnow * 4 / measure.beatUnit));
                     } lastbpm = bpmnow;
+                    const _ptn = `${measure.beatNum}/${measure.beatUnit}`;
+                    if (lastPattern !== _ptn) {
+                        mts[0].events.push(midiEvent.time_signature(tickNow, measure.beatNum, measure.beatUnit));
+                    } lastPattern = _ptn;
 
                     //== 对齐音符 ==//
                     const begin = measure.start / parent.dt;   // 转换为以“格”为单位
@@ -430,6 +449,9 @@ function _IO(parent) {
                 } return newMidi;
             }
         },
+        /* 由于小节的数据结构，变速只能发生在小节开头
+        如果考虑节奏，则需要将小节内变速全部忽略
+        */
         import(file) {
             bSaver.readBinary(file, (data) => {
                 let m;
@@ -442,22 +464,122 @@ function _IO(parent) {
                 }
                 const chdiv = parent.MidiAction.channelDiv;
                 chdiv.switchUpdateMode(false);  // 下面会一次性创建大量音符，所以先关闭更新
-                let tickTimeTable = m.header.tempos;    // bpm会随着时间改变
+                let tickTimeTable = m.header.tempos ?? [{
+                    ticks: 0, bpm: 120
+                }];
+
+                if (confirm("是否使用该MIDI的节奏?")) { // 对齐变速和节奏
+                    // 将节奏型和变速事件合并排序
+                    let rhy = [{ticks: -1, timeSignature: [4, 4]}, ...tickTimeTable, ...m.header.timeSignatures];
+                    rhy.sort((a, b) => a.ticks - b.ticks);
+                    rhy[0].ticks = 0;
+                    // 合并时间相同的
+                    let combined = [];
+                    for (let i = 0; i < rhy.length; i++) {
+                        const t = rhy[i].ticks;
+                        let timeSignature = rhy[i].timeSignature;
+                        let bpm = rhy[i].bpm;
+                        let j = i + 1;
+                        while (j < rhy.length && rhy[j].ticks == t) {
+                            bpm = rhy[j].bpm ?? bpm;    // 使用最新值
+                            timeSignature = rhy[j].timeSignature ?? timeSignature;
+                            j++;
+                        }
+                        combined.push({
+                            ticks: t,
+                            bpm: bpm,
+                            timeSignature: timeSignature
+                        });
+                        i = j - 1;
+                    }
+                    // 为中间变速的情况创建小节并分配id
+                    combined[0].id = 0;
+                    for (let i = 1; i < combined.length; i++) {
+                        const c = combined[i];
+                        let j = i - 1;
+                        let last = combined[j];
+                        const ticksPerBar = m.header.tick * last.timeSignature[0] * 4 / last.timeSignature[1];
+                        if (c.timeSignature) {
+                            // 理论上小节改变不会出现在小节中 但为了兼容奇怪的MIDI需要微调
+                            // 四舍五入到最近的小节开始位置
+                            const bars = Math.round((c.ticks - last.ticks) / ticksPerBar);
+                            c.id = bars + last.id;
+                            const dt = last.ticks + bars * ticksPerBar - c.ticks;
+                            if (dt === 0) continue;
+                            // 平移后面所有事件
+                            for (const mt of m.tracks) {
+                                const notes = mt.notes;
+                                // 找到第一个ticks大于等于c.ticks的事件
+                                let idx = notes.findIndex(ev => ev.ticks >= c.ticks);
+                                if (idx === -1) continue;
+                                for (let k = idx; k < notes.length; k++) notes[k].ticks += dt;
+                            }
+                            for (let k = i; k < combined.length; k++) combined[k].ticks += dt;
+                        } else {
+                            // 如果节奏改变出现在小节中：
+                            // 前1/2: 放到小节头; 后1/2: 放到下一个小节头
+                            // 总是创建小节
+                            while (c.ticks < last.ticks) last = combined[--j];
+                            const bars = Math.floor((c.ticks - last.ticks) / ticksPerBar);
+                            const offset = c.ticks - last.ticks - bars * ticksPerBar;
+                            c.timeSignature = last.timeSignature;
+                            if (offset < (ticksPerBar >> 1)) {
+                                c.id = last.id + bars;
+                                c.ticks = last.ticks + bars * ticksPerBar;
+                            } else {
+                                c.id = last.id + bars + 1;
+                                c.ticks = last.ticks + (bars + 1) * ticksPerBar;
+                            }
+                        }
+                    }
+                    // 合并id相同的小节
+                    rhy.length = 0;
+                    let lastbpm = 120, lastTimeSignature = [4, 4];
+                    for (let i = 0; i < combined.length; i++) {
+                        const c = combined[i];
+                        c.bpm ??= lastbpm;
+                        c.timeSignature ??= lastTimeSignature;
+                        let j = i + 1;
+                        while (j < combined.length && combined[j].id == c.id) {
+                            c.bpm = combined[j].bpm ?? c.bpm;
+                            c.timeSignature = combined[j].timeSignature ?? c.timeSignature;
+                            j++;
+                        } rhy.push(c);
+                        i = j - 1;
+                        lastbpm = c.bpm;
+                        lastTimeSignature = c.timeSignature;
+                    } tickTimeTable = rhy;
+                    // 设置节奏
+                    const beats = parent.BeatBar.beats;
+                    beats.length = 0;
+                    for (const t of tickTimeTable) {
+                        const msPerMeasure = 240000 * t.timeSignature[0] / (t.timeSignature[1] * t.bpm);
+                        beats.push(new eMeasure(
+                            t.id, -1, t.timeSignature[0], t.timeSignature[1], msPerMeasure
+                        ));
+                    } beats.check();
+                }
+
                 const chArray = [];
                 let chArrayIndex = 0;
                 for (const mt of m.tracks) {
                     if (mt.notes.length == 0) continue;
-
-                    var tickTimeAt = -1;
-                    var nexttickTimeChange = 0;
-                    var tickTime = 0;   // 一个tick的毫秒数/parent.dt
-                    function checkChange(tick) {
-                        if (tick > nexttickTimeChange) {
-                            tickTimeAt++;
-                            nexttickTimeChange = tickTimeTable[tickTimeAt + 1] ? tickTimeTable[tickTimeAt + 1].ticks : Infinity;
-                            tickTime = 60000 / (tickTimeTable[tickTimeAt].bpm * m.header.tick * parent.dt);
+                    let tickTimeIdx = -1;
+                    let startTick = 0;
+                    let nexttickTimeChange = 0;
+                    let tickTime = 0;   // 一个tick的毫秒数/parent.dt
+                    let msBefore = 0;   // 用parent.dt归一化后的之前的时间
+                    let _timeOffset = 0;
+                    const checkChange = (tick) => {
+                        while (tick >= nexttickTimeChange) {
+                            msBefore += (nexttickTimeChange - startTick) * tickTime;
+                            tickTimeIdx++;
+                            startTick = nexttickTimeChange;
+                            nexttickTimeChange = tickTimeTable[tickTimeIdx + 1]?.ticks ?? Infinity;
+                            tickTime = 60000 / (tickTimeTable[tickTimeIdx].bpm * m.header.tick * parent.dt);
+                            _timeOffset = msBefore - startTick * tickTime;
                         } return tickTime;
-                    } checkChange(1);
+                    }; checkChange(1);
 
                     const ch = chdiv.addChannel();
                     if (!ch) break; // 音轨已满，addChannel会返回undefined同时alert，所以只要break
@@ -471,10 +593,22 @@ function _IO(parent) {
                     ch.ch.volume = maxIntensity;
 
                     chArray[chArrayIndex++] = mt.notes.map((nt) => {
-                        const t = checkChange(nt.ticks);
+                        let t = checkChange(nt.ticks + 1);
+                        const start = _timeOffset + nt.ticks * t;
+                        const endTick = nt.ticks + nt.durationTicks;
+                        let end;
+                        if (endTick > nexttickTimeChange) { // 跨变速区间
+                            // 暂存状态
+                            const store = [tickTimeIdx, startTick, nexttickTimeChange, tickTime, msBefore, _timeOffset];
+                            t = checkChange(nt.ticks + nt.durationTicks + 1);
+                            end = _timeOffset + endTick * t;
+                            // 恢复状态
+                            [tickTimeIdx, startTick, nexttickTimeChange, tickTime, msBefore, _timeOffset] = store;
+                        } else end = _timeOffset + endTick * t;
                         return {    // 理应给x1和x2取整，但是为了尽量不损失信息就不取整了 不取整会导致导出midi时要取整
-                            x1: nt.ticks * t,
-                            x2: (nt.ticks + nt.durationTicks) * t,
+                            // x1: msBefore + (nt.ticks - startTick) * t,
+                            x1: start,
+                            x2: end,
                             y: nt.midi - 24,
                             ch: chid,
                             selected: false,

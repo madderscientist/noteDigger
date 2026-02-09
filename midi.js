@@ -365,7 +365,7 @@ class mtrk {
                         case 0x58:  // 节拍
                             TimeSignatures.push({
                                 ticks: temp.ticks,
-                                timeSignature: [temp.value[0], 2 << temp.value[1]]
+                                timeSignature: [temp.value[0], 1 << temp.value[1]]
                             });
                             break;
                     }

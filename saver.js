@@ -27,14 +27,15 @@ window.bSaver = {
     /**
      * 将二维的Float32Array的Array转为可解析的一维ArrayBuffer
      * 要求每个Float32Array的长度相同
-     * @param {Array<Float32Array>} Float32Mat 
+     * @param {Array<Float32Array>} Float32Mat 支持仅有length的对象
      * @returns {ArrayBuffer} 二进制数组 开头有两个Uint32的长度信息, 用于保存每个Float32Array的长度和Float32Mat的长度
      */
     Float32Mat2Buffer(Float32Mat) {
         // 先保存两个维度的长度: 每个Float32Array的长度和Float32Mat的长度
-        const lengthArray = new Uint32Array([Float32Mat[0].length, Float32Mat.length]);
+        const lengthArray = new Uint32Array([Float32Mat[0]?.length ?? 0, Float32Mat.length]);
+        let bn = Float32Mat[0]?.byteLength ?? 0;
+        if (bn === 0) return lengthArray.buffer;
         let offset = lengthArray.byteLength;
-        let bn = Float32Mat[0].byteLength;
         const finalArrayBuffer = new ArrayBuffer(offset + bn * Float32Mat.length);
         new Uint32Array(finalArrayBuffer, 0, 2).set(lengthArray);
         // 再将每个Float32Array的数据拷贝到finalArrayBuffer中
@@ -54,8 +55,9 @@ window.bSaver = {
         let lengthArray = new Uint32Array(arrayBuffer, offset, 2);
         offset += lengthArray.byteLength;
         let [n, N] = lengthArray;
-        const mergedFloatArray = new Float32Array(arrayBuffer, offset, n * N);
         const Float32Mat = new Array(N);
+        if (n === 0) return [Float32Mat, offset];
+        const mergedFloatArray = new Float32Array(arrayBuffer, offset, n * N);
         for (let i = 0, j = 0; i < N; i++, j += n) {
             Float32Mat[i] = mergedFloatArray.subarray(j, j + n);
         } return [Float32Mat, offset + mergedFloatArray.byteLength];
