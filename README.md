@@ -118,6 +118,7 @@
 |   │  analyser.js: 频域数据分析与简化
 |   │  fft_real.js: 执行实数FFT获取频域数据
 |   │  stftGPU.js: 使用WebGPU加速STFT
+|   |  NNLS.js: 非负最小二乘 用于去除谐波
 |   |
 |   ├─AI
 │   │  │  AIEntrance.js: 开启AI的worker的入口

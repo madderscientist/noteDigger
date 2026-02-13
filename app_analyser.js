@@ -4,6 +4,7 @@
 /// <reference path="./dataProcess/AI/AIEntrance.js" />
 /// <reference path="./dataProcess/ANA.js" />
 /// <reference path="./dataProcess/bpmEst.js" />
+/// <reference path="./dataProcess/NNLS.js" />
 
 /**
  * 数据解析相关算法
@@ -426,11 +427,11 @@ function _Analyser(parent) {
                 beatbar.push(new eMeasure(id, prev, 1, 4, at - prev));
                 prev = at;
             }
-            for (i = i - 1 + g_pattern; i < beatIdx.length; i+=g_pattern, id++) {
+            for (i = i - 1 + g_pattern; i < beatIdx.length; i += g_pattern, id++) {
                 const at = beatIdx[i] * parent.dt;
                 beatbar.push(new eMeasure(id, prev, g_pattern, 4, at - prev));
                 prev = at;
-            } 
+            }
         }
         beatbar.check(true);
         parent.snapshot.save(0b100);
@@ -464,5 +465,94 @@ function _Analyser(parent) {
             }
             ++n;
         } return parts;
+    }
+
+    /**
+     * 利用非负最小二乘去除频谱中的谐波成分
+     * 原理是将谐波模板（每个音符的基频和若干个谐波）作为特征，拟合出每一帧中各个音符的强度，然后将这些音符的谐波成分从频谱中减去
+     * @param {number} decay 谐波衰减率，默认0.6，越大去除越彻底但可能过度拟合
+     */
+    this.reduceHarmonic = async (decay = 0.6) => {
+        const container = document.createElement('div');
+        container.innerHTML = `<div class="request-cover">
+    <div class="card hvCenter"><label class="title">分析中</label>
+        <span>00%</span>
+        <div class="layout">
+            <div class="porgress-track">
+                <div class="porgress-value"></div>
+            </div>
+        </div>
+    </div>
+</div>`;
+        const progressUI = container.firstElementChild;
+        const progress = progressUI.querySelector('.porgress-value');
+        const percent = progressUI.querySelector('span');
+        document.body.insertBefore(progressUI, document.body.firstChild);
+        const onprogress = (detail) => {
+            if (detail < 0) {
+                progress.style.width = '100%';
+                percent.textContent = '100%';
+                progressUI.style.opacity = 0;
+                setTimeout(() => progressUI.remove(), 200);
+            } else if (detail >= 1) {
+                detail = 1;
+                progress.style.width = '100%';
+                percent.textContent = "加载界面……";
+            } else {
+                progress.style.width = (detail * 100) + '%';
+                percent.textContent = (detail * 100).toFixed(2) + '%';
+            }
+        };
+        var lastFrame = performance.now();
+
+        const s = parent.Spectrogram._spectrogram;
+        const M = s[0].length, N = s.length;
+        const M1 = M + 1;
+        // 创建音符谐波模板
+        const harmonicAmp = Array.from({ length: 10 }, (_, i) => decay ** i);
+        const Harmonic = new Float32Array(M);
+        for (let i = 0; i < harmonicAmp.length; i++) {
+            const idx = 12 * Math.log2(i + 1);
+            let l = Math.floor(idx), r = Math.ceil(idx);
+            if (r < M) {
+                if (l == r) Harmonic[l] = harmonicAmp[i];
+                else {
+                    Harmonic[l] += harmonicAmp[i] * (r - idx);
+                    Harmonic[r] += harmonicAmp[i] * (idx - l);
+                }
+            }
+        }
+        // 填充到模板矩阵A
+        const A = new Float32Array(M * M);
+        for (let i = 0; i < M; i++)
+            A.set(Harmonic.subarray(0, M - i), i * M1);
+        // 对每一帧执行NNLS
+        const nnls = new NNLSSolver(M, M, 2e-4);
+        for (let t = 0; t < N; t++) {
+            const f0 = s[t];
+            const c = nnls.solve(A, f0);
+            // 计算谐波
+            Harmonic.fill(0);
+            for (let i = 0; i < M; i++) {
+                const a = i + 12;   // 从二次谐波开始
+                const off = i * M + a;
+                for (let j = 0; j < M - a; j++) {
+                    Harmonic[a + j] += A[off + j] * c[i];
+                }
+            }
+            // 从原始频谱中减去谐波
+            for (let i = 0; i < M; i++) {
+                f0[i] = Math.max(0, f0[i] - Harmonic[i]);
+            }
+            // UI更新
+            let tnow = performance.now();
+            if (tnow - lastFrame > 200) {
+                onprogress(t / N);
+                await new Promise(resolve => setTimeout(resolve, 0));   // 等待UI
+                lastFrame = tnow;
+            }
+        }
+        parent.layers.spectrum.dirty = true;
+        onprogress(-1);
     }
 }

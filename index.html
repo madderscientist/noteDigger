@@ -21,6 +21,8 @@
     <script src="./dataProcess/bpmEst.js" async></script>
     <!-- 自动音符对齐 -->
     <script src="./dataProcess/ANA.js" async></script>
+    <!-- 非负最小二乘 -->
+    <script src="./dataProcess/NNLS.js" async></script>
 
     <script src="./siderMenu.js"></script>
     <script src="./myRange.js"></script>
@@ -157,6 +159,7 @@
                 <button>所有时间</button>
             </div>
         </li>
+        <li class="pointer">去除谐波<span style="color: gray; font-size: 0.8em;"> 不可逆</span></li>
         <li class="pointer">数字谱对齐音频</li>
         <li class="pointer">人工智障扒谱</li>
         <li class="pointer">音色分离扒谱</li>
@@ -452,10 +455,12 @@
                 } autoFill();
             };
         }
+        // 去谐波
+        lis[3].onclick = () => app.Analyser.reduceHarmonic();
         // 自动音符对齐
-        lis[3].onclick = () => app.Analyser.autoNoteAlign();
+        lis[4].onclick = () => app.Analyser.autoNoteAlign();
         // 人工智障扒谱
-        lis[4].onclick = function () {
+        lis[5].onclick = function () {
             if (!app.Analyser.basicamt(null, true)) return; // 仅仅判断是否可以进行AI扒谱
             const btn = this;
             // 由于效果并不好，因此不会自动执行；而程序为了省内存不会保留音频数据，因此需要重新上传音频
@@ -476,7 +481,7 @@
             }; input.click();
         };
         // 音色分离扒谱
-        lis[5].onclick = function () {
+        lis[6].onclick = function () {
             if (!app.Analyser.basicamt(null, true)) return; // 仅仅判断是否可以进行AI扒谱
             const btn = this;
             const input = document.createElement('input');
