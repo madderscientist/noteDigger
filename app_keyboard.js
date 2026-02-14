@@ -11,6 +11,16 @@ function _Keyboard(parent) {
      * 更新链: 'onmousemove' -> parent.mouseY setter -> this.highlight
      */
     this.highlight = -1;
+    this.harmonics = [0];
+    Object.defineProperty(this, 'Harmonics', {
+        get() { return this.harmonics?.length || 0; },
+        set(n) {// 建议n<=6
+            n |= 0;
+            if (n == this.Harmonics) return;
+            if (n <= 0) this.harmonics = null;
+            else this.harmonics = Array.from({ length: n }, (_, i) => Math.round(12 * Math.log2(i + 1)));
+        }
+    });
     this.freqTable = new FreqTable(440);    // 在parent.Analyser.stft中更新
 
     // 以下为画键盘所需
@@ -31,8 +41,10 @@ function _Keyboard(parent) {
         // 绘制频谱区音符高亮
         const actionCtx = parent.layers.action.ctx;
         actionCtx.fillStyle = "#ffffff4f";
-        const noteY = parent.layers.height - (this.highlight - 24) * parent._height + parent.scrollY;
-        actionCtx.fillRect(0, noteY, parent.layers.width, -parent._height);
+        for (let i = this.Harmonics - 1; i >= 0; i--) {
+            let noteY = parent.layers.height - (this.highlight - 24 + this.harmonics[i]) * parent._height + parent.scrollY;
+            actionCtx.fillRect(0, noteY, parent.layers.width, -parent._height);
+        }
 
         const ctx = parent.keyboard.ctx;
         const w = parent.keyboard.width;

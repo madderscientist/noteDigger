@@ -253,7 +253,10 @@ function _IO(parent) {
                     parent.Spectrogram.spectrogram = v;
                     resolve();
                     // 后台执行CQT CQT的报错已经被拦截不会冒泡到下面的catch中
-                    parent.Analyser.cqt(audioData, tNum, channel, checkboxCQT.checked && checkboxGPU.checked);
+                    if (checkboxCQT.checked) parent.Analyser.cqt(
+                        audioData, tNum, channel,
+                        checkboxCQT.checked && checkboxGPU.checked
+                    );
                 }).catch((e) => {
                     console.error(e);
                     parent.event.dispatchEvent(new CustomEvent('fileerror', { detail: e }));

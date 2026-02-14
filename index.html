@@ -170,6 +170,7 @@
         <li data-value="15"><button>-</button>高度<button>+</button></li>
         <li data-value="170"><button>-</button>遮罩厚度<button>+</button></li>
         <li data-value="20"><button>-</button>最短节拍宽<button>+</button></li>
+        <li data-value="1"><button>-</button>谐波数<button>+</button></li>
         <li>
             精准设置重复区间
             <div id="repeatRange">
@@ -584,7 +585,15 @@
         lis[3].lastChild.onclick = () => {
             lis[3].dataset.value = ++app.BeatBar.minInterval;
         };
-        const repeatInput = lis[4].querySelectorAll('input');
+        lis[4].firstChild.onclick = () => {
+            if (app.Keyboard.Harmonics <= 0) return;
+            lis[4].dataset.value = --app.Keyboard.Harmonics;
+        };
+        lis[4].lastChild.onclick = () => {
+            if (app.Keyboard.Harmonics >= 6) return;
+            lis[4].dataset.value = ++app.Keyboard.Harmonics;
+        };
+        const repeatInput = lis[5].querySelectorAll('input');
         function checkTime(time) {
             const timeRegex = /^\d{1,2}:\d{1,2}:\d{1,3}$/;
             return timeRegex.test(time);
@@ -596,7 +605,7 @@
         repeatInput[0].oninput = repeatInput[1].oninput = function () {
             this.style.color = checkTime(this.value) ? 'var(--theme-text)' : 'red';
         };
-        const repbtn = lis[4].querySelectorAll('button');
+        const repbtn = lis[5].querySelectorAll('button');
         repbtn[0].onclick = () => {
             app.TimeBar.setRepeat(-1, -1);
         };
@@ -612,7 +621,7 @@
             } else alert('时间格式错误！');
         }
         // 扩大复选框的点击范围
-        for (const l of [lis[5], lis[6], lis[7]]) {
+        for (const l of [lis[6], lis[7], lis[8]]) {
             l.querySelector('input')?.addEventListener('click', _checkBoxBlur);
         }
     }
