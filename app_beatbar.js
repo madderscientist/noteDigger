@@ -166,13 +166,14 @@ function _BeatBar(parent) {
                 // 下下个
                 const nextnext = beatarr.setMeasure(baseM.id + 2, undefined, false, true);
                 const nextnextM = beatarr[nextnext];
-
                 if (nextnext === base + 2) {
                     // 中间隔了一个小节头
                     const deleted = beatarr.splice(base + 1, 1)[0];
                     baseM.interval += deleted.interval;
+                    baseM.beatNum += deleted.beatNum;
                 } else {
                     baseM.interval += baseM.interval;
+                    baseM.beatNum += baseM.beatNum;
                 }
                 for (let i = base + 1; i < beatarr.length; i++) beatarr[i].id--;
                 beatarr.check(true);

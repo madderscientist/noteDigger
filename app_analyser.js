@@ -465,25 +465,86 @@ function _Analyser(parent) {
             }
             ++n;
         } return parts;
-    }
+    };
 
+    this.reduceHarmonic = () => {
+        let resolve, reject;
+        let p = new Promise((res, rej) => {
+            resolve = res;
+            reject = rej;
+        });
+        let tempDiv = document.createElement('div');
+        tempDiv.innerHTML = `<div class="request-cover">
+<div class="card hvCenter">
+    <label class="title">谐波去除 <span style="font-size: 0.6em; color: grey;">非负最小二乘法</span></label>
+    <div class="layout">
+        <span class="labeled" data-tooltip="对谐波强度的估计">谐波衰减率</span>
+        <input type="number" value="0.6" step="0.01" min="0.1" max="0.9">
+    </div>
+    <div class="layout">
+        <span class="labeled" data-tooltip="考虑的谐波数量">谐波数量</span>
+        <input type="number" value="10" step="1" min="4" max="16">
+    </div>
+    <div class="layout">
+        <label class="labeled" data-tooltip="修改频谱 不可逆">
+            原位操作<input type="checkbox">
+        </label>
+    </div>
+    <div class="layout">
+        <button class="ui-cancel">取消</button>
+        <span style="width: 1em;"></span>
+        <button class="ui-confirm">确认</button>
+    </div>
+</div></div>`;
+        const UI = tempDiv.firstElementChild;
+        const inputs = UI.querySelectorAll('input[type="number"]');
+        const decayInput = inputs[0];
+        const harmonicsInput = inputs[1];
+        const cancelBtn = UI.querySelector('.ui-cancel');
+        const inplace = UI.querySelector('input[type="checkbox"]');
+        const confirmBtn = UI.querySelector('.ui-confirm');
+        cancelBtn.onclick = () => {
+            UI.remove();
+            resolve(false);
+        };
+        confirmBtn.onclick = () => {
+            let decay = parseFloat(decayInput.value);
+            if (decay < 0.1 || decay > 0.9) {
+                alert("衰减率必须在0.1到0.9之间！");
+                return;
+            }
+            let harmonics = parseInt(harmonicsInput.value);
+            if (harmonics < 4 || harmonics > 16) {
+                alert("谐波数量必须在4到16之间！");
+                return;
+            }
+            UI.remove();
+            this._reduceHarmonic(decay, harmonics, inplace.checked).then(() => {
+                resolve(true);
+            }).catch(reject);
+        }
+        document.body.insertBefore(UI, document.body.firstChild);
+        return p;
+    };
     /**
-     * 利用非负最小二乘去除频谱中的谐波成分
+     * 利用非负最小二乘去除频谱中的谐波成分并补偿基频 在幅度谱上进行
+     * 如果inplace为true则直接修改Spectrogram.spectrogram 否则会存储谐波成分矩阵于Spectrogram.harmonic
      * 原理是将谐波模板（每个音符的基频和若干个谐波）作为特征，拟合出每一帧中各个音符的强度，然后将这些音符的谐波成分从频谱中减去
      * @param {number} decay 谐波衰减率，默认0.6，越大去除越彻底但可能过度拟合
+     * @param {number} harmonics 谐波数量
+     * @param {boolean} inplace 是否直接在原频谱上减去谐波 还是单独存储谐波成分
      */
-    this.reduceHarmonic = async (decay = 0.6) => {
+    this._reduceHarmonic = async (decay = 0.6, harmonics = 10, inplace = false) => {
         const container = document.createElement('div');
         container.innerHTML = `<div class="request-cover">
-    <div class="card hvCenter"><label class="title">分析中</label>
-        <span>00%</span>
-        <div class="layout">
-            <div class="porgress-track">
-                <div class="porgress-value"></div>
-            </div>
+<div class="card hvCenter"><label class="title">分析中</label>
+    <span>00%</span>
+    <div class="layout">
+        <div class="porgress-track">
+            <div class="porgress-value"></div>
         </div>
     </div>
-</div>`;
+</div></div>`;
         const progressUI = container.firstElementChild;
         const progress = progressUI.querySelector('.porgress-value');
         const percent = progressUI.querySelector('span');
@@ -509,7 +570,7 @@ function _Analyser(parent) {
         const M = s[0].length, N = s.length;
         const M1 = M + 1;
         // 创建音符谐波模板
-        const harmonicAmp = Array.from({ length: 10 }, (_, i) => decay ** i);
+        let harmonicAmp = Array.from({ length: harmonics }, (_, i) => decay ** i);
         const Harmonic = new Float32Array(M);
         for (let i = 0; i < harmonicAmp.length; i++) {
             const idx = 12 * Math.log2(i + 1);
@@ -526,23 +587,35 @@ function _Analyser(parent) {
         const A = new Float32Array(M * M);
         for (let i = 0; i < M; i++)
             A.set(Harmonic.subarray(0, M - i), i * M1);
+        // 模式选择
+        if (!inplace) {
+            harmonicAmp = Array(N);
+            harmonicAmp.raw = new Float32Array(N * M);
+        } else harmonicAmp = null;
         // 对每一帧执行NNLS
-        const nnls = new NNLSSolver(M, M, 2e-4);
+        const nnls = new NNLSSolver(M, M, 2e-4, Harmonic);
         for (let t = 0; t < N; t++) {
-            const f0 = s[t];
-            const c = nnls.solve(A, f0);
+            const f = s[t];
+            const c = nnls.solve(A, f);
             // 计算谐波
             Harmonic.fill(0);
             for (let i = 0; i < M; i++) {
-                const a = i + 12;   // 从二次谐波开始
+                const a = i + 12;   // start at 2f0
                 const off = i * M + a;
+                let f0h = 0;
                 for (let j = 0; j < M - a; j++) {
-                    Harmonic[a + j] += A[off + j] * c[i];
-                }
+                    let amp = A[off + j] * c[i];
+                    f0h += amp * amp;
+                    Harmonic[a + j] += amp;
+                };
+                // 加强基频。∵L2<L1 ∴此处用L2对基频小幅补偿
+                Harmonic[i] -= Math.sqrt(f0h);
             }
-            // 从原始频谱中减去谐波
-            for (let i = 0; i < M; i++) {
-                f0[i] = Math.max(0, f0[i] - Harmonic[i]);
+            if (inplace) { // 从原始频谱中减去谐波
+                for (let i = 0; i < M; i++) f[i] = Math.max(0, f[i] - Harmonic[i]);
+            } else { // 存储谐波成分
+                let a = harmonicAmp[t] = harmonicAmp.raw.subarray(t * M, (t + 1) * M);
+                a.set(Harmonic);
             }
             // UI更新
             let tnow = performance.now();
@@ -552,7 +625,8 @@ function _Analyser(parent) {
                 lastFrame = tnow;
             }
         }
+        if (!inplace) parent.Spectrogram.harmonic = harmonicAmp;
         parent.layers.spectrum.dirty = true;
         onprogress(-1);
-    }
+    };
 }

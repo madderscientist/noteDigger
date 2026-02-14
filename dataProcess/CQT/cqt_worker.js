@@ -80,7 +80,7 @@ class CQT {
         const output_length = 1 + (x.length - offset) / stride | 0;
         const output_data = new Float32Array(output_length * this.bins);
         const output = Array(output_length);
-        const frameEnergy = new Float32Array(output_length);
+        const frameEnergy = output.raw = new Float32Array(output_length);
         let pointer = 0;
         let energySum = 0;
         for (let p = 0; offset <= x.length; offset += stride) {
@@ -332,8 +332,8 @@ fn main(
         encoder.copyBufferToBuffer(buffer, 0, readBuffer, 0, buffer.size);
         device.queue.submit([encoder.finish()]);
         await readBuffer.mapAsync(GPUMapMode.READ);
-        const resultArray = new Float32Array(readBuffer.getMappedRange()).slice();
         const ampMatrix = Array(numFrames);
+        const resultArray = ampMatrix.raw = new Float32Array(readBuffer.getMappedRange()).slice();
         for (let t = 0, offset = 0; t < numFrames; t++) {
             const next = offset + this.bins;
             ampMatrix[t] = resultArray.subarray(offset, next);

@@ -16,10 +16,50 @@ function _Spectrogram(parent) {
         }
     });
 
-    this._spectrogram = null;
+    this._Hmultiple = 1;  // 谐波的倍数
+    Object.defineProperty(this, 'Hmultiple', {
+        get: function() { return this._Hmultiple; },
+        set: function(m) {
+            this._Hmultiple = m;
+            parent.layers.spectrum.dirty = true;
+        }
+    });
+
+    this._spectrogram = null;   // .raw属性为底层一维buffer
+    Object.defineProperty(this, 'spectrogram', {
+        get: function() { return this._spectrogram; },
+        set: function(s) {
+            if (!s) {
+                this._spectrogram = this.harmonic = null;
+                parent.xnum = 0;
+            } else {
+                if (s.raw != this._spectrogram?.raw) {
+                    this._spectrogram = s;
+                    this.harmonic = null;
+                }
+                parent.xnum = s.length;
+                parent.scroll2();
+            }
+        }
+    });
+
     this.mask = '#25262daa';
+    Object.defineProperty(this, 'Alpha', {
+        get: function() {
+            return parseInt(this.mask.substring(7), 16);
+        },
+        set: function(a) {
+            a = Math.min(255, Math.max(a | 0, 0));
+            this.mask = '#25262d' + a.toString(16).padStart(2, '0');
+            parent.layers.spectrum.dirty = true;
+        }
+    });
+
+    this.harmonic = null;  // 对谐波的估计 在parent.Analyser._reduceHarmonic中计算得到
+
     this.getColor = (value) => {    // 0-step1，是蓝色的亮度从0变为50%；step1-step2，是颜色由蓝色变为红色；step2-255，保持红色
-        value = value || 0;
+        value = value || 0; // 防NaN
+        if (value < 0) value = 0;
         let hue = 0, lightness = 50;    // Red hue
         if (value <= this.colorStep1) {
             hue = 240;  // Blue hue
@@ -35,9 +75,11 @@ function _Spectrogram(parent) {
         let rectx = parent.rectXstart;
         for (let x = parent.idXstart; x < parent.idXend; x++) {
             const s = this._spectrogram[x];
+            const h = this.harmonic?.[x];
             let recty = parent.rectYstart;
             for (let y = parent.idYstart; y < parent.idYend; y++) {
-                ctx.fillStyle = this.getColor(s[y] * this._multiple);
+                const amp = s[y] - (h?.[y] ?? 0) * this._Hmultiple;
+                ctx.fillStyle = this.getColor(amp * this._multiple);
                 ctx.fillRect(rectx, recty, parent._width, -parent._height);
                 recty -= parent._height;
             }
@@ -63,31 +105,4 @@ function _Spectrogram(parent) {
         ctx.fillStyle = this.mask;
         ctx.fillRect(0, 0, rectx, canvas.height);
     };
-
-    Object.defineProperty(this, 'spectrogram', {
-        get: function() {
-            return this._spectrogram;
-        },
-        set: function(s) {
-            if (!s) {
-                this._spectrogram = null;
-                parent.xnum = 0;
-            } else {
-                this._spectrogram = s;
-                parent.xnum = s.length;
-                parent.scroll2();
-            }
-        }
-    });
-
-    Object.defineProperty(this, 'Alpha', {
-        get: function() {
-            return parseInt(this.mask.substring(7), 16);
-        },
-        set: function(a) {
-            a = Math.min(255, Math.max(a | 0, 0));
-            this.mask = '#25262d' + a.toString(16).padStart(2, '0');
-            parent.layers.spectrum.dirty = true;
-        }
-    });
 }

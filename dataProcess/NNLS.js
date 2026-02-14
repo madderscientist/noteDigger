@@ -6,8 +6,9 @@ class NNLSSolver {
      * @param {number} K 个数
      * @param {number} M 维度
      * @param {number} lambda 正则化参数 防止不稳定
+     * @param {Float32Array|null} buffer_r 可选的外部残差缓冲区，长度应为M
      */
-    constructor(K, M, lambda = 1e-4) {
+    constructor(K, M, lambda = 1e-4, buffer_r = null) {
         this.K = K;
         this.M = M;
         this.lambda = lambda;
@@ -15,7 +16,7 @@ class NNLSSolver {
         this.c = new Float32Array(K);         // 最终系数 (K)
         this.s = new Float32Array(K);         // 候选系数 (K)
         this.w = new Float32Array(K);         // 梯度 (K)
-        this.residual = new Float32Array(M);  // 增量残差 (M)
+        this.residual = buffer_r ?? new Float32Array(M);  // 增量残差 (M)
         this.matM = new Float32Array(M * M);  // 正规方程矩阵 (M*M)
         this.rhsM = new Float32Array(M);      // 正规方程右侧向量 (M)
         this.L = new Float32Array(M * M);     // Cholesky 分解矩阵 (M*M)

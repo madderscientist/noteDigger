@@ -159,7 +159,7 @@
                 <button>所有时间</button>
             </div>
         </li>
-        <li class="pointer">去除谐波<span style="color: gray; font-size: 0.8em;"> 不可逆</span></li>
+        <li class="pointer">去除谐波</li>
         <li class="pointer">数字谱对齐音频</li>
         <li class="pointer">人工智障扒谱</li>
         <li class="pointer">音色分离扒谱</li>
@@ -456,7 +456,27 @@
             };
         }
         // 去谐波
-        lis[3].onclick = () => app.Analyser.reduceHarmonic();
+        lis[3].onclick = function () {
+            if (!app.Spectrogram._spectrogram) {
+                alert("请先导入音频！");
+                return;
+            }
+            app.Analyser.reduceHarmonic().then((done) => {
+                if (!done) return;
+                if (this.childElementCount) return;
+                this.firstChild.textContent = "重新去除谐波";
+                let ui = document.createElement('div');
+                ui.innerHTML = `<h5 style="display: inline-block;">谐波保留:</h5><div class="wf fr">多&nbsp;<input type="range" max="1" min="0" value="${app.Spectrogram.Hmultiple}" step="0.05">&nbsp;少</div>`;
+                const r = ui.querySelector('input');
+                r.addEventListener('input', function() {
+                    app.Spectrogram.Hmultiple = parseFloat(this.value);
+                });
+                r.classList.add('fullRange');
+                ui.addEventListener('click', _checkBoxBlur);
+                this.appendChild(ui);
+                myRange.new(r).reset();
+            });
+        };
         // 自动音符对齐
         lis[4].onclick = () => app.Analyser.autoNoteAlign();
         // 人工智障扒谱
