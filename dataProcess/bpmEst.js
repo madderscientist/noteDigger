@@ -298,7 +298,7 @@ class Beat {
             const frame = spectrogram[i];
             let diff = 0;
             for (let j = 0; j < frame.length; j++) {
-                const logedValue = Math.log(frame[j] + 1e-8);
+                const logedValue = Math.log(frame[j] + 1e-6);
                 const delta = logedValue - prevFrame[j];
                 if (delta > 0) diff += delta;
                 // 滑动更鲁棒
@@ -504,12 +504,15 @@ class Beat {
             const K = (halfK << 1) | 1;
             if (window === null || window.length < K)
                 window = new Float32Array(K);
-            const scale = 32 / fpb;
+            const scale = 24 / fpb; // 越大意味着越窄
             // librosa没有对窗进行归一化 会导致对低节拍的偏好
-            for (let i = 0, j = -fpb; i < K; ++i, ++j) {
+            let sum = 0;
+            for (let i = 0, j = -halfK; i < K; ++i, ++j) {
                 const x = j * scale;
-                window[i] = Math.exp(-0.5 * x * x);
-            } return { K, halfK };
+                sum += window[i] = Math.exp(-0.5 * x * x);
+            }
+            for (let i = 0; i < K; i++) window[i] /= sum;
+            return { K, halfK };
         };
 
         if (framesPerBeat.length === 1) {

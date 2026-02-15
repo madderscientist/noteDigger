@@ -553,43 +553,53 @@
     // ==== 设置界面 ==== //
     {
         const lis = document.getElementById('settingPannel').children;
-        lis[0].firstChild.onclick = () => {
+        lis[0].firstChild.onclick = (e) => {
+            e.target.blur();
             --app.width;    // 设置width会自动被setter限位
             lis[0].dataset.value = app.width;
             app.scroll2();
         };
-        lis[0].lastChild.onclick = () => {
+        lis[0].lastChild.onclick = (e) => {
+            e.target.blur();
             lis[0].dataset.value = ++app.width;
             app.scroll2();
         };
-        lis[1].firstChild.onclick = () => {
+        lis[1].firstChild.onclick = (e) => {
+            e.target.blur();
             --app.height;    // 设置height会自动被setter限位
             lis[1].dataset.value = app.height;
             app.scroll2();
         };
-        lis[1].lastChild.onclick = () => {
+        lis[1].lastChild.onclick = (e) => {
+            e.target.blur();
             lis[1].dataset.value = ++app.height;
             app.scroll2();
         };
-        lis[2].firstChild.onclick = () => {
+        lis[2].firstChild.onclick = (e) => {
+            e.target.blur();
             if (app.Spectrogram.Alpha <= 1) return;
             lis[2].dataset.value = --app.Spectrogram.Alpha;
         };
-        lis[2].lastChild.onclick = () => {
+        lis[2].lastChild.onclick = (e) => {
+            e.target.blur();
             lis[2].dataset.value = ++app.Spectrogram.Alpha;
         };
-        lis[3].firstChild.onclick = () => {
+        lis[3].firstChild.onclick = (e) => {
+            e.target.blur();
             if (app.BeatBar.minInterval <= 5) return;
             lis[3].dataset.value = --app.BeatBar.minInterval;
         };
-        lis[3].lastChild.onclick = () => {
+        lis[3].lastChild.onclick = (e) => {
+            e.target.blur();
             lis[3].dataset.value = ++app.BeatBar.minInterval;
         };
-        lis[4].firstChild.onclick = () => {
+        lis[4].firstChild.onclick = (e) => {
+            e.target.blur();
             if (app.Keyboard.Harmonics <= 0) return;
             lis[4].dataset.value = --app.Keyboard.Harmonics;
         };
-        lis[4].lastChild.onclick = () => {
+        lis[4].lastChild.onclick = (e) => {
+            e.target.blur();
             if (app.Keyboard.Harmonics >= 6) return;
             lis[4].dataset.value = ++app.Keyboard.Harmonics;
         };
@@ -606,10 +616,12 @@
             this.style.color = checkTime(this.value) ? 'var(--theme-text)' : 'red';
         };
         const repbtn = lis[5].querySelectorAll('button');
-        repbtn[0].onclick = () => {
+        repbtn[0].onclick = (e) => {
             app.TimeBar.setRepeat(-1, -1);
+            e.target.blur();
         };
-        repbtn[1].onclick = () => {
+        repbtn[1].onclick = (e) => {
+            e.target.blur();
             if (checkTime(repeatInput[0].value) && checkTime(repeatInput[1].value)) {
                 let i1 = Time2Ms(repeatInput[0].value);
                 let i2 = Time2Ms(repeatInput[1].value);

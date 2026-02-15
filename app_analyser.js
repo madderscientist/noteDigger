@@ -371,7 +371,7 @@ function _Analyser(parent) {
      */
     this.beatEst = (minBPM = 40, autoDownBeat = false) => {
         const sr = Math.round(1000 / parent.dt);
-        const onset = Beat.extractOnset(parent.Spectrogram.spectrogram, 16 / sr);
+        const onset = Beat.extractOnset(parent.Spectrogram.spectrogram, Math.min(0.99, 16 / sr));
 
         const maxInterval = Math.ceil(sr * 60 / minBPM);
         // 范围要大，所以方差大一些

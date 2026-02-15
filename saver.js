@@ -57,7 +57,7 @@ window.bSaver = {
         let [n, N] = lengthArray;
         const Float32Mat = new Array(N);
         if (n === 0) return [Float32Mat, offset];
-        const mergedFloatArray = new Float32Array(arrayBuffer, offset, n * N);
+        const mergedFloatArray = Float32Mat.raw = new Float32Array(arrayBuffer, offset, n * N);
         for (let i = 0, j = 0; i < N; i++, j += n) {
             Float32Mat[i] = mergedFloatArray.subarray(j, j + n);
         } return [Float32Mat, offset + mergedFloatArray.byteLength];

@@ -13,12 +13,11 @@ function _Keyboard(parent) {
     this.highlight = -1;
     this.harmonics = [0];
     Object.defineProperty(this, 'Harmonics', {
-        get() { return this.harmonics?.length || 0; },
+        get() { return this.harmonics.length; },
         set(n) {// 建议n<=6
-            n |= 0;
+            n = Math.max(0, n | 0);
             if (n == this.Harmonics) return;
-            if (n <= 0) this.harmonics = null;
-            else this.harmonics = Array.from({ length: n }, (_, i) => Math.round(12 * Math.log2(i + 1)));
+            this.harmonics = Array.from({ length: n }, (_, i) => Math.round(12 * Math.log2(i + 1)));
         }
     });
     this.freqTable = new FreqTable(440);    // 在parent.Analyser.stft中更新

@@ -54,23 +54,25 @@ function _BeatBar(parent) {
             }
         } ctx.stroke(); spectrum.stroke();
 
-        if (beatX.length == 0) return;
-        spectrum.beginPath();
-        spectrum.strokeStyle = '#909090';
-        for (const x of beatX) {
-            spectrum.moveTo(x, 0);
-            spectrum.lineTo(x, spectrumHeight);
-        } spectrum.stroke();
+        if (beatX.length != 0) {
+            spectrum.beginPath();
+            spectrum.strokeStyle = '#909090';
+            for (const x of beatX) {
+                spectrum.moveTo(x, 0);
+                spectrum.lineTo(x, spectrumHeight);
+            } spectrum.stroke();
+        }
 
-        if (noteX.length == 0) return;
-        spectrum.beginPath();
-        spectrum.setLineDash([4, 4]);
-        spectrum.strokeStyle = '#606060';
-        for (const x of noteX) {
-            spectrum.moveTo(x, 0);
-            spectrum.lineTo(x, spectrumHeight);
-        } spectrum.stroke();
-        spectrum.setLineDash([]);   // 恢复默认
+        if (noteX.length != 0) {
+            spectrum.beginPath();
+            spectrum.setLineDash([4, 4]);
+            spectrum.strokeStyle = '#606060';
+            for (const x of noteX) {
+                spectrum.moveTo(x, 0);
+                spectrum.lineTo(x, spectrumHeight);
+            } spectrum.stroke();
+            spectrum.setLineDash([]);   // 恢复默认
+        }
     };
     this.contextMenu = new ContextMenu([
         {
