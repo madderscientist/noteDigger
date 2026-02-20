@@ -46,55 +46,78 @@ class NoteAnalyser {    // 负责解析频谱数据
     get A4() {
         return this.freqTable.A4;
     }
-    updateRange() {
-        let at = Array.from(this.freqTable.map((value) => Math.round(value / this.df)));
-        at.push(Math.round((this.freqTable[this.freqTable.length - 1] * 1.059463) / this.df))
-        const range = new Float32Array(84); // 第i个区间的终点
-        for (let i = 0; i < at.length - 1; i++) {
-            range[i] = Math.sqrt(at[i] * at[i + 1]);  // 根据音乐的对数尺度，用几何平均
-        } this.rangeTable = range;
+    /**
+     * 创建从线性谱到CQ谱的加权矩阵
+     * @param {number} semiR 每个半音收集的频率范围 单位:半音 取1的时候半音间无重合
+     * @param {number} leakR 频谱泄露半径 单位:每FFT精度
+     * @param {number} oversample 过采样率 用于模拟泄露
+     */
+    updateRange(semiR = 0.667, leakR = 1, oversample = 32) {
+        const win = this.win = Array(this.freqTable.length);
+        const offset = this.offset = new Uint16Array(this.freqTable.length);
+
+        // 用余弦模拟FFT的频率泄漏(FFT使用hanning窗)
+        const H_fft = new Float32Array((oversample << 1) | 1);
+        // 跳过两端的0
+        for (let i = 0, j = H_fft.length - 1, w = Math.PI / (oversample + 1); i < oversample; i++, j--) {
+            H_fft[i] = H_fft[j] = (1 - Math.cos((i + 1) * w)) * 0.5;
+        } H_fft[oversample] = 1;
+        const over_df = this.df * leakR / (oversample + 1);
+
+        // 用对数谱的余弦收集能量 新坐标u=B*log2(x/center) B=12
+        // du/dx = B/log(2)/x 每Hz对应的半音数 代表占据能量的宽度
+        const omega = Math.PI / semiR;
+        function pitchCospuls(x, center) {
+            if (x <= 0) return 0;
+            let wrapedf = 12 * Math.log2(x / center);   // 半音距离
+            if (Math.abs(wrapedf) >= semiR) return 0;
+            // 余弦窗*du/dx 余弦周期为2表示相邻半音 常数项不管 会归一化
+            return (Math.cos(wrapedf * omega) + 1) / x;
+        }
+
+        const tuning = 1.0594630943592953;  // 2^(1/12)
+        for (let i = 0; i < offset.length; i++) {
+            let fc = this.freqTable[i];
+            let start = this.freqTable[i - 1] ?? fc / tuning;
+            let end = this.freqTable[i + 1] ?? fc * tuning;
+            start = offset[i] = (start / this.df) | 0;
+            end = Math.ceil(end / this.df) + 1;
+            const H = win[i] = new Float32Array(end - start);
+            for (let j = start, id = 0; j < end; j++, id++) {
+                // 对每个fft中心频点计算贡献: \sum 泄露*窗值
+                for (let hid = 0, f = j * this.df - oversample * over_df; hid < H_fft.length; f += over_df, hid++)
+                    H[id] += pitchCospuls(f, fc) * H_fft[hid];
+            }
+            // 幅度一致性: 频率越高窗越大
+            for (let j = 0; j < H.length; j++) H[j] *= fc;
+        }
     }
     /**
      * 从FFT提取音符的频谱 原理是区间内求和
      * @param {Float32Array} real 实部
      * @param {Float32Array} imag 虚部
      * @param {Float32Array} buffer 可选的缓冲区 避免重复分配
-     * @returns {Float32Array} 音符的幅度谱 数据很小
+     * @returns {Float32Array} 音符的幅度谱
      */
     mel(real, imag, buffer = null) {
         const noteAm = buffer ?? new Float32Array(84);
-        let at = this.rangeTable[0] | 0;
-        for (let i = 0; i < this.rangeTable.length; i++) {
-            let end = this.rangeTable[i];
-            if (at == end) {   // 如果相等则就算一次 乘法比幂运算快
-                noteAm[i] = real[at] * real[at] + imag[at] * imag[at];
-            } else {
-                for (; at < end; at++) noteAm[i] += real[at] * real[at] + imag[at] * imag[at];
-                if (at == end) {  // end是整数，需要对半分
-                    let a2 = (real[end] * real[end] + imag[end] * imag[end]) / 2;
-                    noteAm[i] += a2;
-                    if (i < noteAm.length - 1) noteAm[i + 1] += a2;
-                }
+        for (let i = 0; i < this.freqTable.length; i++) {
+            const H = this.win[i];
+            const offset = this.offset[i];
+            for (let j = 0; j < H.length; j++) {
+                const eng = real[offset + j] * real[offset + j] + imag[offset + j] * imag[offset + j];
+                noteAm[i] += eng * H[j];
             }
-            // FFT的结果需要除以N才是DTFT的结果 由于结果太小，统一放大10倍 经验得到再乘700可在0~255得到较好效果
-            // 由于后续有归一化，所以这里不除也不开方
-            // noteAm[i] = Math.sqrt(noteAm[i]) * 16 / real.length;
         } return noteAm;
     }
     // 上面函数的平方和版本
     mel2(eng, buffer = null) {
         const noteAm = buffer ?? new Float32Array(84);
-        let at = this.rangeTable[0] | 0;
-        for (let i = 0; i < this.rangeTable.length; i++) {
-            let end = this.rangeTable[i];
-            if (at == end) noteAm[i] = eng[at];
-            else {
-                for (; at < end; at++) noteAm[i] += eng[at];
-                if (at == end) {
-                    let a2 = (eng[end]) / 2;
-                    noteAm[i] += a2;
-                    if (i < noteAm.length - 1) noteAm[i + 1] += a2;
-                }
+        for (let i = 0; i < this.freqTable.length; i++) {
+            const H = this.win[i];
+            const offset = this.offset[i];
+            for (let j = 0; j < H.length; j++) {
+                noteAm[i] += eng[offset + j] * H[j];
             }
         } return noteAm;
     }
