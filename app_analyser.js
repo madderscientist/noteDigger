@@ -12,38 +12,32 @@
  */
 function _Analyser(parent) {
     /**
-     * 对audioBuffer执行STFT
      * @param {AudioBuffer} audioBuffer 音频缓冲区
-     * @param {number} tNum 一秒几次分析 决定步距
-     * @param {number} A4 频率表的A4频率
      * @param {number} channel 选择哪个channel分析 0:left 1:right 2:l+r 3:l-r else:fft(l)+fft(r)
-     * @param {number} fftPoints 实数fft点数
-     * @param {boolean} useGPU 是否使用GPU加速
-     * @returns {Promise<Array<Float32Array>>} 时频谱数据
+     * @returns {Array<Float32Array>} 选择的channel数据 .sampleRate为采样率
      */
-    this.stft = async (audioBuffer, tNum = 20, A4 = 440, channel = -1, fftPoints = 8192, useGPU = true) => {// 8192点在44100采样率下，最低能分辨F#2，但是足矣
-        parent.dt = 1000 / tNum;
-        parent.TperP = parent.dt / parent._width; parent.PperT = parent._width / parent.dt;
-        const dN = Math.round(audioBuffer.sampleRate / tNum);
-        if (parent.Keyboard.freqTable.A4 != A4) parent.Keyboard.freqTable.A4 = A4;   // 更新频率表
+    this.selectChannel = (audioBuffer, channel) => {
         const channels = [];
+        channels.sampleRate = audioBuffer.sampleRate;
         switch (channel) {
             case 0: channels.push(audioBuffer.getChannelData(0)); break;
             case 1: channels.push(audioBuffer.getChannelData(audioBuffer.numberOfChannels - 1)); break;
             case 2: { // L+R
                 let length = audioBuffer.length;
-                const timeDomain = new Float32Array(audioBuffer.getChannelData(0));
+                let timeDomain = audioBuffer.getChannelData(0);
                 if (audioBuffer.numberOfChannels > 1) {
+                    timeDomain = new Float32Array(timeDomain);
                     let channelData = audioBuffer.getChannelData(1);
-                    for (let i = 0; i < length; i++) timeDomain[i] = timeDomain[i] + channelData[i];
+                    for (let i = 0; i < length; i++) timeDomain[i] += channelData[i];
                 } channels.push(timeDomain); break;
             }
             case 3: { // L-R
                 let length = audioBuffer.length;
-                const timeDomain = new Float32Array(audioBuffer.getChannelData(0));
+                let timeDomain = audioBuffer.getChannelData(0);
                 if (audioBuffer.numberOfChannels > 1) {
+                    timeDomain = new Float32Array(timeDomain);
                     let channelData = audioBuffer.getChannelData(1);
-                    for (let i = 0; i < length; i++) timeDomain[i] = timeDomain[i] - channelData[i];
+                    for (let i = 0; i < length; i++) timeDomain[i] -= channelData[i];
                 } channels.push(timeDomain); break;
             }
             default: { // fft(L)+fft(R)
@@ -51,13 +45,30 @@ function _Analyser(parent) {
                     channels.push(audioBuffer.getChannelData(c));
                 break;
             }
-        } let STFT;
+        } return channels;
+    };
+    /**
+     * 对channels执行STFT
+     * @param {Array<Float32Array>} channels 通道数据数组，每个元素为一个channel的数据 .sampleRate为采样率
+     * @param {number} tNum 一秒几次分析 决定步距
+     * @param {number} A4 频率表的A4频率
+     * @param {number} fftPoints 实数fft点数
+     * @param {boolean} useGPU 是否使用GPU加速
+     * @returns {Promise<Array<Float32Array>>} 时频谱数据
+     */
+    this.stft = async (channels, tNum = 20, A4 = 440, fftPoints = 8192, useGPU = true) => {// 8192点在44100采样率下，最低能分辨F#2，但是足矣
+        parent.dt = 1000 / tNum;
+        parent.TperP = parent.dt / parent._width; parent.PperT = parent._width / parent.dt;
+        const fs = channels.sampleRate ??= parent.audioContext.sampleRate;
+        const dN = Math.round(fs / tNum);
+        parent.Keyboard.freqTable.A4 = A4;
+        let STFT;
         try {
             if (!useGPU) throw new Error("强制使用CPU计算STFT");
-            STFT = await stftGPU(audioBuffer.sampleRate, channels, dN, fftPoints);
+            STFT = await stftGPU(fs, channels, dN, fftPoints);
         } catch (e) {
             console.warn("GPU加速STFT失败,回退至CPU计算\n原因:", e.message);
-            STFT = await stftCPU(audioBuffer.sampleRate, channels, dN, fftPoints);
+            STFT = await stftCPU(fs, channels, dN, fftPoints);
         } return NoteAnalyser.normalize(STFT);
     }
 
@@ -121,16 +132,15 @@ function _Analyser(parent) {
 
     /**
      * 后台（worker）计算CQT
-     * @param {AudioBuffer} audioBuffer 音频缓冲区
+     * @param {Array<Float32Array>} channels 通道数据数组，每个元素为一个channel的数据 .sampleRate为采样率
      * @param {number} tNum 一秒几次分析 决定步距
-     * @param {number} channel 选择哪个channel分析 0:left 1:right 2:l+r 3:l-r else:fft(l)+fft(r)
      * @param {boolean} useGPU 是否使用GPU加速计算CQT
      * @returns 不返回，直接作用于Spectrogram.spectrogram
      */
-    this.cqt = (audioData, tNum, channel, useGPU = false) => {
+    this.cqt = (channels, tNum, useGPU = false) => {
         if (!parent.io.canUseExternalWorker || window.cqt == undefined) return; // 开worker和fetch要求http
         console.time("CQT计算");
-        cqt(audioData, tNum, channel, parent.Keyboard.freqTable[0], useGPU).then((cqtData) => {
+        cqt(channels, tNum, parent.Keyboard.freqTable[0], useGPU).then((cqtData) => {
             // CQT结果准确但琐碎，STFT结果粗糙但平滑，所以混合一下
             const s = parent.Spectrogram.spectrogram;
             let tLen = Math.min(cqtData.length, s.length);
@@ -138,7 +148,9 @@ function _Analyser(parent) {
                 const cqtBins = cqtData[i];
                 const stftBins = s[i];
                 for (let j = 0; j < cqtBins.length; j++) {
-                    stftBins[j] = Math.sqrt(stftBins[j] * cqtBins[j]);
+                    // 更重视CQT谱 若CQT谱更强则用更大的平均
+                    if (stftBins[j] < cqtBins[j]) stftBins[j] = Math.hypot(stftBins[j], cqtBins[j]) / Math.SQRT2;
+                    else stftBins[j] = Math.sqrt(stftBins[j] * cqtBins[j]);
                 }
             }
             console.timeEnd("CQT计算");

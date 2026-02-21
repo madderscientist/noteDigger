@@ -3,7 +3,9 @@ class FreqTable extends Float32Array {
         super(84);  // 范围是C1-B7
         this.A4 = A4;
     }
-    set A4(A4) {
+    set A4(A4) {    // 负数强制更新
+        if (A4 == this.A4) return;
+        if (A4 < 0) A4 = -A4;
         let Note4 = [
             A4 * 0.5946035575013605, A4 * 0.6299605249474366,
             A4 * 0.6674199270850172, A4 * 0.7071067811865475,
@@ -21,9 +23,7 @@ class FreqTable extends Float32Array {
         this.set(Note4.map(v => v * 4), 60);
         this.set(Note4.map(v => v * 8), 72);
     }
-    get A4() {
-        return this[45];
-    }
+    get A4() { return this[45]; }
 }
 
 class NoteAnalyser {    // 负责解析频谱数据
@@ -48,7 +48,7 @@ class NoteAnalyser {    // 负责解析频谱数据
     }
     /**
      * 创建从线性谱到CQ谱的加权矩阵
-     * @param {number} semiR 每个半音收集的频率范围 单位:半音 取1的时候半音间无重合
+     * @param {number} semiR 每个半音收集的频率范围 单位:半音 取0.5时半音间无重合
      * @param {number} leakR 频谱泄露半径 单位:每FFT精度
      * @param {number} oversample 过采样率 用于模拟泄露
      */
@@ -75,13 +75,14 @@ class NoteAnalyser {    // 负责解析频谱数据
             return (Math.cos(wrapedf * omega) + 1) / x;
         }
 
-        const tuning = 1.0594630943592953;  // 2^(1/12)
+        const tuning = 2 ** (semiR / 12);   // 半音范围对应的频率倍数
+        const leak_f = over_df * oversample;// 模拟泄露的频率范围
         for (let i = 0; i < offset.length; i++) {
             let fc = this.freqTable[i];
-            let start = this.freqTable[i - 1] ?? fc / tuning;
-            let end = this.freqTable[i + 1] ?? fc * tuning;
-            start = offset[i] = (start / this.df) | 0;
-            end = Math.ceil(end / this.df) + 1;
+            let start = fc / tuning;
+            let end = fc * tuning;
+            start = offset[i] = Math.ceil((start - leak_f) / this.df);
+            end = Math.floor((end + leak_f) / this.df) + 1;
             const H = win[i] = new Float32Array(end - start);
             for (let j = start, id = 0; j < end; j++, id++) {
                 // 对每个fft中心频点计算贡献: \sum 泄露*窗值
@@ -122,31 +123,25 @@ class NoteAnalyser {    // 负责解析频谱数据
         } return noteAm;
     }
     /**
-     * 能量谱归一化
-     * @param {Array<Float32Array>} engSpectrum 能量谱 每个元素未开方
+     * 能量谱归一化 Welford计算std
+     * @param {Array<Float32Array>} engSpectrum 能量谱
      */
     static normalize(engSpectrum) {
-        // 求每一帧的能量
-        let energySum = 0;
-        let frameEnergy = new Float32Array(engSpectrum.length);
-        for (let t = 0; t < engSpectrum.length; t++) {
-            const frame = engSpectrum[t];
-            for (let i = 0; i < frame.length; i++)
-                frameEnergy[t] += frame[i];
-            energySum += frameEnergy[t];
+        let count = 0, mean = 0, M2 = 0;
+        for (const frame of engSpectrum) {
+            for (let i = 0; i < frame.length; i++) {
+                const x = frame[i];
+                count++;
+                const delta = x - mean;
+                mean += delta / count;
+                const delta2 = x - mean;
+                M2 += delta * delta2;
+            }
         }
-        // 计算能量方差
-        let sigma = 1e-8;
-        const meanEnergy = energySum / engSpectrum.length;
-        for (let t = 0; t < engSpectrum.length; t++) {
-            const delta = frameEnergy[t] - meanEnergy;
-            sigma += delta * delta;
-        }
-        sigma = Math.sqrt(sigma / engSpectrum.length);
-        // 归一化
+        const invSigma = Math.sqrt(count / M2);
         for (const frame of engSpectrum) {
             for (let i = 0; i < frame.length; i++)
-                frame[i] = Math.sqrt(frame[i] / sigma);
+                frame[i] = Math.sqrt(frame[i] * invSigma);
         } return engSpectrum;
     }
     /**

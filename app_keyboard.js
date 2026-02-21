@@ -42,6 +42,7 @@ function _Keyboard(parent) {
         actionCtx.fillStyle = "#ffffff4f";
         for (let i = this.Harmonics - 1; i >= 0; i--) {
             let noteY = parent.layers.height - (this.highlight - 24 + this.harmonics[i]) * parent._height + parent.scrollY;
+            if (noteY < 0) continue;
             actionCtx.fillRect(0, noteY, parent.layers.width, -parent._height);
         }
 

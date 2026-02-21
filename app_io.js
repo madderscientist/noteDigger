@@ -241,12 +241,12 @@ function _IO(parent) {
             parent.event.addEventListener('progress', onprogress);
             // 读取文件
             loadAudio(false).then((audioBuffer) => {
-                let audioData;
+                let channels;
                 // 解码音频文件为音频缓冲区
                 parent.audioContext.decodeAudioData(audioBuffer).then((decodedData) => {
-                    audioData = decodedData;
+                    channels = parent.Analyser.selectChannel(decodedData, channel);
                     return Promise.all([
-                        parent.Analyser.stft(decodedData, tNum, A4, channel, 8192, checkboxSTFTGPU.checked),
+                        parent.Analyser.stft(channels, tNum, A4, 8192, checkboxSTFTGPU.checked),
                         parent.AudioPlayer.createAudio(URL.createObjectURL(file)) // fileReader.readAsDataURL(file) 将mov文件decode之后变成base64，audio无法播放 故不用
                     ]);
                 }).then(([v, audio]) => {
@@ -254,7 +254,7 @@ function _IO(parent) {
                     resolve();
                     // 后台执行CQT CQT的报错已经被拦截不会冒泡到下面的catch中
                     if (checkboxCQT.checked) parent.Analyser.cqt(
-                        audioData, tNum, channel,
+                        channels, tNum,
                         checkboxCQT.checked && checkboxGPU.checked
                     );
                 }).catch((e) => {

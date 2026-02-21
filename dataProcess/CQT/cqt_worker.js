@@ -71,23 +71,20 @@ class CQT {
     }
     /**
      * 计算CQT
-     * @param {Float32Array} x 输入实数时序信号 会被改变！
-     * @param {number} stride 
+     * @param {Float32Array} x 输入实数时序信号
+     * @param {number} hop 步长
+     * @param {Float32Array} raw 可选的输出数组 如果提供了就用它来存储能量(累加) 否则新建一个
      * @returns {Array<Float32Array>} 第一维是时间，第二维是频率
      */
-    cqt(x, stride) {
-        let offset = stride >> 1;
-        const output_length = 1 + (x.length - offset) / stride | 0;
-        const output_data = new Float32Array(output_length * this.bins);
+    cqt(x, hop, raw = null) {
+        let offset = hop >> 1;
+        const output_length = (x.length - offset) / hop | 1;
         const output = Array(output_length);
-        const frameEnergy = output.raw = new Float32Array(output_length);
-        let pointer = 0;
-        let energySum = 0;
-        for (let p = 0; offset <= x.length; offset += stride) {
+        output.raw = raw ??= new Float32Array(output_length * this.bins);
+        for (let p = 0, pointer = 0; offset <= x.length; offset += hop, pointer++) {
             const nextp = p + this.bins;
-            const energy = output[pointer] = output_data.subarray(p, nextp);
+            const energy = output[pointer] = raw.subarray(p, nextp);
             p = nextp;
-            let _energySum = 0;
             for (let b = 0; b < this.bins; b++) {    // 每个频率
                 const kernel_r = this.kernel_r[b];
                 const kernel_i = this.kernel_i[b];
@@ -98,27 +95,23 @@ class CQT {
                     const index = left + i;
                     real += x[index] * kernel_r[i];
                     imag += x[index] * kernel_i[i];
-                }
-                energy[b] = real * real + imag * imag;
-                _energySum += energy[b];
-            }
-            frameEnergy[pointer] = _energySum;
-            energySum += _energySum;
-            ++pointer;
-        }
-        // 归一化
-        let sigma = 1e-8;
-        const meanEnergy = energySum / output_length;
-        for (let t = 0; t < output_length; t++) {
-            const delta = frameEnergy[t] - meanEnergy;
-            sigma += delta * delta;
-        }
-        sigma = Math.sqrt(sigma / output_length);
-        for (const frame of output) {
-            for (let i = 0; i < frame.length; i++) {
-                frame[i] = Math.sqrt(frame[i] / sigma);
+                } energy[b] += real * real + imag * imag;
             }
         } return output;
+    }
+
+    // 能量谱归一化为幅度谱
+    static norm(s) {
+        let count = 0, mean = 0, M2 = 0;
+        for (const e of s) {
+            count++;
+            let d = e - mean;
+            mean += d / count;
+            let d2 = e - mean;
+            M2 += d * d2;
+        }
+        let invSigma = Math.sqrt(count / M2);
+        for (let i = 0; i < s.length; i++) s[i] = Math.sqrt(s[i] * invSigma);
     }
 
     /**
@@ -333,33 +326,13 @@ fn main(
         device.queue.submit([encoder.finish()]);
         await readBuffer.mapAsync(GPUMapMode.READ);
         const ampMatrix = Array(numFrames);
-        const resultArray = ampMatrix.raw = new Float32Array(readBuffer.getMappedRange()).slice();
+        const raw = ampMatrix.raw = new Float32Array(readBuffer.getMappedRange()).slice();
+        readBuffer.destroy();
+        CQT.norm(raw);
         for (let t = 0, offset = 0; t < numFrames; t++) {
             const next = offset + this.bins;
-            ampMatrix[t] = resultArray.subarray(offset, next);
+            ampMatrix[t] = raw.subarray(offset, next);
             offset = next;
-        }
-        readBuffer.destroy();
-        // 归一化
-        const frameEnergy = new Float32Array(numFrames);
-        let energySum = 0;
-        for (let t = 0; t < numFrames; t++) {
-            const frame = ampMatrix[t];
-            for (let i = 0; i < frame.length; i++)
-                frameEnergy[t] += frame[i];
-            energySum += frameEnergy[t];
-        }
-        // 计算能量方差
-        let sigma = 1e-8;
-        const meanEnergy = energySum / numFrames;
-        for (let t = 0; t < numFrames; t++) {
-            const delta = frameEnergy[t] - meanEnergy;
-            sigma += delta * delta;
-        }
-        sigma = Math.sqrt(sigma / numFrames);
-        // 归一化
-        for (let i = 0; i < resultArray.length; i++) {
-            resultArray[i] = Math.sqrt(resultArray[i] / sigma);
         } return ampMatrix;
     }
 
@@ -389,28 +362,21 @@ self.onmessage = async ({ data }) => {
         await cqt.initWebGPU(256);
         console.log("WebGPU初始化成功,使用GPU计算CQT");
         const numFrames = cqt.cqt_GPU(audioChannel[0], hop);
-        if (audioChannel.length > 1) {
-            // 开启第二通道的计算 会累加到cqt.outputBuffer
-            cqt.device.queue.writeBuffer(cqt.inputAudioBuffer, 0, audioChannel[1]);
-            cqt.cqt_GPU(audioChannel[1], hop);
+        for (let i = 1; i < audioChannel.length; i++) {
+            // 开启其他通道的计算 会累加到cqt.outputBuffer
+            cqt.cqt_GPU(audioChannel[i], hop);
         }
         cqtData = await cqt.norm_CPU(cqt.outputBuffer, numFrames);
         cqt.freeGPU();
     } catch (e) {
         console.log("使用CPU计算CQT\n原因:", e.message);
         cqtData = cqt.cqt(audioChannel[0], hop);
-        // 第二个通道
-        if (audioChannel.length > 1) {
-            let cqtData2 = cqt.cqt(audioChannel[1], hop);
-            for (let i = 0; i < cqtData.length; i++) {
-                const temp1 = cqtData[i];
-                const temp2 = cqtData2[i];
-                for (let j = 0; j < cqtData[i].length; j++)
-                    temp1[j] = (temp1[j] + temp2[j]) * 0.5;
-            }
-        }
+        for (let i = 1; i < audioChannel.length; i++) {
+            // 开启其他通道的计算 会累加到cqtData.raw
+            cqt.cqt(audioChannel[i], hop, cqtData.raw);
+        } CQT.norm(cqtData.raw);
     }
     // 要求cqtData都是一整块
-    self.postMessage(cqtData, [cqtData[0].buffer, ...audioChannel.map(x => x.buffer)]);
+    self.postMessage(cqtData, [cqtData.raw.buffer, ...audioChannel.map(x => x.buffer)]);
     self.close();
 };
