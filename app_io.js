@@ -12,7 +12,7 @@ function _IO(parent) {
         if (!l || l <= 0) l = Math.ceil((parent.layers.width << 1) / parent.width);
         // 一个怎么取值都返回0的东西，充当频谱
         parent.Spectrogram.spectrogram = new Proxy({
-            spectrogram: new Uint8Array(parent.ynum).fill(0),
+            raw: new Uint8Array(parent.ynum).fill(0),
             _length: l,
             get length() { return this._length; },
             set length(l) { // 只要改变频谱的长度就可以改变时长 长度改变在MidiAction.updateView中
@@ -22,12 +22,12 @@ function _IO(parent) {
                 parent.AudioPlayer.play_btn.lastChild.textContent = parent.AudioPlayer.durationString;
             },
             *[Symbol.iterator]() {
-                for (let i = 0; i < this.length; i++) yield this.spectrogram;
+                for (let i = 0; i < this.length; i++) yield this.raw;
             }
         }, {
             get(obj, prop) {    // 方括号传递的总是string
                 if (isNaN(Number(prop))) return obj[prop];
-                return obj.spectrogram;
+                return obj.raw;
             },
             set(obj, prop, value) {
                 if (isNaN(Number(prop))) obj[prop] = value;
