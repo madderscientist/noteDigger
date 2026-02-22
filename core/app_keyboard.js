@@ -1,4 +1,4 @@
-/// <reference path="./dataProcess/analyser.js" />
+/// <reference path="../dataProcess/analyser.js" />
 
 /**
  * 左侧键盘
@@ -36,7 +36,7 @@ function _Keyboard(parent) {
      * 仅当: 视野垂直变化 或 this.highlight 更改 时需要更新
      * 是否更新的判断 交给parent完成
      */
-    this.update = () => {
+    this.render = () => {
         // 绘制频谱区音符高亮
         const actionCtx = parent.layers.action.ctx;
         actionCtx.fillStyle = "#ffffff4f";

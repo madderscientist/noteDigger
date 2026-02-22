@@ -69,8 +69,7 @@ function _Spectrogram(parent) {
         } return `hsl(${hue}, 100%, ${lightness}%)`;
     };
     // 不能用画图的坐标去限制，因为数据可能填不满画布 必须用id
-    this.update = () => {   
-        const canvas = parent.layers.spectrum;
+    this.render = (canvas) => {
         const ctx = canvas.ctx;
         let rectx = parent.rectXstart;
         for (let x = parent.idXstart; x < parent.idXend; x++) {

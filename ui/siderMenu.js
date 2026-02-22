@@ -69,7 +69,7 @@ class SiderMenu extends HTMLDivElement {
      * @param {HTMLDivElement} menu 存放tab的 样式: .siderTabs 每一个tab: .siderTab
      * @param {HTMLDivElement} container 展示具体内容的 样式: .siderContent 拖动条: .siderBar 每一个子内容都会加上siderItem类
      * @param {number} minWidth 展示具体内容的最小宽度
-     * @returns 
+     * @returns {SiderMenu} 构造好的SiderMenu
      */
     static new(menu, container, minWidth) {
         Object.setPrototypeOf(menu, SiderMenu.prototype);
@@ -89,7 +89,7 @@ class SiderMenu extends HTMLDivElement {
      * @param {string} tabClass tab的类名 用空格分隔
      * @param {HTMLElement} dom tab对应的内容
      * @param {boolean} selected 是否默认选中
-     * @returns {HTMLDivElement} 添加的tab
+     * @returns {HTMLDivElement} 添加的tab .item是dom .dataset.name是名称
      */
     add(name, tabClass, dom, selected = false) {
         const tab = document.createElement('div');

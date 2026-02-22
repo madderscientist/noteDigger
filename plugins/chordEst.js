@@ -1,3 +1,107 @@
+window.plugins ??= [];
+window.plugins.push(function (app) {
+    // 和弦识别
+    var chords = null;
+    const chordEst = () => {
+        let hasHarmonic = !!app.Spectrogram.harmonic;
+        console.time("和弦分析");
+        const chordest = new ChordEst(hasHarmonic ? 0.3 : 0.1, 0.1, Math.pow(0.82, app.dt / 1000)); // 1s后切换和弦的概率是0.82
+        const buffer = new Float32Array(12);
+        let buffer2 = hasHarmonic ? new Float32Array(84) : null;
+        for (let t = 0; t < app.Spectrogram.spectrogram.length; t++) {
+            let spec = app.Spectrogram.spectrogram[t];
+            if (hasHarmonic) {
+                for (let i = 0; i < spec.length; i++) buffer2[i] = Math.max(0, spec[i] - app.Spectrogram.harmonic[t][i]);
+                spec = buffer2;
+            }
+            chordest.step(chordest.chroma([spec], buffer));
+        }
+        const c = chordest.decode();
+        const results = [];
+        let lastChord = null;
+        for (let i = 0; i < c.length; i++) {
+            if (c[i] !== lastChord) {
+                results.push({ at: i, chord: c[i] });
+                lastChord = c[i];
+            }
+        }
+        console.timeEnd("和弦分析");
+        ChordEst.octaveW = null;
+        chords = results;
+        app.makeActDirty();
+    };
+    const render = (canvas) => {
+        if (!chords) return;
+        const ctx = canvas.ctx;
+        let x = 0; {
+            let left = 0, right = chords.length - 1;
+            while (left <= right) {
+                const mid = Math.floor((left + right) / 2);
+                if (chords[mid].at < app.idXstart) {
+                    x = mid;
+                    left = mid + 1;
+                } else right = mid - 1;
+            }
+        }
+        const fill1Start = [], fill2Start = [];
+        for (; x < chords.length && chords[x].at < app.idXend; x++) {
+            if (chords[x].chord === 'N') continue;
+            let f = x & 1 ? fill1Start : fill2Start;
+            let xstart = Math.max(0, chords[x].at * app._width - app.scrollX);
+            let xend = Math.min(canvas.width, (chords[x + 1]?.at ?? app.xnum) * app._width - app.scrollX);
+            f.push({ xstart, xend, chord: chords[x].chord });
+        }
+        let ystart = canvas.height - app._height;
+        ctx.fillStyle = '#8400ff55';
+        for (const { xstart, xend, chord } of fill1Start)
+            ctx.fillRect(xstart, ystart, xend - xstart, app._height);
+        ctx.fillStyle = '#dd00ff55';
+        for (const { xstart, xend, chord } of fill2Start)
+            ctx.fillRect(xstart, ystart, xend - xstart, app._height);
+        ctx.fillStyle = 'black';
+        ystart = canvas.height - 1;
+        for (const { xstart, xend, chord } of fill1Start)
+            ctx.fillText(chord, xstart, ystart);
+        for (const { xstart, xend, chord } of fill2Start)
+            ctx.fillText(chord, xstart, ystart);
+    };
+    // 注册
+    const tgtLabel = "分析";
+    for (const t of window.menu.tabs) {
+        if (t.dataset.name != tgtLabel) continue;
+        const ul = t.item;
+        const li = document.createElement('li');
+        li.classList.add('pointer');
+        li.innerText = "和弦分析";
+        // 插入到“去除谐波”之后
+        let inserted = false;
+        for (let i = 0; i < ul.children.length; i++) {
+            if (ul.children[i].innerText && ul.children[i].innerText.includes('去除谐波')) {
+                if (ul.children[i].nextSibling)
+                    ul.insertBefore(li, ul.children[i].nextSibling);
+                else ul.appendChild(li);
+                inserted = true;
+                break;
+            }
+        } !inserted && ul.appendChild(li);
+        li.onclick = function (e) {
+            if (!app.Spectrogram._spectrogram || app.midiMode) {
+                alert("请先导入音频！");
+                return;
+            }
+            chordEst();
+            e.stopPropagation();
+            e.target.blur();
+        }; break;
+    }
+    window.app.layers.action.register(render);
+    console.log('plugin "chordEst" loaded');
+});
+if (window.app) {
+    window.plugins.forEach(plugin => plugin(window.app));
+    window.plugins = null;
+}
+
 /**
  * @abstract 和弦识别类
  * 参考NNLS-Chroma这个Vamp插件,并做了简化(删去了NNLS&白化)与增强(乐理规则的转移概率调整)

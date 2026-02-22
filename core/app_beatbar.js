@@ -1,5 +1,5 @@
-/// <reference path="beatBar.js" />
-/// <reference path="contextMenu.js" />
+/// <reference path="../lib/beatBar.js" />
+/// <reference path="../ui/contextMenu.js" />
 
 /**
  * 顶部小节轴
@@ -8,7 +8,8 @@
 function _BeatBar(parent) {
     this.beats = new Beats();
     this.minInterval = 20;  // 最小画线间隔
-    this.update = () => {
+    // timeBar的下半部分画小节线和拍线 并在工作区画小节线
+    this.render = () => {
         const canvas = parent.timeBar;
         const ctx = parent.timeBar.ctx;
 

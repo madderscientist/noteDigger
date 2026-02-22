@@ -1,5 +1,5 @@
-/// <reference path="./saver.js" />
-/// <reference path="./midi.js" />
+/// <reference path="../lib/saver.js" />
+/// <reference path="../lib/midi.js" />
 
 /**
  * 文件相关操作

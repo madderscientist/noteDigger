@@ -1,4 +1,4 @@
-/// <reference path="fakeAudio.js" />
+/// <reference path="../lib/fakeAudio.js" />
 
 /**
  * 音频播放

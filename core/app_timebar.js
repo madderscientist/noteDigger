@@ -1,4 +1,4 @@
-/// <reference path="contextMenu.js" />
+/// <reference path="../ui/contextMenu.js" />
 
 /**
  * 顶部时间轴
@@ -34,8 +34,8 @@ function _TimeBar(parent) {
         const t = this.msToClock(ms);
         return `${t[0].toString().padStart(2, "0")}:${t[1].toString().padStart(2, "0")}:${t[2].toString().padStart(3, "0")}`;
     };
-    // timeBar的上半部分画时间轴
-    this.update = () => {
+    // timeBar的上半部分画时间轴 并绘制工作区重复区间和时间指针
+    this.render = () => {
         const canvas = parent.timeBar;
         const ctx = parent.timeBar.ctx;
         let idstart = Math.ceil(parent.idXstart / this.interval - 0.1); // 画面中第一个时间点的序号

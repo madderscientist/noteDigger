@@ -1,4 +1,4 @@
-/// <reference path="channelDiv.js" />
+/// <reference path="../ui/channelDiv.js" />
 
 /**
  * 管理用户在钢琴卷帘上的动作
@@ -124,7 +124,7 @@ function _MidiAction(parent) {
         }
         parent.layers.action.dirty = true;
     };
-    this.update = () => {     // 按照insight绘制音符
+    this.render = () => {     // 按照insight绘制音符
         const m = this.insight;
         const s = parent.layers.action.ctx;
         const c = this.channelDiv.channel;

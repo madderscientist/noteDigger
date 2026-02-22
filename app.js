@@ -2,22 +2,16 @@
 // 防止在html初始化之前getElement，所以封装成了构造函数，而不是直接写obj
 function App() {
     this.event = new EventTarget();
-    // 键盘和时间轴
+    // 键盘和时间轴 其绘制由工作区管理
     this.keyboard = document.getElementById('piano');
     this.keyboard.ctx = this.keyboard.getContext('2d', { alpha: false, desynchronized: true });
     this.timeBar = document.getElementById('timeBar');
     this.timeBar.ctx = this.timeBar.getContext('2d', { alpha: false, desynchronized: true });
     // 工作区图层
-    const getCanvasCtx = (id, alpha = true, desynchronized = false) => {
-        const canvas = document.getElementById(id);
-        canvas.ctx = canvas.getContext('2d', { alpha, desynchronized});
-        canvas.dirty = true;
-        return canvas;
-    }
-    this.layerContainer = document.getElementById('spectrum-layers');
+    this.layerContainer = document.getElementById('main-layers');
     this.layers = this.layerContainer.layers = {
-        spectrum: getCanvasCtx('spectrum', false),
-        action: getCanvasCtx('actions', true),
+        spectrum: LayeredCanvas.new2d('spectrum', false),
+        action: LayeredCanvas.new2d('actions', true)
     };
     Object.defineProperty(this.layers, 'width', {
         get: function () { return this.spectrum.width; },
@@ -31,10 +25,24 @@ function App() {
             for (const c in this) this[c].height = h;
         }, enumerable: false
     });
+    Object.defineProperty(this.layers, 'addLayer', {
+        value: (name, zIndex) => {
+            if (this.layers[name]) return this.layers[name];
+            const canvas = document.createElement('canvas');
+            canvas.style.zIndex = zIndex;
+            this.layerContainer.appendChild(canvas);
+            return this.layers[name] = LayeredCanvas.new2d(canvas, true);
+        }, enumerable: false
+    });
+    Object.defineProperty(this.layers, 'render', {
+        value: function () {
+            for (const c in this) this[c].render();
+        }, enumerable: false
+    });
 
     this.midiMode = false;
-    this.TperP = -1;
-    this.PperT = -1;
+    this.TperP = -1;    // 每个像素代表的ms
+    this.PperT = -1;    // 每ms代表的像素
     this._width = 5;    // 每格的宽度
     Object.defineProperty(this, 'width', {
         get: function () { return this._width; },
@@ -43,8 +51,8 @@ function App() {
             this._width = w;
             this.TimeBar.updateInterval();
             this.HscrollBar.refreshSize();  // 刷新横向滑动条
-            this.TperP = this.dt / this._width;  // 每个像素代表的时间
-            this.PperT = this._width / this.dt;  // 每个时间代表的像素
+            this.TperP = this.dt / this._width;
+            this.PperT = this._width / this.dt;
         }
     });
     this._height = 15;   // 每格的高度
@@ -130,29 +138,6 @@ function App() {
     this.Keyboard = new _Keyboard(this); this.height = this._height; // 更新this.Keyboard._ychange
     this.TimeBar = new _TimeBar(this);
     this.BeatBar = new _BeatBar(this);
-    // 小插件对象
-    this.pitchNameDisplay = {   // 音名显示 配合设置中的checkbox使用
-        _showPitchName: null,
-        showPitchName: (ifshow) => {
-            if (ifshow) {
-                this.layerContainer.addEventListener('mousemove', this._trackMouseX);
-                this.pitchNameDisplay._showPitchName = ['C', 'C#', 'D', 'D#', 'E', 'F', 'F#', 'G', 'G#', 'A', 'A#', 'B'];
-            } else {
-                this.layerContainer.removeEventListener('mousemove', this._trackMouseX);
-                this.pitchNameDisplay._showPitchName = null;
-            }
-        },
-        update: () => {
-            if (this.pitchNameDisplay._showPitchName && this.Keyboard.highlight >= 0) {
-                this.layers.action.ctx.fillStyle = 'black';
-                this.layers.action.ctx.fillText(
-                    `${this.pitchNameDisplay._showPitchName[this.Keyboard.highlight % 12]}${Math.floor(this.Keyboard.highlight / 12) - 1}`,
-                    this._mouseX - this._height * 1.5,
-                    this.layers.height - (this.Keyboard.highlight - 24) * this._height + this.scrollY - (this._height >> 3)
-                );
-            }
-        }
-    };
     // 撤销相关
     this.snapshot = new Snapshot(16, {
         // 用对象包裹，实现字符串的引用
@@ -279,8 +264,8 @@ function App() {
             spectrumHeight = 0.4 * h;
             this.timeBar.height = 0.6 * h;
         }
-        this.layers.height = this.keyboard.height = spectrumHeight;
-        this.layers.width = this.timeBar.width = spectrumWidth;
+        this.keyboard.height = spectrumHeight;
+        this.timeBar.width = spectrumWidth;
         for (const c in this.layers) {
             const canvas = this.layers[c];
             canvas.width = spectrumWidth;
@@ -330,34 +315,29 @@ function App() {
         this.scroll2((this.scrollX + mouseX) * times - mouseX, this.scrollY);
     };
     /**
-     * 重新绘制画布(工作区)
+     * 状态更新与重绘
      */
     this.update = () => {
-        // 首先要同步时间 如果音频播放了，就同步音频时间
         this.AudioPlayer.update();
         this.MidiPlayer.update();
-        if (this.layers.spectrum.dirty) {
-            this.Spectrogram.update();  // 只更新spectrum画布
-            this.layers.spectrum.dirty = false;
-        }
-        if (this.layers.action.dirty) {
-            this.layers.action.ctx.clearRect(0, 0, this.layers.width, this.layers.height);
-            this.Keyboard.update(); // 应最先 因为高亮显示不重要应该在最下面
-            this.BeatBar.update();
-            this.MidiAction.update();   // 应在BeatBar之后，节拍线应在音符下面
-            this.TimeBar.update();  // 应最后绘制 因为时间指针应该在最上面
-            this.pitchNameDisplay.update();
-            this.chordBar?.update();
-            this.layers.action.dirty = false;
-        }
+        this.layers.render();
     };
+    this.layers.spectrum.resetHandlers([this.Spectrogram.render]);
+    this.layers.action.resetHandlers([
+        c => c.ctx.clearRect(0, 0, c.width, c.height),
+        this.Keyboard.render,// 应最先 因为高亮显示不重要应该在最下面
+        this.BeatBar.render,
+        this.MidiAction.render,// 应在BeatBar之后 节拍线在音符下面
+        this.TimeBar.render,// 应最后 时间指针应该在最上面
+    ]);
+
     this.trackMouseY = (e) => { // onmousemove
         this.mouseY = e.offsetY;
     };
     this.trackMouseX = (e) => { // 用于框选，会更新frameX值 在this.MidiAction中add和remove事件监听器
         this.mouseX = e.offsetX;
     };
-    this._trackMouseX = (e) => {// 给this.Spectrogram.showPitchName专用的，只会更新_mouseX
+    this._trackMouseX = (e) => {// 给pitchName插件专用的 只会更新_mouseX
         this._mouseX = e.offsetX;
     };
 
@@ -605,12 +585,59 @@ function App() {
 
     this.loopUpdate(true);
 }
+
+class LayeredCanvas extends HTMLCanvasElement {
+    static new2d(canvas, alpha = true, desynchronized = true) {
+        if (typeof canvas === 'string') canvas = document.getElementById(canvas);
+        return LayeredCanvas.new(canvas, '2d', {alpha, desynchronized, willReadFrequently: false});
+    }
+    static new(canvas, contextType = '2d', contextAttributes) {
+        Object.setPrototypeOf(canvas, LayeredCanvas.prototype);
+        canvas.init(contextType, contextAttributes);
+        return canvas;
+    }
+    init(contextType, contextAttributes) {
+        this.ctx = this.getContext(contextType, contextAttributes);
+        this.handlers = []; // [{handler, priority}]
+        this.dirty = true;
+    }
+    resetHandlers(handlers) {
+        this.handlers = handlers
+            .filter(handler => typeof handler === 'function')
+            .map((handler, i) => ({handler, priority: i}));
+    }
+    /**
+     * 注册渲染函数
+     * @param {function(LayeredCanvas): void} handler 
+     * @param {number} priority 优先级越小越先执行
+     */
+    register(handler, priority = null) {
+        if (priority === null) {
+            if (this.handlers.length)
+                priority = this.handlers[this.handlers.length - 1].priority + 1;
+            else priority = 0;
+        }
+        this.handlers.push({handler, priority});
+        this.handlers.sort((a, b) => a.priority - b.priority);
+    }
+    unregister(handler) {
+        this.handlers = this.handlers.filter(h => h.handler !== handler);
+    }
+    render() {
+        if (!this.dirty) return;
+        for (const {handler} of this.handlers) handler(this);
+        this.dirty = false;
+    }
+}
+
 /*
-需要什么dom?
-#Canvases-Container div 决定画布高度
-#spectrum canvas 画频谱
-#piano canvas 画琴键
-#timeBar canvas 画时间轴
+dom needed:
+#Canvases-Container div 决定画布尺寸
+    #piano canvas 画琴键
+    #timeBar canvas 画时间轴
+    #main-layers div 主工作区图层容器
+        #spectrum canvas 画频谱
+        #actions canvas 画其余
 #funcSider div 音轨选择的容器
 #speedControl input[type=range] 变速
 #multiControl input[type=range] 变画频谱的倍率
@@ -618,5 +645,5 @@ function App() {
 #play-btn button 播放
 #actMode div 动作模式选择，其下有两个btn
 #scrollbar-track div 滑动条轨道
-#scrollbar-thumb div 滑动条
+    #scrollbar-thumb div 滑动条
 */

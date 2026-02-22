@@ -126,7 +126,7 @@ button {
     overflow: hidden;
 }
 
-#spectrum-layers {
+#main-layers {
     position: relative;
     canvas {
         position: absolute;
