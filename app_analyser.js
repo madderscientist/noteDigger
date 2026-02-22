@@ -1,10 +1,12 @@
 /// <reference path="./dataProcess/fft_real.js" />
+/// <reference path="./dataProcess/stftGPU.js" />
 /// <reference path="./dataProcess/analyser.js" />
 /// <reference path="./dataProcess/CQT/cqt.js" />
 /// <reference path="./dataProcess/AI/AIEntrance.js" />
 /// <reference path="./dataProcess/ANA.js" />
 /// <reference path="./dataProcess/bpmEst.js" />
 /// <reference path="./dataProcess/NNLS.js" />
+/// <reference path="./dataProcess/chordEst.js" />
 
 /**
  * 数据解析相关算法
@@ -640,5 +642,35 @@ function _Analyser(parent) {
         if (!inplace) parent.Spectrogram.harmonic = harmonicAmp;
         parent.layers.spectrum.dirty = true;
         onprogress(-1);
+    };
+
+    this.chordEst = () => {
+        let hasHarmonic = !!parent.Spectrogram.harmonic;
+        console.time("和弦分析");
+        const chordest = new ChordEst(hasHarmonic ? 0.3 : 0.1, 0.1, Math.pow(0.82, parent.dt / 1000)); // 1s后切换和弦的概率是0.82
+        const buffer = new Float32Array(12);
+        let buffer2 = hasHarmonic ? new Float32Array(84) : null;
+        for (let t = 0; t < parent.Spectrogram.spectrogram.length; t++) {
+            let spec = parent.Spectrogram.spectrogram[t];
+            if (hasHarmonic) {
+                for (let i = 0; i < spec.length; i++) buffer2[i] = Math.max(0, spec[i] - parent.Spectrogram.harmonic[t][i]);
+                spec = buffer2;
+            }
+            chordest.step(chordest.chroma([spec], buffer));
+        }
+        const chords = chordest.decode();
+        const results = [];
+        let lastChord = null;
+        for (let i = 0; i < chords.length; i++) {
+            if (chords[i] !== lastChord) {
+                results.push({ at: i, chord: chords[i] });
+                lastChord = chords[i];
+            }
+        }
+        console.timeEnd("和弦分析");
+        ChordEst.octaveW = null;
+        parent.chordBar ??= new _ChordBar(parent);
+        parent.chordBar.chords = results;
+        parent.makeActDirty();
     };
 }

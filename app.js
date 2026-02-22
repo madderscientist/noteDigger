@@ -347,6 +347,7 @@ function App() {
             this.MidiAction.update();   // 应在BeatBar之后，节拍线应在音符下面
             this.TimeBar.update();  // 应最后绘制 因为时间指针应该在最上面
             this.pitchNameDisplay.update();
+            this.chordBar?.update();
             this.layers.action.dirty = false;
         }
     };
