@@ -34,9 +34,29 @@ function App() {
             return this.layers[name] = LayeredCanvas.new2d(canvas, true);
         }, enumerable: false
     });
+    Object.defineProperty(this.layers, 'removeLayer', {
+        value: (name, zIndex) => {
+            if (this.layers[name]) {
+                this.layers[name].canvas.remove();
+                delete this.layers[name];
+            }
+        }, enumerable: false
+    });
     Object.defineProperty(this.layers, 'render', {
         value: function () {
             for (const c in this) this[c].render();
+        }, enumerable: false
+    });
+
+    this.layers.action.mask = '#25262da8';
+    Object.defineProperty(this.layers.action, 'Alpha', {
+        get: function() {
+            return parseInt(this.mask.substring(7), 16);
+        },
+        set: function(a) {
+            a = Math.min(255, Math.max(a | 0, 0));
+            this.mask = '#25262d' + a.toString(16).padStart(2, '0');
+            this.dirty = true;
         }, enumerable: false
     });
 
@@ -324,7 +344,13 @@ function App() {
     };
     this.layers.spectrum.resetHandlers([this.Spectrogram.render]);
     this.layers.action.resetHandlers([
-        c => c.ctx.clearRect(0, 0, c.width, c.height),
+        c => {  // 绘制遮罩
+            let ctx = c.ctx;
+            ctx.globalCompositeOperation = 'copy';
+            ctx.fillStyle = c.mask;
+            ctx.fillRect(0, 0, c.width, c.height);
+            ctx.globalCompositeOperation = 'source-over';
+        },
         this.Keyboard.render,// 应最先 因为高亮显示不重要应该在最下面
         this.BeatBar.render,
         this.MidiAction.render,// 应在BeatBar之后 节拍线在音符下面

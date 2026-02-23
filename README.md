@@ -90,34 +90,42 @@
 ## 文件结构
 ```
 │  app.js: 最重要的文件，主程序
-│  app_analyser.js: 时频分析相关
-│  app_audioplayer.js: 音频播放
-│  app_beatbar.js: 小节轴
-│  app_hscrollbar.js: 底部滑动条
-│  app_io.js: 管理输入与输出
-│  app_keyboard.js: 左侧键盘
-│  app_midiaction.js: 与音符的交互
-│  app_midiplayer.js: 音符播放
-│  app_spectrogram.js: 频谱绘制
-│  app_timebar.js: 时间轴
-|
-|  beatBar.js: 节奏信息的稀疏数组存储
-│  channelDiv.js: 多音轨的UI界面类, 可拖拽列表
-│  contextMenu.js: 右键菜单类
-|  fakeAudio.js: 模拟了不会响的Audio，用于midi编辑器模式
 │  favicon.ico: 小图标
 │  index.html: 程序入口, 其js主要是按钮的onclick
 │  jsconfig.json: 开发用 跨文件JS解析
 │  LICENSE
-│  midi.js: midi创建、解析类
-│  myRange.js: 横向滑动条的封装类
 │  README.md
-│  saver.js: 二进制保存相关
-│  siderMenu.js: 侧边栏菜单类
-│  snapshot.js: 快照类, 实现撤销和重做
-│  tinySynth.js: 合成器类, 负责播放音频
-│  todo.md: 一些设计思路和权衡
 │
+├─core: app.js用到的核心组件
+│      app_analyser.js: 算法相关
+│      app_audioplayer.js: 音频播放
+│      app_beatbar.js: 小节轴
+│      app_hscrollbar.js: 底部滑动条
+│      app_io.js: 管理输入与输出
+│      app_keyboard.js: 左侧键盘
+│      app_midiaction.js: 与音符的交互
+│      app_midiplayer.js: 音符播放
+│      app_spectrogram.js: 频谱绘制
+│      app_timebar.js: 时间轴
+│      
+├─lib
+│      beatBar.js: 节奏信息的稀疏存储
+│      fakeAudio.js: 模拟了不会响的Audio，用于midi编辑器模式
+│      midi.js: midi创建、解析类
+│      saver.js: 二进制保存相关
+│      snapshot.js: 快照类, 实现撤销和重做
+│      tinySynth.js: 合成器类, 负责播放音频
+|
+├─ui
+│      channelDiv.js: 多音轨的UI界面类, 可拖拽列表
+│      contextMenu.js: 右键菜单类
+│      myRange.js: 横向滑动条的封装类
+│      siderMenu.js: 侧边栏菜单类
+│      
+├─plugins
+│      chordEst.js
+│      pitchName.js
+|
 ├─dataProcess
 |   |  aboutANA.md: 自动音符对齐的数学建模
 |   |  ANA.js: 自动音符对齐
@@ -143,7 +151,10 @@
 │   └─CQT
 │          cqt.js: 开启worker进行后台CQT
 │          cqt_worker.js: CQT类与新线程
-|
+│
+├─docs
+│      todo.md: 一些设计思路和权衡
+│          
 ├─img
 │      bilibili-white.png
 │      github-mark-white.png
@@ -167,6 +178,9 @@
 ```
 
 ## 重要更新记录
+### 2026 2 22
+增加了和弦识别功能，并优化了项目结构。
+
 ### 2026 2 14
 利用NNLS完成了谐波的去除/基频的增强。<br>
 代码位于[reduceHarmonic](app_analyser.js)。原理为用谐波模板拟合频谱，进而得到谐波，并收集谐波的能量用于加强基频。该方法能大大增强基频的明显程度。

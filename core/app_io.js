@@ -31,6 +31,7 @@ function _IO(parent) {
             },
             set(obj, prop, value) {
                 if (isNaN(Number(prop))) obj[prop] = value;
+                return true;
             }
         });
         // 假音频 需要设置parent.midiMode=true;

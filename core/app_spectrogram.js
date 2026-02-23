@@ -43,18 +43,6 @@ function _Spectrogram(parent) {
         }
     });
 
-    this.mask = '#25262daa';
-    Object.defineProperty(this, 'Alpha', {
-        get: function() {
-            return parseInt(this.mask.substring(7), 16);
-        },
-        set: function(a) {
-            a = Math.min(255, Math.max(a | 0, 0));
-            this.mask = '#25262d' + a.toString(16).padStart(2, '0');
-            parent.layers.spectrum.dirty = true;
-        }
-    });
-
     this.harmonic = null;  // 对谐波的估计 在parent.Analyser._reduceHarmonic中计算得到
 
     this.getColor = (value) => {    // 0-step1，是蓝色的亮度从0变为50%；step1-step2，是颜色由蓝色变为红色；step2-255，保持红色
@@ -100,8 +88,5 @@ function _Spectrogram(parent) {
             ctx.fillStyle = '#25262d';
             ctx.fillRect(rectx, 0, w, canvas.height);
         }
-        // 铺底色以凸显midi音符
-        ctx.fillStyle = this.mask;
-        ctx.fillRect(0, 0, rectx, canvas.height);
     };
 }

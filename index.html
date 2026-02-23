@@ -555,6 +555,7 @@
     // ==== 设置界面 ==== //
     {
         const lis = document.getElementById('settingPannel').children;
+        lis[0].dataset.value = app.width;
         lis[0].firstChild.onclick = (e) => {
             e.target.blur();
             --app.width;    // 设置width会自动被setter限位
@@ -566,6 +567,7 @@
             lis[0].dataset.value = ++app.width;
             app.scroll2();
         };
+        lis[1].dataset.value = app.height;
         lis[1].firstChild.onclick = (e) => {
             e.target.blur();
             --app.height;    // 设置height会自动被setter限位
@@ -577,15 +579,17 @@
             lis[1].dataset.value = ++app.height;
             app.scroll2();
         };
+        lis[2].dataset.value = app.layers.action.Alpha;
         lis[2].firstChild.onclick = (e) => {
             e.target.blur();
-            if (app.Spectrogram.Alpha <= 1) return;
-            lis[2].dataset.value = --app.Spectrogram.Alpha;
+            if (app.layers.action.Alpha <= 1) return;
+            lis[2].dataset.value = app.layers.action.Alpha -= 2;
         };
         lis[2].lastChild.onclick = (e) => {
             e.target.blur();
-            lis[2].dataset.value = ++app.Spectrogram.Alpha;
+            lis[2].dataset.value = app.layers.action.Alpha += 2;
         };
+        lis[3].dataset.value = app.BeatBar.minInterval;
         lis[3].firstChild.onclick = (e) => {
             e.target.blur();
             if (app.BeatBar.minInterval <= 5) return;
@@ -595,6 +599,7 @@
             e.target.blur();
             lis[3].dataset.value = ++app.BeatBar.minInterval;
         };
+        lis[4].dataset.value = app.Keyboard.Harmonics;
         lis[4].firstChild.onclick = (e) => {
             e.target.blur();
             if (app.Keyboard.Harmonics <= 0) return;
