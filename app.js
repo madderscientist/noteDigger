@@ -73,6 +73,7 @@ function App() {
             this.HscrollBar.refreshSize();  // 刷新横向滑动条
             this.TperP = this.dt / this._width;
             this.PperT = this._width / this.dt;
+            this.Spectrogram.onresize();
         }
     });
     this._height = 15;   // 每格的高度
@@ -84,6 +85,7 @@ function App() {
             this.Keyboard.setYchange(h);
             this.keyboard.ctx.font = `${h + 2}px Arial`;
             this.layers.action.ctx.font = `${h}px Arial`;
+            this.Spectrogram.onresize();
         }
     });
     this.ynum = 84;     // 一共84个按键
@@ -297,8 +299,8 @@ function App() {
         // 改变画布长宽之后，设置的值会重置，需要重新设置
         this.keyboard.ctx.lineWidth = 1; this.keyboard.ctx.font = `${this._height + 2}px Arial`;
         this.timeBar.ctx.font = '14px Arial';
-        // 更新滑动条大小
-        this.width = this._width;   // 除了触发滑动条更新，还能在初始化的时候保证timeBar的文字间隔
+        // 触发滑动条/频谱缓冲区更新 还能在初始化的时候保证timeBar的文字间隔
+        this.width = this._width;
         this.scroll2();
     };
     /**
@@ -329,7 +331,7 @@ function App() {
      */
     this.scaleX = (mouseX, times) => {
         let nw = this._width * times;
-        if (nw < 2) return;
+        if (nw < 1) return;
         if (nw > this.layers.spectrum.width >> 2) return;
         this.width = nw;
         this.scroll2((this.scrollX + mouseX) * times - mouseX, this.scrollY);
