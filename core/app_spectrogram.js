@@ -118,8 +118,9 @@ function _Spectrogram(parent) {
             const s = this._spectrogram[frameID];
             const h = this.harmonic?.[frameID];
             for (let y = parent.idYstart, j = off; y < parent.idYend; y++, j++) {
-                let amp = Math.pow(s[y] - (h?.[y] ?? 0) * this._Hmultiple, this._contrast) * this._multiple;
-                const colorID = Math.min(this.colorLUT.length - 1, Math.max(0, Math.round(amp * this.colorLUT.scale)));
+                let amp = s[y] - (h?.[y] ?? 0) * this._Hmultiple;
+                amp = Math.pow(Math.max(0, amp), this._contrast) * this._multiple;
+                const colorID = Math.min(this.colorLUT.length - 1, Math.round(amp * this.colorLUT.scale));
                 imageData.u32[j] = this.colorLUT[colorID];
             }
         } dataCanvas.ctx.putImageData(imageData, 0, 0);
