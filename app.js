@@ -397,6 +397,9 @@ function App() {
     document.getElementById('multiControl').addEventListener('input', (e) => { // 变画频谱的倍率
         this.Spectrogram.multiple = parseFloat(e.target.value);
     });
+    document.getElementById('contrastControl').addEventListener('input', (e) => { // 变频谱对比度
+        this.Spectrogram.contrast = parseFloat(e.target.value);
+    });
     document.getElementById('midivolumeControl').addEventListener('input', (e) => { // midi音量
         this.synthesizer.out.gain.value = parseFloat(e.target.value) ** 2;
     });
@@ -668,7 +671,8 @@ dom needed:
         #actions canvas 画其余
 #funcSider div 音轨选择的容器
 #speedControl input[type=range] 变速
-#multiControl input[type=range] 变画频谱的倍率
+#multiControl input[type=range] 改变画频谱的倍率
+#contrastControl input[type=range] 改变画频谱的对比度
 #midivolumeControl input[type=range] midi音量
 #play-btn button 播放
 #actMode div 动作模式选择，其下有两个btn

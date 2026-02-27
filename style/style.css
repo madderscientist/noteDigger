@@ -20,8 +20,29 @@ body {
     overflow: hidden;
 }
 
-@media (max-width: 890px) {
-    .top-logo {
+@media (max-width: 1084px) {
+    .logo3 {
+        display: none !important;
+    }
+}
+
+@media (max-width: 1000px) {
+    .logo2 {
+        display: none !important;
+    }
+}
+
+@media (max-width: 950px) {
+    .logo1 {
+        display: none !important;
+    }
+    .tools {
+        justify-content: space-around !important;
+    }
+}
+
+@media (max-width: 752px) {
+    .rangeBox:has(#speedControl) {
         display: none;
     }
 }

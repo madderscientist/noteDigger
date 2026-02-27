@@ -16,6 +16,15 @@ function _Spectrogram(parent) {
         }
     });
 
+    this._contrast = parseFloat(document.getElementById('contrastControl').value);  // 对比度
+    Object.defineProperty(this, 'contrast', {
+        get: function() { return this._contrast; },
+        set: function(c) {
+            this._contrast = c;
+            parent.layers.spectrum.dirty = true;
+        }
+    });
+
     this._Hmultiple = 1;  // 谐波的倍数
     Object.defineProperty(this, 'Hmultiple', {
         get: function() { return this._Hmultiple; },
@@ -109,7 +118,7 @@ function _Spectrogram(parent) {
             const s = this._spectrogram[frameID];
             const h = this.harmonic?.[frameID];
             for (let y = parent.idYstart, j = off; y < parent.idYend; y++, j++) {
-                let amp = (s[y] - (h?.[y] ?? 0) * this._Hmultiple) * this._multiple;
+                let amp = Math.pow(s[y] - (h?.[y] ?? 0) * this._Hmultiple, this._contrast) * this._multiple;
                 const colorID = Math.min(this.colorLUT.length - 1, Math.max(0, Math.round(amp * this.colorLUT.scale)));
                 imageData.u32[j] = this.colorLUT[colorID];
             }

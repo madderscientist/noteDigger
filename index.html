@@ -63,25 +63,27 @@
 <body class="fc">
     <!-- 上半部分 工具区 -->
     <div class="tools">
-        <img src="./img/logo-small.png" alt="noteDigger" class="top-logo">
+        <img src="./img/logo-small.png" alt="noteDigger" class="top-logo logo1">
+        <div class="rangeBox">
+            速度&nbsp;<input type="range" id="speedControl" max="2" min="0.2" step="0.1" value="1">
+        </div>
         <div>
             <div class="rangeBox">
-                速度&nbsp;<input type="range" id="speedControl" max="2" min="0.25" step="0.05" value="1">
+                <b>显</b>&nbsp;&nbsp;倍率&nbsp;<input type="range" id="multiControl" max="600" min="10" step="2" value="240">
             </div>
             <div class="rangeBox">
-                显示&nbsp;<input type="range" id="multiControl" max="600" min="10" step="1" value="240">
+                <b>示</b>&nbsp;&nbsp;对比&nbsp;<input type="range" id="contrastControl" max="4" min="0.2" step="0.1" value="1">
             </div>
         </div>
         <div>
             <div class="rangeBox">
-                音&nbsp;&nbsp;音符&nbsp;<input type="range" id="midivolumeControl" max="1.5" min="0" step="0.02" value="1">
+                <b>音</b>&nbsp;&nbsp;音符&nbsp;<input type="range" id="midivolumeControl" max="1.5" min="0" step="0.02" value="1">
             </div>
             <div class="rangeBox">
-                量&nbsp;&nbsp;音频&nbsp;<input type="range" id="audiovolumeControl" max="1" min="0" step="0.02"
+                <b>量</b>&nbsp;&nbsp;音频&nbsp;<input type="range" id="audiovolumeControl" max="1" min="0" step="0.02"
                     value="0.2">
             </div>
         </div>
-
 
         <div class="switch-bar" id="actMode">
             <button class="iconfont icon-pen-l labeled selected" data-tooltip="绘制音符"></button>
@@ -95,10 +97,10 @@
         <div class="switch-bar">
             <button class="iconfont icon-pageTurns labeled" id="autopage-btn" data-tooltip="自动翻页:关"></button>
         </div>
-        <a href="https://www.bilibili.com/video/BV1XA4m1G7k4" class="f" target="_blank">
+        <a href="https://www.bilibili.com/video/BV1XA4m1G7k4" class="f logo3" target="_blank">
             <img src="./img/bilibili-white.png" alt="视频教程" class="top-logo">
         </a>
-        <a href="https://github.com/madderscientist/noteDigger" class="f" target="_blank">
+        <a href="https://github.com/madderscientist/noteDigger" class="f logo2" target="_blank">
             <img src="./img/github-mark-white.png" alt="项目地址" class="top-logo">
         </a>
     </div>
@@ -206,6 +208,7 @@
     // 在后面初始化range; reset触发oninput事件同步app中的值
     LableRange.new(speedControl).reset();
     myRange.new(multiControl).reset();
+    myRange.new(contrastControl).reset();
     hideLableRange.new(midivolumeControl).reset();
     hideLableRange.new(audiovolumeControl).reset();
     // 事件
