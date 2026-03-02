@@ -69,15 +69,18 @@
         </div>
         <div>
             <div class="rangeBox">
-                <b>显</b>&nbsp;&nbsp;倍率&nbsp;<input type="range" id="multiControl" max="600" min="10" step="2" value="240">
+                <b>显</b>&nbsp;&nbsp;倍率&nbsp;<input type="range" id="multiControl" max="600" min="10" step="2"
+                    value="240">
             </div>
             <div class="rangeBox">
-                <b>示</b>&nbsp;&nbsp;对比&nbsp;<input type="range" id="contrastControl" max="4" min="0.2" step="0.1" value="1">
+                <b>示</b>&nbsp;&nbsp;对比&nbsp;<input type="range" id="contrastControl" max="4" min="0.2" step="0.1"
+                    value="1">
             </div>
         </div>
         <div>
             <div class="rangeBox">
-                <b>音</b>&nbsp;&nbsp;音符&nbsp;<input type="range" id="midivolumeControl" max="1.5" min="0" step="0.02" value="1">
+                <b>音</b>&nbsp;&nbsp;音符&nbsp;<input type="range" id="midivolumeControl" max="1.5" min="0" step="0.02"
+                    value="1">
             </div>
             <div class="rangeBox">
                 <b>量</b>&nbsp;&nbsp;音频&nbsp;<input type="range" id="audiovolumeControl" max="1" min="0" step="0.02"
@@ -184,7 +187,8 @@
             </div>
             <button>取消区间</button><button>应用</button>
         </li>
-        <li><label>透明度表示强度&nbsp;<input type="checkbox" checked onchange="app.MidiAction.alphaIntensity=this.checked"></label></li>
+        <li><label>透明度表示强度&nbsp;<input type="checkbox" checked
+                    onchange="app.MidiAction.alphaIntensity=this.checked"></label></li>
         <li><label>播放节拍&nbsp;<input type="checkbox" onchange="app.MidiPlayer.switchBeatMode(this.checked)"></label></li>
     </ul>
 </div>
@@ -392,7 +396,7 @@
             this.appendChild(div);
         };
         // 节奏分析
-        lis[1].onclick = function() {
+        lis[1].onclick = function () {
             const lastChild = this.lastElementChild;
             if (lastChild && lastChild.tagName === 'DIV') {
                 lastChild.remove();
@@ -474,7 +478,7 @@
                 let ui = document.createElement('div');
                 ui.innerHTML = `<h5 style="display: inline-block;">谐波保留:</h5><div class="wf fr">多&nbsp;<input type="range" max="1" min="0" value="${app.Spectrogram.Hmultiple}" step="0.05">&nbsp;少</div>`;
                 const r = ui.querySelector('input');
-                r.addEventListener('input', function() {
+                r.addEventListener('input', function () {
                     app.Spectrogram.Hmultiple = parseFloat(this.value);
                 });
                 r.classList.add('fullRange');
@@ -713,6 +717,76 @@
         dragEvents.registDrag();
         alert("文件解析！" + e.detail.message);
     });
+</script>
+<script>
+    /**
+     * iOS 长按适配全局
+     * 功能：在 iOS 设备上，将长按操作映射为 contextmenu 事件
+     */
+    (function () {
+        // 检测是否为 iOS 设备
+        const isIOS = /iPad|iPhone|iPod/.test(navigator.userAgent) && !window.MSStream;
+        if (!isIOS) return;
+
+        let longPressTimer = null;
+        const LONG_PRESS_DURATION = 500; // 长按阈值 ms
+        let startX = null, startY = null; // 记录触摸起始位置
+
+        document.addEventListener('touchstart', function (e) {
+            // 如果已经存在长按目标，清除之前的计时器
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+            // 只处理单个触点
+            if (e.touches.length > 1) return;
+            // 保存触摸点信息
+            const touch = e.touches[0];
+            if (!touch) return;
+            startX = touch.clientX;
+            startY = touch.clientY;
+            // 获取触摸的目标元素
+            const targetElement = e.target;
+            if (!targetElement) return;
+            // 启动长按计时器
+            longPressTimer = setTimeout(function () {
+                // 在触摸的目标元素上触发事件
+                const contextMenuEvent = new MouseEvent('contextmenu', {
+                    bubbles: true,
+                    cancelable: true,
+                    view: window,
+                    clientX: startX,
+                    clientY: startY,
+                    button: 2 // 模拟右键按钮
+                });
+                targetElement.dispatchEvent(contextMenuEvent);
+                longPressTimer = null;
+            }, LONG_PRESS_DURATION);
+        }, { passive: true });
+
+        // 处理触摸移动（移动超过5像素时取消长按）
+        document.addEventListener('touchmove', function (e) {
+            if (longPressTimer && startX !== null && startY !== null) {
+                const touch = e.touches[0];
+                if (touch) {
+                    if (Math.hypot(touch.clientX - startX, touch.clientY - startY) > 8) {
+                        clearTimeout(longPressTimer);
+                        longPressTimer = null;
+                    }
+                }
+            }
+        }, { passive: true });
+
+        const cancelLongPress = () => {
+            if (longPressTimer) {
+                clearTimeout(longPressTimer);
+                longPressTimer = null;
+            }
+        };
+        document.addEventListener('touchend', cancelLongPress);
+        document.addEventListener('touchcancel', cancelLongPress);
+        console.log('iOS 长按适配已启用');
+    })();
 </script>
 
 </html>
