@@ -27,6 +27,7 @@ function _MidiPlayer(parent) {
         if (tnow - this._last < (this.priorT << 1)) this.realT = 0.2 * (tnow - this._last) + 0.8 * this.realT;   // IIR低通滤波
         this._last = tnow;
         if (parent.AudioPlayer.audio.paused) return;
+        const dt = 1e-3 / parent.AudioPlayer.audio.playbackRate;
         const predictT = parent.time + 0.5 * (this.realT + this.priorT); // 先验和实测的加权和
         const predictID = (predictT / parent.dt) | 0;
         // 寻找(mp.lastID, predictID]之间的音符
@@ -51,8 +52,8 @@ function _MidiPlayer(parent) {
                     id: nt.ch,
                     f: parent.Keyboard.freqTable[nt.y],
                     v: nt.v,    // 用户创建的音符不可单独调整音量，为undefined，会使用默认值
-                    t: (parent.time - nt.x1 * parent.dt) / 1000,
-                    last: (nt.x2 - nt.x1) * parent.dt / 1000
+                    t: (parent.time - nt.x1 * parent.dt) * dt,
+                    last: (nt.x2 - nt.x1) * parent.dt * dt
                 });
             }
         }
@@ -61,7 +62,7 @@ function _MidiPlayer(parent) {
             const endms = this._beatNowEnds;
             // 较为宽裕的时间判断
             if (endms < predictT + this.priorT) {
-                this.playBeatSound(parent.audioContext.currentTime + (endms - parent.time) / 1000);
+                this.playBeatSound(parent.audioContext.currentTime + (endms - parent.time) * dt);
                 const p = this._beatIter.next();
                 if (p.done === false) {
                     const m = p.value;
