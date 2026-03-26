@@ -7,7 +7,7 @@
  */
 function _BeatBar(parent) {
     this.beats = new Beats();
-    this.minInterval = 20;  // 最小画线间隔
+    this.minInterval = 20;  // 最小画线间隔 单位:像素
     // timeBar的下半部分画小节线和拍线 并在工作区画小节线
     this.render = () => {
         const canvas = parent.timeBar;
@@ -49,7 +49,11 @@ function _BeatBar(parent) {
             const noteNum = 1 << Math.log2(dp / this.minInterval);
             if (noteNum < 2) continue;
             const noteInterval = dp / noteNum;
-            for (let i = 0, n = noteNum * measure.beatNum; i < n; i++, x -= noteInterval) {
+            let i = ((x - canvas.width) / noteInterval) | 0;    // 跳过末尾的 不然在极大的放大时会卡顿
+            if (i > 0) x -= i * noteInterval;
+            else i = 0;
+            for (let n = noteNum * measure.beatNum; i < n; i++, x -= noteInterval) {
+                if (x < 0) break;
                 if (i % noteNum == 0) continue; // 跳过beat线
                 noteX.push(x);
             }

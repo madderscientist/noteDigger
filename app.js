@@ -42,11 +42,6 @@ function App() {
             }
         }, enumerable: false
     });
-    Object.defineProperty(this.layers, 'render', {
-        value: function () {
-            for (const c in this) this[c].render();
-        }, enumerable: false
-    });
 
     this.layers.action.mask = '#25262da8';
     Object.defineProperty(this.layers.action, 'Alpha', {
@@ -332,7 +327,7 @@ function App() {
     this.scaleX = (mouseX, times) => {
         let nw = this._width * times;
         if (nw < 1) return;
-        if (nw > this.layers.spectrum.width >> 2) return;
+        if (nw > this.layers.spectrum.width) return;
         this.width = nw;
         this.scroll2((this.scrollX + mouseX) * times - mouseX, this.scrollY);
     };
@@ -342,7 +337,7 @@ function App() {
     this.update = () => {
         this.AudioPlayer.update();
         this.MidiPlayer.update();
-        this.layers.render();
+        for (const c in this.layers) this.layers[c].render()
     };
     this.layers.spectrum.resetHandlers([this.Spectrogram.render]);
     this.layers.action.resetHandlers([

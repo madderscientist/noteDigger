@@ -26,13 +26,13 @@ body {
     }
 }
 
-@media (max-width: 1000px) {
+@media (max-width: 1036px) {
     .logo2 {
         display: none !important;
     }
 }
 
-@media (max-width: 950px) {
+@media (max-width: 983px) {
     .logo1 {
         display: none !important;
     }
@@ -41,7 +41,7 @@ body {
     }
 }
 
-@media (max-width: 752px) {
+@media (max-width: 792px) {
     .rangeBox:has(#speedControl) {
         display: none;
     }

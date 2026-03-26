@@ -5,14 +5,42 @@
  * @param {App} parent 
  */
 function _MidiAction(parent) {
-    this.clickXid = 0;
-    this.clickYid = 0;
+    this.clickX = 0;    // 绝对坐标 单位像素
+    this.clickYid = 0;  // 离散坐标 单位离散格
 
     this.mode = 0;      // 0: 笔模式 1: 选择模式
     this.frameMode = 0; // 0: 框选 1: 列选 2: 行选
     this.frameXid = -1; // 框选的终点的X序号(Y序号=this.Keyboard.highlight-24) 此变量便于绘制 如果是负数则不绘制
 
     this.alphaIntensity = true; // 绘制音符时是否根据音量使用透明度
+
+    this.snapMode = 1;   // 0: 不吸附 1: 吸附到网格线 -1: 吸附到小节线
+    /**
+     * 根据snapMode吸附x坐标到不同的位置
+     * @param {number} x x是全局位置 单位:像素
+     * @returns [l, r] 除以 parent.width 后是相对于谱面起点的坐标，和最短的下一个位置
+     */
+    this.snapRound = (x) => {
+        // 最短为一个像素
+        if (this.snapMode == 0) return [x / parent._width, (x + 1) / parent._width];
+        // 最短一格
+        if (this.snapMode == 1) {
+            let i = x / parent._width | 0;
+            return [i, i + 1];
+        }
+        // 小节吸附
+        const m = parent.BeatBar.beats.getMeasure(Math.max(0, x * parent.TperP), true);
+        const start = m.start * parent.PperT;
+        const Interval = m.interval * parent.PperT;
+        const dp = Interval / m.beatNum;
+        // 没有细分
+        if (dp < parent.BeatBar.minInterval) return [start, start + Interval];
+        // 细分 和_BeatBar.render的逻辑一致
+        const noteNum = 1 << Math.log2(dp / parent.BeatBar.minInterval);
+        const subDp = dp / noteNum;
+        const n = ((x - start) / subDp | 0) * subDp + start;
+        return [n / parent._width, (n + subDp) / parent._width];
+    };
 
     /* 一个音符 = {
         y: 离散 和spectrum的y一致
@@ -25,19 +53,17 @@ function _MidiAction(parent) {
     this.selected = []; // 选中的音符 无序即可
     this.midi = [];     // 所有音符 需要维护有序性
 
-    let _tempdx = 0;       // 鼠标移动记录上次
-    let _tempdy = 0;
-    let _anyAction = false;// 用于在选中多个后判断松开鼠标时应该如何处理选中
+    var _anyAction = false; // 用于在选中多个后判断松开鼠标时应该如何处理选中
 
     if (!parent.synthesizer) throw new Error('MidiAction requires a synthesizer to be created.');
     const cd = this.channelDiv = new ChannelList(document.getElementById('funcSider'), parent.synthesizer);
     // 导入midi时创建音轨不应该update，而是应该在音符全创建完成后存档
     cd.updateCount = -1;    // -1表示需要update 否则表示禁用更新但记录了请求次数
-    cd.switchUpdateMode = (state, forceUpdate = false) => { // 控制音轨的更新
+    cd.switchUpdateMode = (state, forceUpdate = false, type = 0b11) => { // 控制音轨的更新
         if (state) {    // 切换回使能update
             if (cd.updateCount > 0 || forceUpdate) {    // 如果期间有更新请求
                 this.updateView();
-                parent.snapshot.save(0b11);
+                parent.snapshot.save(type);
             } cd.updateCount = -1;
         } else if (cd.updateCount < 0) {    // 如果是从true切换为false
             cd.updateCount = 0;
@@ -152,7 +178,8 @@ function _MidiAction(parent) {
         } if (!this.mode || this.frameXid < 0) return;
         // 绘制框选动作
         s.fillStyle = '#f0f0f088';
-        let [xmin, xmax] = this.clickXid <= this.frameXid ? [this.clickXid, this.frameXid + 1] : [this.frameXid, this.clickXid + 1];
+        const clickXid = this.clickX / parent._width | 0;
+        let [xmin, xmax] = clickXid <= this.frameXid ? [clickXid, this.frameXid + 1] : [this.frameXid, clickXid + 1];
         const Y = parent.Keyboard.highlight - 24;
         let [ymin, ymax] = Y <= this.clickYid ? [Y, this.clickYid + 1] : [this.clickYid, Y + 1];
         let x1, x2, y1, y2;
@@ -190,45 +217,82 @@ function _MidiAction(parent) {
         this.selected.forEach(v => { v.selected = false; });
         this.selected.length = 0;
     };
+
+    var _tempdy = 0;
+    this.changeNoteY = () => {  // 要求在trackMouse之后添加入spectrum的mousemoveEnent
+        _anyAction = true;
+        let dy = parent.Keyboard.highlight - 24 - this.clickYid;
+        this.selected.forEach((v) => { v.y += dy - _tempdy; });
+        _tempdy = dy;
+        this.updateView();
+    };
+
+    // 记录操作音符时之前的值 由于changeNoteX和changeNoteDuration 互斥，因此共用
+    var prevValue = null;
     /**
-     * 改变选中的音符的时长 依赖相对于点击位置的移动改变长度 所以需要提前准备好clickX
-     * 需要保证和changeNoteX同时只能使用一个
+     * 改变选中的音符的时长 需要保证和changeNoteX同时只能使用一个
      * @param {MouseEvent} e 
      */
     this.changeNoteDuration = (e) => {
         _anyAction = true;
         // 兼容窗口滑动，以绝对坐标进行运算
-        let dx = (((e.offsetX + parent.scrollX) / parent._width) | 0) - this.clickXid;
-        this.selected.forEach((v) => {
-            if ((v.x2 += dx - _tempdx) <= v.x1) v.x2 = v.x1 + 1;
-        });
-        _tempdx = dx;
-    };
-    this.changeNoteY = () => {  // 要求在trackMouse之后添加入spectrum的mousemoveEnent
-        _anyAction = true;
-        let dy = parent.Keyboard.highlight - 24 - this.clickYid;
-        this.selected.forEach((v) => {
-            v.y += dy - _tempdy;
-        });
-        _tempdy = dy;
-        this.updateView();
+        let dx = e.offsetX + parent.scrollX - this.clickX;
+        // 此时prevValue存的是音符的v2*width值
+        for (let i = 0; i < prevValue.length; i++) {
+            const v = this.selected[i];
+            const [l, r] = this.snapRound(prevValue[i] + dx);
+            if (v.x1 >= r) {
+                const [_, nr] = this.snapRound(v.x1 * parent._width);
+                v.x2 = nr;
+            } else v.x2 = r;
+        }
     };
     this.changeNoteX = (e) => { // 由this.onclick_L调用
         _anyAction = true;
-        let dx = (((e.offsetX + parent.scrollX) / parent._width) | 0) - this.clickXid;
-        this.selected.forEach((v) => {
-            let d = v.x2 - v.x1;
-            if ((v.x1 += dx - _tempdx) < 0) v.x1 = 0; // 越界则设置为0
+        let dx = e.offsetX + parent.scrollX - this.clickX;
+        // 此时prevValue存的是音符的v1*width值
+        for (let i = 0; i < prevValue.length; i++) {
+            const v = this.selected[i];
+            const d = v.x2 - v.x1;
+            const [l, r] = this.snapRound(prevValue[i] + dx);
+            v.x1 = Math.max(0, l);
             v.x2 = v.x1 + d;
-        });
-        _tempdx = dx;
+        }
+    };
+    // 封装事件管理
+    const startMove = () => {
+        prevValue = this.selected.map(v => v.x1 * parent._width);
+        parent.layerContainer.addEventListener('mousemove', this.changeNoteX);
+        parent.layerContainer.addEventListener('mousemove', this.changeNoteY);
+        const removeEvent = () => {
+            parent.layerContainer.removeEventListener('mousemove', this.changeNoteX);
+            parent.layerContainer.removeEventListener('mousemove', this.changeNoteY);
+            document.removeEventListener('mouseup', removeEvent);
+            this.midi.sort((a, b) => a.x1 - b.x1);   // 排序非常重要 因为查找被点击的音符依赖顺序
+            // 鼠标松开则存档
+            if (_anyAction) parent.snapshot.save(0b10);
+        }; document.addEventListener('mouseup', removeEvent);
+
+    };
+    const startDurationChange = () => {
+        prevValue = this.selected.map(v => v.x2 * parent._width);
+        parent.layerContainer.addEventListener('mousemove', this.changeNoteDuration);
+        parent.layerContainer.addEventListener('mousemove', this.changeNoteY);
+        const removeEvent = () => {
+            parent.layerContainer.removeEventListener('mousemove', this.changeNoteDuration);
+            parent.layerContainer.removeEventListener('mousemove', this.changeNoteY);
+            document.removeEventListener('mouseup', removeEvent);
+            // 鼠标松开则存档
+            if (_anyAction) parent.snapshot.save(0b10);
+        }; document.addEventListener('mouseup', removeEvent);
     };
     /**
      * 框选音符的鼠标动作 由this.onclick_L调用
      * 选中的标准：框住了音头
      */
     this.selectAction = (mode = 0) => {
-        this.frameXid = this.clickXid; // 先置大于零，表示开始绘制
+        const clickXid = this.clickX / parent._width | 0;   // 选择动作永远以格点为准
+        this.frameXid = clickXid; // 先置大于零，表示开始绘制
         if (mode == 1) {    // 列选
             parent.layerContainer.addEventListener('mousemove', parent.trackMouseX);
             const up = () => {
@@ -237,7 +301,7 @@ function _MidiAction(parent) {
                 let ch = this.channelDiv.selected;
                 if (ch && !ch.lock) {
                     ch = ch.index;
-                    let [xmin, xmax] = this.clickXid <= this.frameXid ? [this.clickXid, this.frameXid + 1] : [this.frameXid, this.clickXid + 1];
+                    let [xmin, xmax] = clickXid <= this.frameXid ? [clickXid, this.frameXid + 1] : [this.frameXid, clickXid + 1];
                     for (const nt of this.midi) nt.selected = (nt.x1 >= xmin && nt.x1 < xmax && nt.ch == ch);
                     this.selected = this.midi.filter(v => v.selected);
                 } this.frameXid = -1;
@@ -263,7 +327,7 @@ function _MidiAction(parent) {
                 if (ch && !ch.lock) {
                     ch = ch.index;
                     const Y = parent.Keyboard.highlight - 24;
-                    let [xmin, xmax] = this.clickXid <= this.frameXid ? [this.clickXid, this.frameXid + 1] : [this.frameXid, this.clickXid + 1];
+                    let [xmin, xmax] = clickXid <= this.frameXid ? [clickXid, this.frameXid + 1] : [this.frameXid, clickXid + 1];
                     let [ymin, ymax] = Y <= this.clickYid ? [Y, this.clickYid + 1] : [this.clickYid, Y + 1];
                     for (const nt of this.midi) nt.selected = (nt.x1 >= xmin && nt.x1 < xmax && nt.y >= ymin && nt.y < ymax && nt.ch == ch);
                     this.selected = this.midi.filter(v => v.selected);
@@ -280,10 +344,10 @@ function _MidiAction(parent) {
         // 取消已选
         this.clearSelected();
         // 添加新音符，设置已选
+        const [x1, x2] = this.snapRound(this.clickX);
         const note = {
             y: this.clickYid,
-            x1: this.clickXid,
-            x2: this.clickXid + 1,
+            x1, x2,
             ch: this.channelDiv.selected.index,
             selected: true
         }; this.selected.push(note);
@@ -297,15 +361,7 @@ function _MidiAction(parent) {
         }
         _anyAction = true;
         this.updateView();
-        parent.layerContainer.addEventListener('mousemove', this.changeNoteDuration);
-        parent.layerContainer.addEventListener('mousemove', this.changeNoteY);
-        const removeEvent = () => {
-            parent.layerContainer.removeEventListener('mousemove', this.changeNoteDuration);
-            parent.layerContainer.removeEventListener('mousemove', this.changeNoteY);
-            document.removeEventListener('mouseup', removeEvent);
-            // 鼠标松开则存档
-            if (_anyAction) parent.snapshot.save(0b10);
-        }; document.addEventListener('mouseup', removeEvent);
+        startDurationChange();
     };
     /**
      * MidiAction所有鼠标操作都由此分配
@@ -314,8 +370,8 @@ function _MidiAction(parent) {
         //== step 1: 判断是否点在了音符上 ==//
         _anyAction = false;
         // 为了支持在鼠标操作的时候能滑动，记录绝对位置
-        _tempdx = _tempdy = 0;
-        const x = this.clickXid = ((e.offsetX + parent.scrollX) / parent._width) | 0;
+        _tempdy = 0;
+        const x = (this.clickX = e.offsetX + parent.scrollX) / parent._width;
         if (x >= parent._xnum) {   // 越界
             this.clearSelected(); return;
         }
@@ -383,26 +439,9 @@ function _MidiAction(parent) {
         }
         //== step 4: 如果点击到了音符，添加移动事件 ==//
         if (((e.offsetX + parent.scrollX) << 1) > (n.x2 + n.x1) * parent._width) {    // 靠近右侧，调整时长
-            parent.layerContainer.addEventListener('mousemove', this.changeNoteDuration);
-            parent.layerContainer.addEventListener('mousemove', this.changeNoteY);
-            const removeEvent = () => {
-                parent.layerContainer.removeEventListener('mousemove', this.changeNoteDuration);
-                parent.layerContainer.removeEventListener('mousemove', this.changeNoteY);
-                document.removeEventListener('mouseup', removeEvent);
-                // 鼠标松开则存档
-                if (_anyAction) parent.snapshot.save(0b10);
-            }; document.addEventListener('mouseup', removeEvent);
+            startDurationChange();
         } else {    // 靠近左侧，调整位置
-            parent.layerContainer.addEventListener('mousemove', this.changeNoteX);
-            parent.layerContainer.addEventListener('mousemove', this.changeNoteY);
-            const removeEvent = () => {
-                parent.layerContainer.removeEventListener('mousemove', this.changeNoteX);
-                parent.layerContainer.removeEventListener('mousemove', this.changeNoteY);
-                document.removeEventListener('mouseup', removeEvent);
-                this.midi.sort((a, b) => a.x1 - b.x1);   // 排序非常重要 因为查找被点击的音符依赖顺序
-                // 鼠标松开则存档
-                if (_anyAction) parent.snapshot.save(0b10);
-            }; document.addEventListener('mouseup', removeEvent);
+            startMove();
         }
     };
 }

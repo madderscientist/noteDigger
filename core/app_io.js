@@ -622,7 +622,7 @@ function _IO(parent) {
                 }
                 for (const ch of chArray) parent.MidiAction.midi.push(...ch);
                 parent.MidiAction.midi.sort((a, b) => a.x1 - b.x1);
-                chdiv.switchUpdateMode(true);   // 打开更新并一次性处理积压请求
+                chdiv.switchUpdateMode(true, true, 0b111);   // 打开更新并一次性处理积压请求
             });
         },
     }

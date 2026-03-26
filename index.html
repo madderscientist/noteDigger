@@ -95,6 +95,9 @@
             </button>
         </div>
         <div class="switch-bar">
+            <button class="iconfont icon-xifu1 labeled selected" id="snap-btn" data-tooltip="网格吸附"></button>
+        </div>
+        <div class="switch-bar">
             <button class="iconfont icon-repeat labeled selected" id="repeat-btn" data-tooltip="重复区间:开"></button>
         </div>
         <div class="switch-bar">
@@ -217,6 +220,26 @@
     hideLableRange.new(audiovolumeControl).reset();
     // 事件
     // ==== 顶部按钮事件 ==== //
+    document.getElementById('snap-btn').addEventListener('click', function () {
+        switch (app.MidiAction.snapMode) {
+            case 1:
+                app.MidiAction.snapMode = -1;
+                this.dataset.tooltip = "节拍吸附";
+                this.className = "iconfont icon-xifu labeled selected";
+                break;
+            case -1:
+                app.MidiAction.snapMode = 0;
+                this.dataset.tooltip = "吸附:关";
+                this.className = "iconfont icon-xifu labeled";
+                break;
+            default:    // 吸附:关
+                app.MidiAction.snapMode = 1;
+                this.dataset.tooltip = "网格吸附";
+                this.className = "iconfont icon-xifu1 labeled selected";
+                break;
+        }
+        this.blur();
+    });
     document.getElementById('repeat-btn').addEventListener('click', function () {
         if (this.classList.toggle('selected')) {
             app.AudioPlayer.repeat = true;
