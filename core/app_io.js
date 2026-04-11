@@ -298,6 +298,7 @@ function _IO(parent) {
             parent.MidiAction.channelDiv.fromArray(obj.channel);
             parent.BeatBar.beats.copy(obj.beat);
             parent.dt = obj.dt;
+            parent.TperP = parent.dt / parent._width; parent.PperT = parent._width / parent.dt;
             parent.Keyboard.freqTable.A4 = obj.A4;
             parent.Spectrogram.spectrogram = data[1];
             parent.snapshot.save();

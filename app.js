@@ -96,7 +96,7 @@ function App() {
             this.idXend = Math.min(this._xnum, Math.ceil((this.scrollX + this.layers.width) / this._width));
         }
     });
-    this.dt = 50;       // 每次分析的时间间隔 单位毫秒 在this.Analyser.analyse中更新
+    this.dt = 50;       // 每次分析的时间间隔 单位毫秒 在this.Analyser.stft this.io.onfile this.io.projFile.import 中更新
     this.time = -1;     // 当前时间 单位：毫秒 在this.AudioPlayer.update中更新
 
     // 以下变量仅在scroll2中更新(特别标记的除外)
