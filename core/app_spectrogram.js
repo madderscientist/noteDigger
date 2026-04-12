@@ -112,6 +112,34 @@ function _Spectrogram(parent) {
         ctx.strokeStyle = "#FFFFFF";    // 分界线颜色
         ctx.fillStyle = '#25262d';      // 背景颜色
     };
+    // 供外部调用的接口 返回一个可以用[][]访问的对象 值为最终计算结果
+    this.getCurrentSpectrum = () => {
+        const _this = this;
+        const view = {
+            length: this._spectrogram.length,
+            buffer: new Float32Array(this._spectrogram[0].length),
+            currentFrame: -1
+        };
+        return new Proxy(view, {
+            get(target, prop) {
+                if (prop in target) return target[prop];
+                const frameID = parseInt(prop);
+                if (isNaN(frameID) || frameID < 0 || frameID >= target.length) return undefined;
+                const b = target.buffer;
+                if (frameID === target.currentFrame) return b;
+                const s = _this._spectrogram[frameID];
+                const h = _this.harmonic?.[frameID];
+                if (h) for (let i = 0; i < b.length; i++) {
+                    let amp = s[i] - h[i] * _this._Hmultiple;
+                    b[i] = Math.pow(Math.max(0, amp), _this._contrast) * _this._multiple;
+                } else for (let i = 0; i < b.length; i++) {
+                    b[i] = Math.pow(Math.max(0, s[i]), _this._contrast) * _this._multiple;
+                }
+                target.currentFrame = frameID;
+                return b;
+            }
+        });
+    };
     this.renderSpectrum = (ctx) => {
         // 填充数据到imagerData 随spectrum的列主序
         for (let frameID = parent.idXstart, x = 0, off = 0; frameID < parent.idXend; frameID++, x++, off += imageData.width) {

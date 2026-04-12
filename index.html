@@ -458,8 +458,8 @@
                 }
                 let id = ch.index;
                 let notes = NoteAnalyser.autoFill(
-                    app.Spectrogram._spectrogram,
-                    parseInt(threshold.value) / app.Spectrogram.multiple,
+                    app.Spectrogram.getCurrentSpectrum(),
+                    parseInt(threshold.value),
                     from, to
                 );
                 for (const nt of notes) nt.ch = id;
