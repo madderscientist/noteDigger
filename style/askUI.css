@@ -47,10 +47,14 @@
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 10px 8px 0 8px;
+    padding: 5px 8px 5px 8px;
     margin: 0.2em;
     background: inherit;
     color: inherit;
+}
+
+.card.hvCenter .layout-first {
+    margin-top: calc(0.2em + 5px);
 }
 
 .request-cover .card.hvCenter button {

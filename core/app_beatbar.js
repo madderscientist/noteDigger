@@ -89,7 +89,7 @@ function _BeatBar(parent) {
                 tempDiv.innerHTML = `
 <div class="request-cover">
     <div class="card hvCenter"><label class="title">小节${m.id}设置</label>
-        <div class="layout"><span>拍数</span><input type="text" name="ui-ask" step="1" max="16" min="1"></div>
+        <div class="layout layout-first"><span>拍数</span><input type="text" name="ui-ask" step="1" max="16" min="1"></div>
         <div class="layout"><span>音符</span><select name="ui-ask">
             <option value="2">2分</option>
             <option value="4">4分</option>

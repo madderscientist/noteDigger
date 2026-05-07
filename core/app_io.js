@@ -98,7 +98,7 @@ function _IO(parent) {
     <div class="card hvCenter">
         <span class="title" style="text-align: center;">${file.name}</span>
         <button class="ui-cancel"${midiModeStyle}>使用已有结果</button>
-        <div class="layout"><span>每秒的次数：</span><input type="number" name="ui-ask" value="20" min="1" max="100"></div>
+        <div class="layout layout-first"><span>每秒的次数：</span><input type="number" name="ui-ask" value="20" min="1" max="100"></div>
         <div class="layout"><span>标准频率A4=</span><input type="number" name="ui-ask" value="440" step="0.1" min="55"></div>
         <div${midiModeStyle}>
             <div class="layout">分析声道：
@@ -212,7 +212,7 @@ function _IO(parent) {
 <div class="request-cover">
     <div class="card hvCenter"><label class="title">解析中</label>
         <span>00%</span>
-        <div class="layout">
+        <div class="layout layout-first">
             <div class="porgress-track">
                 <div class="porgress-value"></div>
             </div>
@@ -334,28 +334,41 @@ function _IO(parent) {
                 let tempDiv = document.createElement('div');
                 tempDiv.innerHTML = `
 <div class="request-cover">
-    <div class="card hvCenter" style="overflow: visible;"><label class="title">导出为midi</label>
-        <div class="layout"><button class="ui-confirm labeled" data-tooltip="可用于制谱；可能会损失、扭曲一些信息">导出时节奏对齐</button></div>
-        <div class="layout"><button class="ui-confirm labeled" data-tooltip="保证播放起来和这里一模一样，但丢失节奏信息">和听起来一样</button></div>
-        <div class="layout">仅导出可见音轨<input type="checkbox"></div>
-        <div class="layout"><button class="ui-cancel">取消</button></div>
+<div class="card hvCenter" style="overflow: visible;">
+    <div class="fr" style="align-items: center;">
+        <label class="title">导出为midi</label>
+        <span style="flex:1"></span>
+        <button class="ui-cancel">❌</button>
     </div>
+    <ul class="btn-ul layout-first">
+        <li class="layout dim-text" style="flex-direction: column;">
+            <button class="ui-confirm labeled" data-tooltip="可用于制谱；可能会损失、扭曲一些信息">节奏量化对齐</button>
+            <div class="fr layout-first" style="align-items: center;">
+                <span class="labeled" data-tooltip="越大越逼近听感，越小越规整\n若节奏已经精准，建议增大">对齐精度</span>
+                <input type="number" value="4" min="2" max="12" style="width: 2em;">
+            </div>
+        </li>
+        <li class="layout dim-text"><button class="ui-confirm labeled" data-tooltip="保证播放起来和这里一模一样，但丢失节奏信息\n适用于合成音频">和听起来一样</button></li>
+        <li class="layout"><label>仅导出可见音轨<input type="checkbox"></label></li>
+    </ul>
+</div>
 </div>`;
                 const card = tempDiv.firstElementChild;
                 const close = () => { card.remove(); };
                 const checkbox = card.querySelector('input[type="checkbox"]');
                 const btns = card.querySelectorAll('button');
-                btns[0].onclick = () => {
-                    const midi = this.beatAlign(checkbox.checked);
+                btns[0].onclick = close;
+                btns[1].onclick = () => {;
+                    const alignRate = parseInt(card.querySelector('input[type="number"]').value);
+                    const midi = this.beatAlign(checkbox.checked, alignRate);
                     bSaver.saveArrayBuffer(midi.export(1), midi.name + '.mid');
                     close();
                 };
-                btns[1].onclick = () => {
+                btns[2].onclick = () => {
                     const midi = this.keepTime(checkbox.checked);
                     bSaver.saveArrayBuffer(midi.export(1), midi.name + '.mid');
                     close();
                 };
-                btns[2].onclick = close;
                 document.body.insertBefore(card, document.body.firstChild);
                 card.tabIndex = 0;
                 card.focus();
@@ -381,7 +394,8 @@ function _IO(parent) {
                     mts[nt.ch].addEvent(midiEvent.note(nt.x1 * accuracy, (nt.x2 - nt.x1) * accuracy, midint, v));
                 } return newMidi;
             },
-            beatAlign(onlyVisible = false) {
+            beatAlign(onlyVisible = false, alignRate = 2) {
+                alignRate = Math.max(Math.round(alignRate), 2);
                 // 初始化midi
                 let begin = parent.BeatBar.beats[0];
                 let lastbpm = begin.bpm;    // 用于自适应bpm
@@ -445,7 +459,7 @@ function _IO(parent) {
                         if (n.ticks > end) break;    // 给下一小节
                         m_i++;
                         if (onlyVisible && !parent.MidiAction.channelDiv.channel[n._ch].visible) continue;
-                        const threshold = n._d / 2;
+                        const threshold = n._d / alignRate;
                         let accuracy = aot;
                         while (accuracy > threshold) accuracy /= 2;
                         n.ticks = tickNow + ((Math.round((n.ticks - begin) / accuracy) * newMidi.tick * accuracy / aot) >> 1);

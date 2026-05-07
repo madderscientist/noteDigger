@@ -247,8 +247,8 @@ button {
     border-radius: 4px;
 }
 .btn-ul li:hover {
-    background-color: var(--theme-light);
-    color: white;
+    background-color: var(--theme-light) !important;
+    color: white !important;
 }
 .btn-ul button {
     padding: 0.25em 0.6em;
@@ -378,4 +378,8 @@ canvas.selecting {
 
 .pointer {
     cursor: pointer;
+}
+
+.dim-text {
+    color: var(--theme-text) !important;
 }

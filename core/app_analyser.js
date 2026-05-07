@@ -266,9 +266,9 @@ function _Analyser(parent) {
         <div class="fr" style="align-items: center;">
             <label class="title">数字谱对齐音频</label>
             <span style="flex:1"></span>
-            <button class="ui-cancel">取消</button>
+            <button class="ui-cancel">❌</button>
         </div>
-        <div class="layout">
+        <div class="layout layout-first">
             <button class="ui-cancel">降低八度</button>
             <span style="width: 1em;"></span>
             <button class="ui-cancel">升高八度</button>

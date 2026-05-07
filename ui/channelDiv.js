@@ -458,7 +458,7 @@ class ChannelList extends EventTarget {
         tempDiv.innerHTML = `
         <div class="request-cover">
             <div class="card hvCenter"><label class="title">音轨${ch.dataset.tabIndex}设置</label>
-                <div class="layout"><span>音轨名:</span><input type="text" name="ui-ask"></div>
+                <div class="layout layout-first"><span>音轨名:</span><input type="text" name="ui-ask"></div>
                 <div class="layout"><span>音量：&nbsp;</span><input type="number" name="ui-ask" value="100" step="1" min="0" max="127"></div>
                 <div class="layout"><span>音色：&nbsp;</span><select name="ui-ask"></select></div>
                 <div class="layout"><button class="ui-cancel">取消</button><button class="ui-confirm">确定</button></div>
