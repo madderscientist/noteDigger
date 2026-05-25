@@ -48,6 +48,9 @@ class NoteAnalyser {    // 负责解析频谱数据
     }
     /**
      * 创建从线性谱到CQ谱的加权矩阵
+     * Y(fc) = ∫ W(12 * log2(x/fc)) * S(x) dx ≈ Σ_n W(12·log₂(n·Δx / fc)) · S(n·Δx) · Δx
+     * 假设无噪声，高频泄露更广，窗就应该更大，因此可以直接区间求和
+     * 过采样下，S仅在(n·oversample·Δx)处有值 此时用余弦窗模拟泄露，填充中间的过采样点
      * @param {number} semiR 每个半音收集的频率范围 单位:半音 取0.5时半音间无重合
      * @param {number} leakR 频谱泄露半径 单位:每FFT精度
      * @param {number} oversample 过采样率 用于模拟泄露
@@ -64,15 +67,13 @@ class NoteAnalyser {    // 负责解析频谱数据
         } H_fft[oversample] = 1;
         const over_df = this.df * leakR / (oversample + 1);
 
-        // 用对数谱的余弦收集能量 新坐标u=B*log2(x/center) B=12
-        // du/dx = B/log(2)/x 每Hz对应的半音数 代表占据能量的宽度
+        // 用对数谱的余弦收集能量
         const omega = Math.PI / semiR;
-        function pitchCospuls(x, center) {
+        function pitchCosWindow(x, center) {
             if (x <= 0) return 0;
             let wrapedf = 12 * Math.log2(x / center);   // 半音距离
             if (Math.abs(wrapedf) >= semiR) return 0;
-            // 余弦窗*du/dx 余弦周期为2表示相邻半音 常数项不管 会归一化
-            return (Math.cos(wrapedf * omega) + 1) / x;
+            return Math.cos(wrapedf * omega) + 1;   // 常数项不管 会归一化
         }
 
         const tuning = 2 ** (semiR / 12);   // 半音范围对应的频率倍数
@@ -87,10 +88,8 @@ class NoteAnalyser {    // 负责解析频谱数据
             for (let j = start, id = 0; j < end; j++, id++) {
                 // 对每个fft中心频点计算贡献: \sum 泄露*窗值
                 for (let hid = 0, f = j * this.df - oversample * over_df; hid < H_fft.length; f += over_df, hid++)
-                    H[id] += pitchCospuls(f, fc) * H_fft[hid];
+                    H[id] += pitchCosWindow(f, fc) * H_fft[hid];
             }
-            // 幅度一致性: 频率越高窗越大
-            for (let j = 0; j < H.length; j++) H[j] *= fc;
         }
     }
     /**
