@@ -345,7 +345,7 @@ function _IO(parent) {
             <button class="ui-confirm labeled" data-tooltip="可用于制谱；可能会损失、扭曲一些信息">节奏量化对齐</button>
             <div class="fr layout-first" style="align-items: center;">
                 <span class="labeled" data-tooltip="越大越逼近听感，越小越规整\n若节奏已经精准，建议增大">对齐精度</span>
-                <input type="number" value="4" min="2" max="12" style="width: 2em;">
+                <input type="number" value="4" min="2" max="16" style="width: 2em;">
             </div>
         </li>
         <li class="layout dim-text"><button class="ui-confirm labeled" data-tooltip="保证播放起来和这里一模一样，但丢失节奏信息\n适用于合成音频">和听起来一样</button></li>
