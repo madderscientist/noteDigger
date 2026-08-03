@@ -84,6 +84,7 @@ window.plugins.push(function (app) {
                 break;
             }
         } !inserted && ul.appendChild(li);
+        // 注册点击事件
         li.onclick = function (e) {
             if (!app.Spectrogram._spectrogram || app.midiMode) {
                 alert("请先导入音频！");
@@ -92,7 +93,32 @@ window.plugins.push(function (app) {
             chordEst();
             e.stopPropagation();
             e.target.blur();
-        }; break;
+        };
+        // 右键菜单
+        const menu = new ContextMenu([
+            {
+                name: "清除和弦",
+                callback: (e_father, e_self) => {
+                    chords = null;
+                    app.makeActDirty();
+                    return false;
+                }
+            }, {
+                name: "复制和弦",
+                callback: (e_father, e_self) => {
+                    let str = chords.map(c => `${c.at * app.dt}ms: ${c.chord}`).join('\n');
+                    navigator.clipboard.writeText(str).then(() => {
+                        alert("已复制到剪贴板");
+                    });
+                }
+            }
+        ]);
+        li.addEventListener('contextmenu', (e) => {
+            if (!chords) return;
+            e.preventDefault();
+            menu.show(e);
+        });
+        break;
     }
     window.app.layers.action.register(render);
     console.log('plugin "chordEst" loaded');
