@@ -183,6 +183,24 @@ button {
     margin: 0.25em;
 }
 
+#volume-swap-btn {
+    background-color: rgb(50, 53, 62);
+    color: var(--theme-text);
+    padding: 2px 5px;
+    margin-right: 4px;
+    border-radius: 5px;
+    line-height: 1.15em;
+    font-size: 0.9em;
+}
+
+#volume-swap-btn:hover {
+    color: white;
+}
+
+#volume-swap-btn:active {
+    background-color: var(--theme-middle);
+}
+
 /* 工具选择 */
 .switch-bar {
     display: inline-block;

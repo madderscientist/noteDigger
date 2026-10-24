@@ -434,6 +434,12 @@ function App() {
                 case 'PageUp': this.scroll2(this.scrollX - this.layers.spectrum.width, this.scrollY); break;
                 case 'PageDown': this.scroll2(this.scrollX + this.layers.spectrum.width, this.scrollY); break;
                 case 'Home': this.scroll2(0); this.setTime(0); break;
+                case '`': case '·':
+                    if (!e.repeat) {
+                        const btn = document.getElementById('volume-swap-btn');
+                        btn.click();
+                        document.addEventListener('keyup', () => btn.click(), { once: true });
+                    } break;
             }
         }
     });
@@ -670,7 +676,9 @@ dom needed:
 #speedControl input[type=range] 变速
 #multiControl input[type=range] 改变画频谱的倍率
 #contrastControl input[type=range] 改变画频谱的对比度
+#volume-swap-btn button 反转音符和音频音量
 #midivolumeControl input[type=range] midi音量
+#audiovolumeControl input[type=range] 音频音量
 #play-btn button 播放
 #actMode div 动作模式选择，其下有两个btn
 #scrollbar-track div 滑动条轨道
