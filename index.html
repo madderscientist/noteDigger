@@ -353,8 +353,6 @@
             app.io.midiFile.export.UI();
         };
         const textfield = numberedScore.querySelector('textarea');
-        textfield.addEventListener('focus', () => app.preventShortCut = true);
-        textfield.addEventListener('blur', () => app.preventShortCut = false);
         numberedScore.querySelector('button').onclick = () => { // 转数字谱
             const note = ["1", "#1", "2", "#2", "3", "4", "#4", "5", "#5", "6", "#6", "7"];
             function indexToje(index) { // indexToje(0) -> "1"

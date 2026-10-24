@@ -289,10 +289,7 @@ function _Analyser(parent) {
 </div>`;
         const UI = tempDiv.firstElementChild;
         const textarea = UI.querySelector('textarea');
-        const close = () => {
-            UI.remove();
-            parent.preventShortCut = false;
-        }
+        const close = () => UI.remove();
         const btns = UI.getElementsByTagName('button');
         btns[0].onclick = close;
         btns[1].onclick = () => {
@@ -330,7 +327,6 @@ function _Analyser(parent) {
                 alert(error.message);
             }
         }
-        parent.preventShortCut = true; // 禁止快捷键
         document.body.insertBefore(UI, document.body.firstChild);
     };
     this._autoNoteAlign = (noteSeq, begin, end) => {

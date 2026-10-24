@@ -145,7 +145,6 @@ function App() {
             this.MidiAction.frameXid = Math.floor((x + this.scrollX) / this._width);
         }
     });
-    this.preventShortCut = false;   // 当需要原始快捷键时(比如输入框)修改此为true
     this.audioContext = new AudioContext({ sampleRate: 44100 });
     this.synthesizer = new TinySynth(this.audioContext);
     this.Spectrogram = new _Spectrogram(this);
@@ -402,9 +401,12 @@ function App() {
         this.AudioPlayer.audio.volume = parseFloat(e.target.value);
     });
     document.addEventListener('keydown', (e) => { // 键盘事件
-        // 以下在没有频谱数据时不启用
-        if (this.preventShortCut) return;
+        // 以下在没有频谱数据、焦点在文本输入框、或有弹窗遮罩时不启用
         if (!this.Spectrogram._spectrogram) return;
+        const el = e.target;
+        if (el.tagName === 'TEXTAREA' || el.isContentEditable ||
+            (el.tagName === 'INPUT' && !['range', 'checkbox', 'radio', 'button', 'file', 'color'].includes(el.type)) ||
+            document.querySelector('.request-cover')) return;
         let shortcut = '';
         // 检测平台并使用相应的修饰键
         const isMac = navigator.platform.toUpperCase().indexOf('MAC') >= 0;
