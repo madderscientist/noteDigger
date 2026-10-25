@@ -40,11 +40,13 @@ function _Spectrogram(parent) {
         set: function(s) {
             if (!s) {
                 this._spectrogram = this.harmonic = null;
+                this._Hmultiple = 1;
                 parent.xnum = 0;
             } else {
                 if (s.raw != this._spectrogram?.raw) {
                     this._spectrogram = s;
                     this.harmonic = null;
+                    this._Hmultiple = 1;
                 }
                 parent.xnum = s.length;
                 parent.scroll2();

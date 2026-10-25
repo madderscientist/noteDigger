@@ -301,7 +301,7 @@
 
     // EQ的UI设置
     function iniEQUI({ detail }) {
-        if (detail >= 0) return;
+        if (detail !== -1) return;
         if (app.midiMode) {
             EQcontrol.innerHTML = '<h5>MIDI模式下没有EQ哦</h5>';
             return;
@@ -496,6 +496,13 @@
             };
         }
         // 去谐波
+        const clearHarmonicUI = () => {
+            if (lis[3].childElementCount) {
+                lis[3].firstChild.textContent = "去除谐波";
+                lis[3].lastElementChild.remove();
+            }
+            app.Spectrogram.Hmultiple = 1;
+        };
         lis[3].onclick = function () {
             if (!app.Spectrogram._spectrogram || app.midiMode) {
                 alert("请先导入音频！");
@@ -503,6 +510,10 @@
             }
             app.Analyser.reduceHarmonic().then((done) => {
                 if (!done) return;
+                if (!app.Spectrogram.harmonic) {
+                    clearHarmonicUI();
+                    return;
+                }
                 if (this.childElementCount) return;
                 this.firstChild.textContent = "重新去除谐波";
                 let ui = document.createElement('div');
@@ -517,6 +528,12 @@
                 myRange.new(r).reset();
             });
         };
+        app.event.addEventListener('progress', ({ detail }) => {
+            if (detail !== -1) return;
+            if (lis[0].childElementCount) lis[0].lastElementChild.remove();
+            if (lis[1].lastElementChild?.tagName === 'DIV') lis[1].lastElementChild.remove();
+            clearHarmonicUI();
+        });
         // 自动音符对齐
         lis[4].onclick = () => app.Analyser.autoNoteAlign();
         // 人工智障扒谱

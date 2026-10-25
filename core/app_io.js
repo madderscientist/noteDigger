@@ -34,8 +34,11 @@ function _IO(parent) {
                 return true;
             }
         });
-        // 假音频 需要设置parent.midiMode=true;
-        return parent.AudioPlayer.createAudio(l / tNum);
+        // 假音频 需要设置 parent.midiMode=true;
+        return parent.AudioPlayer.createAudio(l / tNum).then((a) => {
+            parent.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));
+            return a;
+        });
     }
 
     /**
@@ -43,7 +46,7 @@ function _IO(parent) {
      * - fileui: 展示本函数的UI，需要外界关闭drag功能
      * - fileuiclose: UI关闭，外界恢复drag功能
      * - fileerror: 文件解析错误，外界提示用户; detail为Error对象
-     * - progress: 解析进度，detail为0~1的数字，-1表示完成
+     * - progress: detail为0~1表示解析进度，-1表示加载成功，-2表示加载失败
      * event的意义是可以反复触发（比如进度文件错误可重试），而返回值的promise只能触发一次
      * @param {File} file 音频文件 如果不传则进入midi编辑器模式
      * @returns Promise 指示用户操作完成，即UI关闭
@@ -156,7 +159,7 @@ function _IO(parent) {
                         // 设置音频源 缓存到浏览器
                         parent.AudioPlayer.createAudio(audioBuffer).then(() => {
                             parent.io.projFile.import(data);
-                            // 触发html中的iniEQUI
+                            // 加载成功，刷新EQ并清理旧分析结果
                             parent.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));
                             resolve();
                         }).catch((e) => {
@@ -243,6 +246,7 @@ function _IO(parent) {
             // 读取文件
             loadAudio(false).then((audioBuffer) => {
                 let channels;
+                let loaded = false;
                 // 解码音频文件为音频缓冲区
                 parent.audioContext.decodeAudioData(audioBuffer).then((decodedData) => {
                     channels = parent.Analyser.selectChannel(decodedData, channel);
@@ -252,6 +256,7 @@ function _IO(parent) {
                     ]);
                 }).then(([v, audio]) => {
                     parent.Spectrogram.spectrogram = v;
+                    loaded = true;
                     resolve();
                     // 后台执行CQT CQT的报错已经被拦截不会冒泡到下面的catch中
                     if (checkboxCQT.checked) parent.Analyser.cqt(
@@ -263,8 +268,8 @@ function _IO(parent) {
                     parent.event.dispatchEvent(new CustomEvent('fileerror', { detail: e }));
                     reject(e);
                 }).finally(() => {
-                    // 最终都要关闭进度条
-                    parent.event.dispatchEvent(new CustomEvent('progress', { detail: -1 }));
+                    // -1加载成功，-2加载失败；负值均关闭进度条，仅-1刷新EQ并清理旧分析结果
+                    parent.event.dispatchEvent(new CustomEvent('progress', { detail: loaded ? -1 : -2 }));
                     parent.event.dispatchEvent(new Event('fileuiclose'));  // 恢复drag功能
                 });
             });

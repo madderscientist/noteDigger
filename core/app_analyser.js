@@ -634,7 +634,7 @@ function _Analyser(parent) {
                 lastFrame = tnow;
             }
         }
-        if (!inplace) parent.Spectrogram.harmonic = harmonicAmp;
+        parent.Spectrogram.harmonic = harmonicAmp;
         parent.layers.spectrum.dirty = true;
         onprogress(-1);
     };

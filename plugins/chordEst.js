@@ -121,6 +121,12 @@ window.plugins.push(function (app) {
         break;
     }
     window.app.layers.action.register(render);
+    app.event.addEventListener('progress', ({ detail }) => {
+        if (detail === -1 && chords) {
+            chords = null;
+            app.makeActDirty();
+        }
+    });
     console.log('plugin "chordEst" loaded');
 });
 if (window.app) {
