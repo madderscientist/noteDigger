@@ -20,19 +20,19 @@ body {
     overflow: hidden;
 }
 
-@media (max-width: 1084px) {
+@media (max-width: 1104px) {
     .logo3 {
         display: none !important;
     }
 }
 
-@media (max-width: 1036px) {
+@media (max-width: 1056px) {
     .logo2 {
         display: none !important;
     }
 }
 
-@media (max-width: 983px) {
+@media (max-width: 1003px) {
     .logo1 {
         display: none !important;
     }
@@ -41,7 +41,7 @@ body {
     }
 }
 
-@media (max-width: 792px) {
+@media (max-width: 812px) {
     .rangeBox:has(#speedControl) {
         display: none;
     }
@@ -181,6 +181,7 @@ button {
     align-items: center;
     justify-content: left;
     margin: 0.25em;
+    white-space: nowrap;
 }
 
 #volume-swap-btn {
@@ -234,6 +235,27 @@ button {
 .switch-bar .selected {
     background-color: rgb(60, 87, 221);
 }
+
+.pan-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    background-color: rgb(50, 53, 62);
+    color: var(--theme-text);
+    font-size: 11px;
+    line-height: 1;
+    padding: 2px 4px;
+    border-radius: 4px;
+}
+
+.pan-btn:hover {
+    color: white;
+}
+
+.pan-btn.selected {
+    background-color: rgb(60, 87, 221);
+    color: white;
+}
 /* 下方标签 */
 .labeled {
     position: relative;
@@ -252,6 +274,7 @@ button {
     transform: translateY(105%) translateX(-50%);
     border-radius: 4px;
     border: var(--theme-dark) solid 2px;
+    pointer-events: none;
     display: none;
 }
 .labeled:hover::after {

@@ -12,6 +12,8 @@ function _AudioPlayer(parent) {
     this.autoPage = false;      // 自动翻页
     this.repeat = true;         // 是否区间循环
     this.EQfreq = [31, 62, 125, 250, 500, 1000, 2000, 4000, 8000, 16000];
+    this.panner = parent.audioContext.createStereoPanner();
+    this.panner.connect(parent.audioContext.destination);
     // midiMode下url为duration
     this.createAudio = (url) => {
         return new Promise((resolve, reject) => {
@@ -116,7 +118,7 @@ function _AudioPlayer(parent) {
                 return filter;
             })
         };
-        last.connect(parent.audioContext.destination);
+        last.connect(this.panner);
     };
     this.setAudio = (newAudio) => {
         const a = this.audio;
